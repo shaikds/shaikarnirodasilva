@@ -1,7 +1,7 @@
 - 👋 Hi, I’m @shaikds
 - 👀 I’m interested in developing with - Java using Intellij, Android Studio, with Design Patterns techniques. 
 - 🌱 I’m currently learning to use Design Patterns properly, and writing my own project with Android-Studio and Firebase.
-- I've just finished sql project with android and going forward to my next project that will published soon .
+- I've just finished sql project with android and going forward to my next project that will be published soon .
 - 📫 How to reach me ---> Find me on LinkedIn.
 
 <!---
