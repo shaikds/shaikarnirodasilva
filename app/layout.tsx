@@ -31,6 +31,7 @@ export default function RootLayout({
                 <ul className="space-y-2 text-sm text-harvest-300">
                   <li><a href="/shop" className="hover:text-white transition-colors">Browse Products</a></li>
                   <li><a href="/groups" className="hover:text-white transition-colors">Group Buying</a></li>
+                  <li><a href="/subscriptions" className="hover:text-white transition-colors">Weekly Auto-Order</a></li>
                   <li><a href="/supplier" className="hover:text-white transition-colors">For Suppliers</a></li>
                   <li><a href="/chat" className="hover:text-white transition-colors">AI Assistant</a></li>
                 </ul>

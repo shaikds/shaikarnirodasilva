@@ -94,6 +94,22 @@ function initSchema() {
       FOREIGN KEY (group_buy_id) REFERENCES group_buys(id),
       FOREIGN KEY (order_id) REFERENCES orders(id)
     );
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_name TEXT NOT NULL,
+      customer_email TEXT NOT NULL,
+      product_id INTEGER NOT NULL,
+      quantity REAL NOT NULL,
+      prefer_group_buy INTEGER DEFAULT 1,
+      active INTEGER DEFAULT 1,
+      next_run TEXT NOT NULL,
+      last_run TEXT,
+      last_order_id INTEGER,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (product_id) REFERENCES products(id)
+    );
   `);
 }
 
@@ -349,4 +365,86 @@ export function seedDatabase() {
   database.prepare('UPDATE group_buys SET current_qty = 61 WHERE id = ?').run(gb2.id);
 
   return { message: 'Database seeded successfully' };
+}
+
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+
+export function createSubscription(data: {
+  customer_name: string;
+  customer_email: string;
+  product_id: number;
+  quantity: number;
+  prefer_group_buy?: boolean;
+  notes?: string;
+}) {
+  // Next run = next Monday
+  const nextMonday = new Date();
+  nextMonday.setDate(nextMonday.getDate() + ((1 + 7 - nextMonday.getDay()) % 7 || 7));
+  nextMonday.setHours(8, 0, 0, 0);
+
+  const result = getDb().prepare(`
+    INSERT INTO subscriptions (customer_name, customer_email, product_id, quantity, prefer_group_buy, next_run, notes)
+    VALUES (@customer_name, @customer_email, @product_id, @quantity, @prefer_group_buy, @next_run, @notes)
+  `).run({
+    ...data,
+    prefer_group_buy: data.prefer_group_buy !== false ? 1 : 0,
+    next_run: nextMonday.toISOString(),
+    notes: data.notes || null,
+  });
+  return result.lastInsertRowid;
+}
+
+export function getSubscriptionsByEmail(email: string) {
+  return getDb().prepare(`
+    SELECT s.*, p.name as product_name, p.unit, p.price as current_price,
+           p.image_url, p.category,
+           sup.name as supplier_name
+    FROM subscriptions s
+    JOIN products p ON p.id = s.product_id
+    JOIN suppliers sup ON sup.id = p.supplier_id
+    WHERE s.customer_email = ? AND s.active = 1
+    ORDER BY s.created_at DESC
+  `).all(email);
+}
+
+export function getAllActiveSubscriptions() {
+  return getDb().prepare(`
+    SELECT s.*, p.name as product_name, p.unit, p.price as current_price, p.stock_qty,
+           p.category, sup.name as supplier_name
+    FROM subscriptions s
+    JOIN products p ON p.id = s.product_id
+    JOIN suppliers sup ON sup.id = p.supplier_id
+    WHERE s.active = 1 AND s.next_run <= datetime('now')
+    ORDER BY s.next_run ASC
+  `).all();
+}
+
+export function deactivateSubscription(id: number) {
+  getDb().prepare('UPDATE subscriptions SET active = 0 WHERE id = ?').run(id);
+}
+
+export function updateSubscriptionAfterRun(id: number, orderId: number | bigint) {
+  const nextMonday = new Date();
+  nextMonday.setDate(nextMonday.getDate() + ((1 + 7 - nextMonday.getDay()) % 7 || 7));
+  nextMonday.setHours(8, 0, 0, 0);
+
+  getDb().prepare(`
+    UPDATE subscriptions
+    SET last_run = datetime('now'), last_order_id = ?, next_run = ?
+    WHERE id = ?
+  `).run(orderId, nextMonday.toISOString(), id);
+}
+
+export function getSubscriptionRunLog() {
+  return getDb().prepare(`
+    SELECT s.id, s.customer_name, s.customer_email, s.quantity,
+           p.name as product_name, p.unit,
+           o.total_price, o.order_type, o.status, o.created_at as order_date
+    FROM subscriptions s
+    JOIN products p ON p.id = s.product_id
+    LEFT JOIN orders o ON o.id = s.last_order_id
+    WHERE s.last_order_id IS NOT NULL
+    ORDER BY o.created_at DESC
+    LIMIT 50
+  `).all();
 }

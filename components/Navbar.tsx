@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 const NAV_LINKS = [
   { href: '/shop', label: 'Shop', icon: '🛒' },
   { href: '/groups', label: 'Group Buys', icon: '🤝' },
+  { href: '/subscriptions', label: 'Weekly Order', icon: '🔄' },
   { href: '/supplier', label: 'For Suppliers', icon: '👨‍🌾' },
   { href: '/chat', label: 'AI Assistant', icon: '🤖' },
 ];
