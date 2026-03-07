@@ -85,7 +85,7 @@ What would you like to do today?`,
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/^- (.+)$/gm, '<li>$1</li>')
-      .replace(/(<li>.*<\/li>)/s, '<ul class="list-disc list-inside space-y-1 my-2">$1</ul>')
+      .replace(/(<li>[\s\S]*<\/li>)/, '<ul class="list-disc list-inside space-y-1 my-2">$1</ul>')
       .replace(/\n\n/g, '</p><p class="mt-3">')
       .replace(/\n/g, '<br/>');
   }

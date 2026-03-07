@@ -109,7 +109,7 @@ Reply with a JSON object: { "action": "group_buy" | "individual", "group_buy_id"
   const response = await client.messages.create({
     model: 'claude-opus-4-6',
     max_tokens: 512,
-    output_config: { format: { type: 'json_object' } },
+    output_config: { format: { type: 'json_schema', schema: { type: 'object', properties: { action: { type: 'string' }, group_buy_id: {}, reasoning: { type: 'string' } }, required: ['action', 'group_buy_id', 'reasoning'], additionalProperties: false } } },
     messages: [{ role: 'user', content: decisionPrompt }],
   });
 

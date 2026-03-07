@@ -112,7 +112,7 @@ function executeTool(name: string, input: Record<string, unknown>): string {
         const { query, category } = input as { query: string; category?: string };
         const results = searchProducts(query);
         const filtered = category
-          ? results.filter((p: Record<string, unknown>) => (p.category as string)?.toLowerCase() === category.toLowerCase())
+          ? (results as Record<string, unknown>[]).filter(p => (p.category as string)?.toLowerCase() === category.toLowerCase())
           : results;
         return JSON.stringify(filtered.length > 0 ? filtered : { message: 'No products found for that search' });
       }
