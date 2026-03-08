@@ -29,12 +29,6 @@ export default function HomePage() {
     <div>
       {/* Hero */}
       <section className="relative bg-gradient-to-br from-harvest-800 via-harvest-700 to-harvest-600 text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-10 pointer-events-none" aria-hidden>
-          <div className="absolute top-10 start-10 text-9xl">🌿</div>
-          <div className="absolute top-20 end-20 text-8xl">🍅</div>
-          <div className="absolute bottom-10 start-1/3 text-7xl">🌽</div>
-          <div className="absolute bottom-20 end-10 text-8xl">🍊</div>
-        </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-32">
           <div className="max-w-2xl">
             <div className="badge bg-harvest-500 text-white mb-6">{h.badge}</div>
@@ -60,13 +54,12 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             {[
-              { label: h.stats.farmers, value: '4+', icon: '👨‍🌾' },
-              { label: h.stats.products, value: '11+', icon: '🥕' },
-              { label: h.stats.groupBuys, value: '3', icon: '🤝' },
-              { label: h.stats.savings, value: '30%', icon: '💰' },
+              { label: h.stats.farmers, value: '4+' },
+              { label: h.stats.products, value: '11+' },
+              { label: h.stats.groupBuys, value: '3' },
+              { label: h.stats.savings, value: '30%' },
             ].map(s => (
               <div key={s.label} className="flex flex-col items-center">
-                <span className="text-3xl mb-1">{s.icon}</span>
                 <span className="text-2xl font-bold text-harvest-700">{s.value}</span>
                 <span className="text-sm text-gray-500">{s.label}</span>
               </div>
@@ -83,20 +76,19 @@ export default function HomePage() {
         </div>
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-8">
           {h.how.map((item, i) => {
-            const colors = [
-              'from-blue-50 to-indigo-50 border-blue-100 bg-blue-100',
-              'from-harvest-50 to-emerald-50 border-harvest-100 bg-harvest-100',
-              'from-orange-50 to-amber-50 border-orange-100 bg-orange-100',
+            const styles = [
+              'from-blue-50 to-indigo-50 border-blue-100',
+              'from-harvest-50 to-emerald-50 border-harvest-100',
+              'from-orange-50 to-amber-50 border-orange-100',
             ];
-            const [bg, iconBg] = [colors[i].split(' ').slice(0, 3).join(' '), colors[i].split(' ')[3]];
             return (
-              <div key={item.title} className={`card bg-gradient-to-br ${bg} border p-8`}>
-                <div className={`${iconBg} w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-5`}>
+              <div key={item.title} className={`card bg-gradient-to-br ${styles[i]} border p-8`}>
+                <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-sm font-bold text-harvest-700 mb-5 shadow-sm">
                   {item.icon}
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">{item.title}</h3>
                 <p className="text-gray-600 mb-6 leading-relaxed">{item.desc}</p>
-                <Link href={item.href} className="btn-primary text-sm">{item.cta} →</Link>
+                <Link href={item.href} className="btn-primary text-sm">{item.cta}</Link>
               </div>
             );
           })}
@@ -128,7 +120,8 @@ export default function HomePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-gray-900 mb-1 truncate">{gb.product_name}</h3>
-                    <p className="text-sm text-gray-500 mb-2">{gb.supplier_name}</p>
+                    <p className="text-sm text-gray-500 mb-1">{gb.supplier_name}</p>
+                    {gb.city && <p className="text-xs text-harvest-600 mb-2">{gb.city}</p>}
                     <div className="flex items-baseline gap-2 mb-3 flex-wrap">
                       <span className="text-lg font-bold text-harvest-600">{t.common.currency}{gb.group_price}/{gb.unit}</span>
                       <span className="text-sm text-gray-400 line-through">{t.common.currency}{gb.regular_price}</span>
@@ -182,7 +175,7 @@ export default function HomePage() {
                       <span className="font-medium">{s.rating.toFixed(1)}</span>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-500 mb-1">📍 {s.location}</p>
+                  <p className="text-sm text-gray-500 mb-1">{s.location}</p>
                   <p className="text-sm text-gray-600 line-clamp-2">{s.description}</p>
                   <div className="mt-3 text-xs text-harvest-600 font-medium">
                     {s.product_count} {h.productsAvailable}
@@ -197,7 +190,6 @@ export default function HomePage() {
       {/* CTA Banner */}
       <section className="bg-gradient-to-r from-harvest-700 to-harvest-600 text-white py-16">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <div className="text-4xl mb-4">🤖</div>
           <h2 className="text-2xl sm:text-3xl font-bold mb-4">{h.ctaTitle}</h2>
           <p className="text-harvest-100 text-base sm:text-lg mb-8">{h.ctaDesc}</p>
           <Link href="/chat" className="btn-primary bg-white text-harvest-700 hover:bg-harvest-50 text-lg px-8 py-4">

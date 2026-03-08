@@ -2,6 +2,14 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 
+const ISRAELI_CITIES = [
+  'תל אביב', 'ירושלים', 'חיפה', 'באר שבע', 'ראשון לציון',
+  'פתח תקווה', 'אשדוד', 'נתניה', 'בני ברק', 'רמת גן',
+  'חולון', 'בת ים', 'רחובות', 'אשקלון', 'הרצליה',
+  'כפר סבא', 'מודיעין', 'עכו', 'נצרת', 'אילת',
+  'רמלה', 'לוד', 'נס ציונה', 'רעננה', 'גבעתיים',
+];
+
 interface Supplier {
   id: number;
   name: string;
@@ -31,6 +39,7 @@ export default function SupplierPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [showAddSupplier, setShowAddSupplier] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const [showAddGroup, setShowAddGroup] = useState(false);
   const [addResult, setAddResult] = useState<string | null>(null);
 
   const [supplierForm, setSupplierForm] = useState({
@@ -38,6 +47,9 @@ export default function SupplierPage() {
   });
   const [productForm, setProductForm] = useState({
     supplier_id: 0, name: '', category: 'Vegetables', price: '', unit: 'kg', stock_qty: '', description: '', image_url: '',
+  });
+  const [groupForm, setGroupForm] = useState({
+    product_id: 0, city: '', target_qty: '', regular_price: '', group_price: '', deadline: '',
   });
 
   useEffect(() => {
@@ -65,7 +77,6 @@ export default function SupplierPage() {
     if (data.id) {
       setAddResult('Supplier registered successfully!');
       setShowAddSupplier(false);
-      // Refresh
       fetch('/api/suppliers').then(r => r.json()).then(d => setSuppliers(Array.isArray(d) ? d : []));
     } else {
       setAddResult('Error: ' + (data.error || 'Failed'));
@@ -84,6 +95,30 @@ export default function SupplierPage() {
       setAddResult('Product added successfully!');
       setShowAddProduct(false);
       if (selectedSupplier) selectSupplier(selectedSupplier);
+    } else {
+      setAddResult('Error: ' + (data.error || 'Failed'));
+    }
+  }
+
+  async function handleAddGroup(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch('/api/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_id: Number(groupForm.product_id),
+        city: groupForm.city,
+        target_qty: Number(groupForm.target_qty),
+        regular_price: Number(groupForm.regular_price),
+        group_price: Number(groupForm.group_price),
+        deadline: groupForm.deadline,
+      }),
+    });
+    const data = await res.json();
+    if (data.id) {
+      setAddResult(`Group buy opened successfully for ${groupForm.city}!`);
+      setShowAddGroup(false);
+      setGroupForm({ product_id: 0, city: '', target_qty: '', regular_price: '', group_price: '', deadline: '' });
     } else {
       setAddResult('Error: ' + (data.error || 'Failed'));
     }
@@ -110,13 +145,12 @@ export default function SupplierPage() {
       {/* Benefits banner */}
       <div className="grid md:grid-cols-4 gap-4 mb-10">
         {[
-          { icon: '🤖', title: 'AI Handles Sales', desc: 'Our AI agent takes orders for you 24/7' },
-          { icon: '👥', title: 'Group Buying', desc: 'Sell in bulk via community group orders' },
-          { icon: '📊', title: 'Dashboard', desc: 'Track inventory and orders in real-time' },
-          { icon: '💰', title: 'More Revenue', desc: 'Reach customers you never had before' },
+          { title: 'AI Handles Sales', desc: 'Our AI agent takes orders for you 24/7' },
+          { title: 'Local Group Buying', desc: 'Sell in bulk via city-targeted group orders' },
+          { title: 'Dashboard', desc: 'Track inventory and orders in real-time' },
+          { title: 'More Revenue', desc: 'Reach customers you never had before' },
         ].map(b => (
           <div key={b.title} className="bg-white rounded-xl border border-gray-100 p-4">
-            <div className="text-2xl mb-2">{b.icon}</div>
             <h4 className="font-semibold text-gray-900 text-sm">{b.title}</h4>
             <p className="text-xs text-gray-500 mt-1">{b.desc}</p>
           </div>
@@ -155,7 +189,7 @@ export default function SupplierPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 text-sm truncate">{s.name}</p>
-                      <p className="text-xs text-gray-500">📍 {s.location}</p>
+                      <p className="text-xs text-gray-500">{s.location}</p>
                       <p className="text-xs text-harvest-600 mt-0.5">{s.product_count} products</p>
                     </div>
                   </div>
@@ -176,33 +210,48 @@ export default function SupplierPage() {
                   </div>
                   <div className="flex-1">
                     <h2 className="text-xl font-bold text-gray-900">{selectedSupplier.name}</h2>
-                    <p className="text-sm text-gray-500 mb-2">📍 {selectedSupplier.location}</p>
+                    <p className="text-sm text-gray-500 mb-2">{selectedSupplier.location}</p>
                     <p className="text-sm text-gray-600">{selectedSupplier.description}</p>
                     <div className="flex gap-4 mt-3 text-sm">
-                      {selectedSupplier.phone && <span className="text-gray-500">📞 {selectedSupplier.phone}</span>}
-                      {selectedSupplier.email && <span className="text-gray-500">✉️ {selectedSupplier.email}</span>}
+                      {selectedSupplier.phone && <span className="text-gray-500">{selectedSupplier.phone}</span>}
+                      {selectedSupplier.email && <span className="text-gray-500">{selectedSupplier.email}</span>}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h3 className="font-bold text-gray-900">Products ({products.length})</h3>
-                <button
-                  onClick={() => {
-                    setProductForm(f => ({ ...f, supplier_id: selectedSupplier.id }));
-                    setShowAddProduct(true);
-                    setAddResult(null);
-                  }}
-                  className="btn-primary text-sm"
-                >
-                  + Add Product
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (products.length === 0) {
+                        setAddResult('Add a product first before opening a group buy.');
+                        return;
+                      }
+                      setGroupForm(f => ({ ...f, product_id: products[0].id }));
+                      setShowAddGroup(true);
+                      setAddResult(null);
+                    }}
+                    className="btn-secondary text-sm"
+                  >
+                    + Open Group Buy
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProductForm(f => ({ ...f, supplier_id: selectedSupplier.id }));
+                      setShowAddProduct(true);
+                      setAddResult(null);
+                    }}
+                    className="btn-primary text-sm"
+                  >
+                    + Add Product
+                  </button>
+                </div>
               </div>
 
               {products.length === 0 ? (
                 <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl">
-                  <div className="text-4xl mb-3">🥕</div>
                   <p>No products yet. Add your first product!</p>
                 </div>
               ) : (
@@ -227,7 +276,6 @@ export default function SupplierPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-64 text-gray-400 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-              <div className="text-5xl mb-3">👈</div>
               <p className="font-medium">Select a supplier to view details</p>
               <p className="text-sm mt-1">or register as a new supplier</p>
             </div>
@@ -242,7 +290,7 @@ export default function SupplierPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Register as Supplier</h3>
-                <button onClick={() => setShowAddSupplier(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+                <button onClick={() => setShowAddSupplier(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">x</button>
               </div>
               <form onSubmit={handleAddSupplier} className="space-y-4">
                 <div>
@@ -289,7 +337,7 @@ export default function SupplierPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Add New Product</h3>
-                <button onClick={() => setShowAddProduct(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+                <button onClick={() => setShowAddProduct(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">x</button>
               </div>
               <form onSubmit={handleAddProduct} className="space-y-4">
                 <div>
@@ -320,7 +368,7 @@ export default function SupplierPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Price (₪) *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Price (ILS) *</label>
                     <input required type="number" step="0.5" min="0" className="input" placeholder="0.00" value={productForm.price}
                       onChange={e => setProductForm(f => ({ ...f, price: e.target.value }))} />
                   </div>
@@ -338,6 +386,74 @@ export default function SupplierPage() {
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setShowAddProduct(false)} className="btn-secondary flex-1">Cancel</button>
                   <button type="submit" className="btn-primary flex-1">Add Product</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Open Group Buy Modal */}
+      {showAddGroup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-xl font-bold">Open Group Buy</h3>
+                <button onClick={() => setShowAddGroup(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">x</button>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Target a specific Israeli city. Consumers in that city will see this group buy and be able to join.
+              </p>
+              <form onSubmit={handleAddGroup} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product *</label>
+                  <select required className="input" value={groupForm.product_id}
+                    onChange={e => setGroupForm(f => ({ ...f, product_id: Number(e.target.value) }))}>
+                    <option value={0} disabled>Select a product</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.unit})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">City (Israel) *</label>
+                  <select required className="input" value={groupForm.city}
+                    onChange={e => setGroupForm(f => ({ ...f, city: e.target.value }))}>
+                    <option value="">Select a city</option>
+                    {ISRAELI_CITIES.map(city => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">Only consumers from this city will see and join this group.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Regular Price (ILS) *</label>
+                    <input required type="number" step="0.5" min="0" className="input" placeholder="10.00" value={groupForm.regular_price}
+                      onChange={e => setGroupForm(f => ({ ...f, regular_price: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Group Price (ILS) *</label>
+                    <input required type="number" step="0.5" min="0" className="input" placeholder="7.00" value={groupForm.group_price}
+                      onChange={e => setGroupForm(f => ({ ...f, group_price: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Target Quantity *</label>
+                    <input required type="number" min="1" className="input" placeholder="100" value={groupForm.target_qty}
+                      onChange={e => setGroupForm(f => ({ ...f, target_qty: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deadline *</label>
+                    <input required type="date" className="input" value={groupForm.deadline}
+                      onChange={e => setGroupForm(f => ({ ...f, deadline: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setShowAddGroup(false)} className="btn-secondary flex-1">Cancel</button>
+                  <button type="submit" className="btn-primary flex-1">Open Group Buy</button>
                 </div>
               </form>
             </div>

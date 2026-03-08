@@ -45,7 +45,21 @@ export interface GroupBuy {
   group_price: number;
   deadline: string;
   status: 'active' | 'completed' | 'cancelled';
+  city: string | null;
   progress_pct: number;
+  created_at: string;
+}
+
+export interface ConsumerRequest {
+  id: number;
+  customer_name: string;
+  customer_email: string;
+  city: string;
+  neighborhood: string | null;
+  product_query: string;
+  deadline: string;
+  status: 'searching' | 'matched' | 'expired' | 'completed';
+  matched_group_buy_id: number | null;
   created_at: string;
 }
 

@@ -42,7 +42,8 @@ export function GroupBuyCard({ groupBuy: gb, onJoin }: GroupBuyCardProps) {
       <div className="p-5 space-y-3">
         <div>
           <h3 className="font-bold text-gray-900 text-lg">{gb.product_name}</h3>
-          <p className="text-sm text-gray-500">📍 {gb.supplier_name} · {gb.supplier_location}</p>
+          <p className="text-sm text-gray-500">{gb.supplier_name} · {gb.supplier_location}</p>
+          {gb.city && <p className="text-xs text-harvest-600 mt-0.5">{gb.city}</p>}
         </div>
 
         <div className="flex items-baseline gap-3">

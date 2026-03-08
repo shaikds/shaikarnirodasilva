@@ -32,17 +32,57 @@ export const agentTools: Anthropic.Tool[] = [
   },
   {
     name: 'get_group_buys',
-    description: 'Get active group buying deals. Group buys allow customers to get discounted prices when enough people order together.',
+    description: 'Get active group buying deals. Optionally filter by city to show only local groups.',
     input_schema: {
       type: 'object' as const,
       properties: {
         id: { type: 'number', description: 'Optional: get a specific group buy by ID' },
+        city: { type: 'string', description: 'Optional: filter by city to show local groups' },
       },
     },
   },
   {
+    name: 'find_local_group',
+    description: 'Search for active group buys AND other consumers in the same city looking to buy similar products. Use this when a consumer wants to buy something and you want to find neighbors to buy with.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        city: { type: 'string', description: 'The consumer\'s city (must be an Israeli city)' },
+        product_query: { type: 'string', description: 'What the consumer wants to buy (e.g., "fruits and vegetables", "tomatoes oranges")' },
+      },
+      required: ['city', 'product_query'],
+    },
+  },
+  {
+    name: 'register_buying_intent',
+    description: 'Register a consumer\'s intent to buy something locally. The agent will try to form a local group until the deadline. Use this when no immediate local group is found.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        customer_name: { type: 'string', description: 'Consumer full name' },
+        customer_email: { type: 'string', description: 'Consumer email address' },
+        city: { type: 'string', description: 'Consumer city (Israeli city)' },
+        neighborhood: { type: 'string', description: 'Optional: neighborhood within the city' },
+        product_query: { type: 'string', description: 'What they want to buy' },
+        deadline: { type: 'string', description: 'ISO date string: how long to keep searching (e.g., "2025-03-15")' },
+      },
+      required: ['customer_name', 'customer_email', 'city', 'product_query', 'deadline'],
+    },
+  },
+  {
+    name: 'get_my_requests',
+    description: 'Get all open buying requests for a consumer by their email. Shows status of group-forming attempts.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        customer_email: { type: 'string', description: 'Consumer email address' },
+      },
+      required: ['customer_email'],
+    },
+  },
+  {
     name: 'join_group_buy',
-    description: 'Join a group buying deal for a product. The customer will get the discounted group price when the target quantity is reached.',
+    description: 'Join a group buying deal for a product. The customer will get the discounted group price when the target quantity is reached. Always get explicit approval from the user before calling this.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -56,7 +96,7 @@ export const agentTools: Anthropic.Tool[] = [
   },
   {
     name: 'place_order',
-    description: 'Place an individual order for a product at the regular price. Confirms and processes the order immediately.',
+    description: 'Place an individual order for a product at the regular price. Always get explicit approval from the user before calling this.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -81,22 +121,57 @@ export const agentTools: Anthropic.Tool[] = [
       required: ['customer_email'],
     },
   },
+  {
+    name: 'recommend_alternatives',
+    description: 'When a local group could not be formed by the deadline, recommend nearby Israeli supermarkets and online grocery options.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        city: { type: 'string', description: 'The consumer\'s city' },
+        product_query: { type: 'string', description: 'What they wanted to buy' },
+      },
+      required: ['city'],
+    },
+  },
 ];
 
-export const AGENT_SYSTEM_PROMPT = `You are Harvest, the friendly AI assistant for LocalHarvest — a platform that connects communities with local farmers and fresh produce suppliers.
+export const AGENT_SYSTEM_PROMPT = `You are Harvest, the AI assistant for LocalHarvest — a platform that connects communities with local farmers and fresh produce in Israel.
 
-Your role is to:
-1. Help customers discover fresh local produce from nearby farmers
-2. Explain how group buying works and help them join group buys for discounts
-3. Process individual orders for immediate purchase
-4. Answer questions about suppliers, products, and availability
-5. Track order status and keep customers informed
+Your primary goal is to help consumers buy together with their neighbors from the same city or neighborhood. Local group buying is the most convenient option because everyone is nearby for pickup or delivery coordination.
 
-Key platform facts:
-- All produce is locally grown — vegetables, fruits, and herbs from nearby farms
-- Group buying: customers collectively reach a quantity target to unlock discounted prices
-- When a group buy threshold is reached, ALL pending group orders are automatically confirmed
-- Prices are in Israeli Shekels (₪)
-- Delivery/pickup is arranged with the supplier directly
+HOW YOU WORK:
 
-Be warm, helpful, and enthusiastic about local farming. Always use tools to get real, up-to-date information. When a customer wants to buy, confirm: 1) their name 2) their email 3) product and quantity — then execute.`;
+1. When a consumer wants to buy produce:
+   - First ask for their city (and optionally neighborhood) if not provided.
+   - Explain that buying locally with neighbors is most convenient — same area means easy coordination.
+   - Call find_local_group to check if there are active group buys or other requests in their city.
+   - If a matching local group exists: present it and ask for approval before joining.
+   - If no local group exists yet: ask until what date they want you to keep searching. Then call register_buying_intent to register their request. Tell them you will keep looking for neighbors in their city.
+   - Groups are ONLY formed within the same city or neighborhood. Never mix people from different cities.
+
+2. Before placing any order (individual or group):
+   - Always present the details (product, quantity, price, total) and ask for explicit confirmation.
+   - Never execute an order without the consumer saying yes.
+
+3. If deadline passes with no local group formed:
+   - Call recommend_alternatives to suggest nearby supermarkets and online grocery options in their city.
+
+4. For subscriptions (weekly orders):
+   - The system automatically tries to join a local group buy first, then falls back to individual order.
+   - Consumers can set up weekly auto-orders for recurring needs.
+
+5. For order status checks: use get_order_status.
+
+PLATFORM FACTS:
+- All produce is locally grown in Israel — vegetables, fruits, and herbs.
+- Prices are in Israeli Shekels (ILS).
+- Group buying: consumers collectively reach a quantity target to unlock discounted prices.
+- When a group buy threshold is reached, ALL pending group orders are automatically confirmed.
+- Delivery or pickup is arranged directly with the supplier.
+- Groups are city/neighborhood based — only people from the same area.
+
+TONE:
+- Be clear and direct. No filler words.
+- Do not use emojis.
+- Always confirm before executing any purchase.
+- When no local group exists, proactively suggest the consumer connect with neighbors — it is most convenient for everyone in the area.`;

@@ -41,8 +41,23 @@ export const SCHEMA_SQL = `
     group_price REAL NOT NULL,
     deadline TEXT NOT NULL,
     status TEXT DEFAULT 'active',
+    city TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (product_id) REFERENCES products(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS consumer_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_name TEXT NOT NULL,
+    customer_email TEXT NOT NULL,
+    city TEXT NOT NULL,
+    neighborhood TEXT,
+    product_query TEXT NOT NULL,
+    deadline TEXT NOT NULL,
+    status TEXT DEFAULT 'searching',
+    matched_group_buy_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (matched_group_buy_id) REFERENCES group_buys(id)
   );
 
   CREATE TABLE IF NOT EXISTS orders (
@@ -101,6 +116,8 @@ export function createDatabase(dbPath: string): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
+  // Migrations for existing databases
+  try { db.exec('ALTER TABLE group_buys ADD COLUMN city TEXT'); } catch { /* already exists */ }
   return db;
 }
 

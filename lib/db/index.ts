@@ -7,3 +7,4 @@ export * from './groups';
 export * from './orders';
 export * from './subscriptions';
 export * from './seed';
+export * from './consumer_requests';

@@ -6,12 +6,27 @@ import {
   getAllSuppliers,
   getGroupBuyById,
   getAllGroupBuys,
+  getGroupBuysByCity,
+  findMatchingGroupBuys,
   joinGroupBuy,
   createOrder,
   getProductById,
   getOrdersByEmail,
   getOrderById,
+  registerBuyingIntent,
+  getRequestsByEmail,
+  findMatchingRequests,
 } from '@/lib/db';
+
+const ISRAELI_SUPERMARKETS = [
+  { name: 'Shufersal', website: 'https://www.shufersal.co.il', note: 'Largest chain, delivery available nationwide' },
+  { name: 'Rami Levy', website: 'https://www.rami-levy.co.il', note: 'Competitive prices, many branches' },
+  { name: 'Victory', website: 'https://www.victory.co.il', note: 'Wide selection, online ordering' },
+  { name: 'Yochananof', website: 'https://www.yochananof.co.il', note: 'Fresh produce focus' },
+  { name: 'Mega', website: 'https://www.mega.co.il', note: 'Online grocery delivery' },
+  { name: 'AM:PM', website: 'https://www.ampm.co.il', note: 'Convenience stores, extended hours' },
+  { name: 'Osher Ad', website: 'https://www.osherad.co.il', note: 'Warehouse prices' },
+];
 
 export function executeTool(name: string, input: Record<string, unknown>): string {
   try {
@@ -35,11 +50,56 @@ export function executeTool(name: string, input: Record<string, unknown>): strin
       }
 
       case 'get_group_buys': {
-        const { id } = input as { id?: number };
+        const { id, city } = input as { id?: number; city?: string };
         if (id) {
           return JSON.stringify(getGroupBuyById(id) ?? { error: 'Group buy not found' });
         }
+        if (city) {
+          return JSON.stringify(getGroupBuysByCity(city));
+        }
         return JSON.stringify(getAllGroupBuys('active'));
+      }
+
+      case 'find_local_group': {
+        const { city, product_query } = input as { city: string; product_query: string };
+        const matchingGroupBuys = findMatchingGroupBuys(city, product_query);
+        const matchingRequests = findMatchingRequests(city, product_query);
+        return JSON.stringify({
+          city,
+          product_query,
+          matching_group_buys: matchingGroupBuys,
+          neighbors_also_looking: matchingRequests.map(r => ({
+            id: r.id,
+            city: r.city,
+            neighborhood: r.neighborhood,
+            product_query: r.product_query,
+            deadline: r.deadline,
+          })),
+          summary: matchingGroupBuys.length > 0
+            ? `Found ${matchingGroupBuys.length} active group buy(s) in ${city} matching "${product_query}".`
+            : matchingRequests.length > 0
+              ? `No active group buys yet, but ${matchingRequests.length} neighbor(s) in ${city} are also looking to buy similar items. Registering this consumer will help form a group.`
+              : `No active group buys or requests found in ${city} for "${product_query}". Register the consumer's intent to start building a local group.`,
+        });
+      }
+
+      case 'register_buying_intent': {
+        const { customer_name, customer_email, city, neighborhood, product_query, deadline } = input as {
+          customer_name: string; customer_email: string; city: string;
+          neighborhood?: string; product_query: string; deadline: string;
+        };
+        const requestId = registerBuyingIntent({ customer_name, customer_email, city, neighborhood, product_query, deadline });
+        return JSON.stringify({
+          success: true,
+          request_id: requestId,
+          message: `Registered buying intent for ${customer_name} in ${city}${neighborhood ? ` (${neighborhood})` : ''}. Will search for local neighbors buying "${product_query}" until ${deadline}. If no group forms by then, alternatives will be recommended.`,
+        });
+      }
+
+      case 'get_my_requests': {
+        const { customer_email } = input as { customer_email: string };
+        const requests = getRequestsByEmail(customer_email);
+        return JSON.stringify(requests.length > 0 ? requests : { message: 'No open requests found for this email' });
       }
 
       case 'join_group_buy': {
@@ -77,7 +137,7 @@ export function executeTool(name: string, input: Record<string, unknown>): strin
           unit: product.unit,
           unit_price: product.price,
           total_price: product.price * quantity,
-          message: `Order confirmed! ${quantity} ${product.unit} of ${product.name} ordered for ₪${(product.price * quantity).toFixed(2)}.`,
+          message: `Order confirmed: ${quantity} ${product.unit} of ${product.name} for ILS ${(product.price * quantity).toFixed(2)}.`,
         });
       }
 
@@ -88,6 +148,15 @@ export function executeTool(name: string, input: Record<string, unknown>): strin
         }
         const orders = getOrdersByEmail(customer_email);
         return JSON.stringify(orders.length > 0 ? orders : { message: 'No orders found for this email' });
+      }
+
+      case 'recommend_alternatives': {
+        const { city, product_query } = input as { city?: string; product_query?: string };
+        return JSON.stringify({
+          message: `No local group could be formed in time${city ? ` in ${city}` : ''}. Here are alternative options for buying${product_query ? ` "${product_query}"` : ''}:`,
+          supermarkets: ISRAELI_SUPERMARKETS,
+          tip: 'Most of these offer online ordering and delivery or pickup. Compare prices and check which has branches closest to your location.',
+        });
       }
 
       default:

@@ -29,12 +29,29 @@ export function createGroupBuy(data: {
   regular_price: number;
   group_price: number;
   deadline: string;
+  city?: string;
 }): number | bigint {
   const result = getDb().prepare(`
-    INSERT INTO group_buys (product_id, target_qty, regular_price, group_price, deadline)
-    VALUES (@product_id, @target_qty, @regular_price, @group_price, @deadline)
-  `).run(data);
+    INSERT INTO group_buys (product_id, target_qty, regular_price, group_price, deadline, city)
+    VALUES (@product_id, @target_qty, @regular_price, @group_price, @deadline, @city)
+  `).run({ city: null, ...data });
   return result.lastInsertRowid;
+}
+
+export function getGroupBuysByCity(city: string): GroupBuy[] {
+  return getDb()
+    .prepare(`${GROUP_BUY_SELECT} WHERE gb.status = 'active' AND gb.city = ? ORDER BY gb.deadline ASC`)
+    .all(city) as GroupBuy[];
+}
+
+export function findMatchingGroupBuys(city: string, productQuery: string): GroupBuy[] {
+  const terms = productQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  const rows = getDb()
+    .prepare(`${GROUP_BUY_SELECT} WHERE gb.status = 'active' AND (gb.city = ? OR gb.city IS NULL) ORDER BY gb.deadline ASC`)
+    .all(city) as GroupBuy[];
+  return rows.filter(gb =>
+    terms.some(t => gb.product_name?.toLowerCase().includes(t) || gb.category?.toLowerCase().includes(t))
+  );
 }
 
 export function joinGroupBuy(

@@ -16,7 +16,7 @@ export default function GroupsPage() {
   const HOW_STEPS = t.lang === 'he'
     ? ['מצא רכישה קבוצתית שמעניינת אותך', 'התחייב לכמות במחיר הקבוצתי', 'הקהילה מתחייבת ביחד לעבר היעד', 'היעד הושג → כל ההזמנות מאושרות אוטומטית!']
     : ['Find a group buy you want to join', 'Pledge your quantity at the group price', 'Community pledges build up toward the target', 'Target reached → all orders auto-confirmed!'];
-  const HOW_ICONS = ['👀', '🤝', '📊', '🎉'];
+  const HOW_ICONS = ['1', '2', '3', '4'];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -34,7 +34,6 @@ export default function GroupsPage() {
               {i + 1}
             </div>
             <div>
-              <span className="text-lg">{HOW_ICONS[i]}</span>
               <p className="text-sm text-gray-600 mt-1">{step}</p>
             </div>
           </div>
@@ -64,8 +63,7 @@ export default function GroupsPage() {
         </div>
       ) : groupBuys.length === 0 ? (
         <div className="text-center py-20 text-gray-500">
-          <div className="text-5xl mb-4">🤝</div>
-          <p className="text-lg font-medium">{g.noGroups}</p>
+            <p className="text-lg font-medium">{g.noGroups}</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -64,14 +64,14 @@ export default function SubscriptionsPage() {
     });
     const data = await res.json();
     if (data.id) {
-      setAddResult('✅ ' + (t.lang === 'he' ? 'מנוי שבועי נוצר! ההזמנה הראשונה תרוץ יום שני הבא.' : 'Weekly subscription created! First order runs next Monday.'));
+      setAddResult(t.lang === 'he' ? 'מנוי שבועי נוצר! ההזמנה הראשונה תרוץ יום שני הבא.' : 'Weekly subscription created! First order runs next Monday.');
       setShowAdd(false);
       if (checkedEmail === form.customer_email) {
         const r2 = await fetch(`/api/subscriptions?email=${encodeURIComponent(checkedEmail)}`);
         setSubscriptions(await r2.json());
       }
     } else {
-      setAddResult('❌ ' + (data.error || t.common.error));
+      setAddResult(data.error || t.common.error);
     }
   }
 
@@ -96,16 +96,16 @@ export default function SubscriptionsPage() {
 
   const HOW_STEPS = t.lang === 'he'
     ? [
-        { n: '1', icon: '📋', title: 'בודק את הסל שלך', desc: 'מוצא את כל המנויים לשבוע זה' },
-        { n: '2', icon: '🔍', title: 'סורק רכישות קבוצתיות', desc: 'בודק אם יש עסקה קהילתית למוצר שלך' },
-        { n: '3', icon: '🧠', title: 'AI מחליט', desc: 'Claude בוחר קבוצתי (זול יותר) או הזמנה רגילה' },
-        { n: '4', icon: '✅', title: 'אישור אוטומטי', desc: 'הזמנה בוצעה, מלאי שמור' },
+        { n: '1', title: 'בודק את הסל שלך', desc: 'מוצא את כל המנויים לשבוע זה' },
+        { n: '2', title: 'סורק רכישות קבוצתיות', desc: 'בודק אם יש עסקה קהילתית למוצר שלך' },
+        { n: '3', title: 'AI מחליט', desc: 'Claude בוחר קבוצתי (זול יותר) או הזמנה רגילה' },
+        { n: '4', title: 'אישור אוטומטי', desc: 'הזמנה בוצעה, מלאי שמור' },
       ]
     : [
-        { n: '1', icon: '📋', title: 'Checks your basket', desc: 'Finds all subscriptions due this week' },
-        { n: '2', icon: '🔍', title: 'Scans for group buys', desc: 'Checks if your product has an active community deal' },
-        { n: '3', icon: '🧠', title: 'AI decides', desc: "Claude picks group buy (cheaper) or individual order" },
-        { n: '4', icon: '✅', title: 'Auto-confirms', desc: "Order placed, stock reserved" },
+        { n: '1', title: 'Checks your basket', desc: 'Finds all subscriptions due this week' },
+        { n: '2', title: 'Scans for group buys', desc: 'Checks if your product has an active community deal' },
+        { n: '3', title: 'AI decides', desc: "Claude picks group buy (cheaper) or individual order" },
+        { n: '4', title: 'Auto-confirms', desc: "Order placed, stock reserved" },
       ];
 
   return (
@@ -123,15 +123,13 @@ export default function SubscriptionsPage() {
 
       {/* How it works */}
       <div className="bg-gradient-to-r from-harvest-50 to-emerald-50 rounded-2xl border border-harvest-100 p-5 mb-10">
-        <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <span className="text-2xl">🤖</span>
+        <h2 className="font-bold text-gray-900 mb-4">
           {t.lang === 'he' ? 'איך סוכן ה-AI עובד כל שני' : 'How the AI Agent Works Every Monday'}
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {HOW_STEPS.map(step => (
             <div key={step.n} className="flex flex-col items-center text-center">
               <div className="bg-harvest-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold mb-2">{step.n}</div>
-              <div className="text-2xl mb-1">{step.icon}</div>
               <p className="font-semibold text-sm text-gray-800">{step.title}</p>
               <p className="text-xs text-gray-500 mt-0.5">{step.desc}</p>
             </div>
@@ -140,7 +138,7 @@ export default function SubscriptionsPage() {
       </div>
 
       {addResult && (
-        <div className={`mb-6 p-4 rounded-xl text-sm ${addResult.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+        <div className="mb-6 p-4 rounded-xl text-sm bg-green-50 text-green-700">
           {addResult}
         </div>
       )}
@@ -159,8 +157,8 @@ export default function SubscriptionsPage() {
       {/* Run result */}
       {runResult && (
         <div className="card p-6 mb-8">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <span>📊</span> {s.runLog} — {new Date(runResult.run_at).toLocaleString()}
+          <h3 className="font-bold text-gray-900 mb-4">
+            {s.runLog} — {new Date(runResult.run_at).toLocaleString()}
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
             {[
@@ -185,7 +183,7 @@ export default function SubscriptionsPage() {
               <div className="text-end shrink-0">
                 <div className="font-bold text-harvest-700">₪{r.total.toFixed(2)}</div>
                 <div className={`text-xs font-medium ${r.order_type === 'group' ? 'text-harvest-600' : 'text-gray-500'}`}>
-                  {r.order_type === 'group' ? '🤝' : '🛒'} {r.order_type}
+                  {r.order_type}
                 </div>
                 {r.savings > 0 && <div className="text-xs text-green-600">₪{r.savings.toFixed(2)}</div>}
               </div>
@@ -210,7 +208,6 @@ export default function SubscriptionsPage() {
           <div className="mt-5">
             {subscriptions.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                <div className="text-3xl mb-2">📭</div>
                 <p>{s.noSubs}</p>
               </div>
             ) : (
@@ -226,9 +223,9 @@ export default function SubscriptionsPage() {
                       <div className="flex gap-3 text-xs mt-1">
                         <span className="text-harvest-600">{t.common.currency}{sub.current_price}/{sub.unit}</span>
                         {sub.prefer_group_buy ? (
-                          <span className="text-blue-600">🤝 {s.preferGroup}</span>
+                          <span className="text-blue-600">{s.preferGroup}</span>
                         ) : (
-                          <span className="text-gray-400">🛒</span>
+                          <span className="text-gray-400">individual</span>
                         )}
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
@@ -298,7 +295,7 @@ export default function SubscriptionsPage() {
             <input type="checkbox" id="prefer_gb" className="w-4 h-4 accent-harvest-600"
               checked={form.prefer_group_buy} onChange={e => setForm(f => ({ ...f, prefer_group_buy: e.target.checked }))} />
             <label htmlFor="prefer_gb" className="text-sm text-gray-700 cursor-pointer">
-              <strong className="text-harvest-700">🤝 {s.preferGroup}</strong>
+              <strong className="text-harvest-700">{s.preferGroup}</strong>
             </label>
           </div>
 

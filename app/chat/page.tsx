@@ -25,8 +25,8 @@ export default function ChatPage() {
     {
       role: 'assistant',
       content: t.lang === 'he'
-        ? `שלום! אני **Harvest**, עוזר שוק החקלאות המקומי שלך. 🌱\n\nאני יכול לעזור לך:\n- **לחפש** תוצרת טרייה מחקלאים מקומיים\n- **לגלות** עסקאות רכישה קבוצתית עם הנחות\n- **לבצע הזמנות** ישירות דרך הצ'אט\n- **לעקוב** אחרי סטטוס ההזמנות שלך\n\nמה תרצה לעשות היום?`
-        : `Hi! I'm **Harvest**, your local farm marketplace assistant. 🌱\n\nI can help you:\n- **Find** fresh produce from local farmers\n- **Discover** group buying deals for discounts\n- **Place orders** directly through our chat\n- **Track** your order status\n\nWhat would you like to do today?`,
+        ? `שלום! אני **Harvest**, עוזר שוק החקלאות המקומי שלך.\n\nאני יכול לעזור לך:\n- **לחפש** תוצרת טרייה מחקלאים מקומיים\n- **למצוא שכנים** מאותה עיר/שכונה לקנות ביחד\n- **לבצע הזמנות** ישירות דרך הצ'אט\n- **לעקוב** אחרי סטטוס ההזמנות שלך\n\nמה תרצה לעשות היום?`
+        : `Hello, I'm **Harvest**, your local farm marketplace assistant.\n\nI can help you:\n- **Find** fresh produce from local farmers\n- **Find neighbors** in your city or neighborhood to buy together\n- **Place orders** directly through chat\n- **Track** your order status\n\nWhat would you like to do today?`,
     },
   ]);
   const [input, setInput] = useState('');
@@ -71,14 +71,12 @@ export default function ChatPage() {
     }
   }
 
-  const capIcons = ['🔍', '🤝', '🛒', '📦'];
-
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <div className="w-12 h-12 bg-gradient-to-br from-harvest-500 to-harvest-700 rounded-2xl flex items-center justify-center text-2xl shadow-lg shrink-0">
-          🤖
+        <div className="w-12 h-12 bg-gradient-to-br from-harvest-500 to-harvest-700 rounded-2xl flex items-center justify-center shadow-lg shrink-0">
+          <span className="text-white font-bold text-sm">AI</span>
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{c.title}</h1>
@@ -88,10 +86,9 @@ export default function ChatPage() {
 
       {/* Capabilities */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {c.capabilities.map((cap, i) => (
-          <div key={cap} className="bg-white border border-gray-100 rounded-xl px-3 py-2 flex items-center gap-2 text-sm text-gray-600">
-            <span>{capIcons[i]}</span>
-            <span>{cap}</span>
+        {c.capabilities.map((cap) => (
+          <div key={cap} className="bg-white border border-gray-100 rounded-xl px-3 py-2 text-sm text-gray-600">
+            {cap}
           </div>
         ))}
       </div>
@@ -103,8 +100,8 @@ export default function ChatPage() {
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'assistant' && (
-                <div className="w-8 h-8 bg-gradient-to-br from-harvest-500 to-harvest-700 rounded-full flex items-center justify-center text-sm shrink-0 me-3 mt-0.5">
-                  🌱
+                <div className="w-8 h-8 bg-gradient-to-br from-harvest-500 to-harvest-700 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 me-3 mt-0.5">
+                  H
                 </div>
               )}
               <div
@@ -116,8 +113,8 @@ export default function ChatPage() {
                 dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
               />
               {msg.role === 'user' && (
-                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm shrink-0 ms-3 mt-0.5">
-                  👤
+                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-600 shrink-0 ms-3 mt-0.5">
+                  U
                 </div>
               )}
             </div>
@@ -125,8 +122,8 @@ export default function ChatPage() {
 
           {loading && (
             <div className="flex justify-start">
-              <div className="w-8 h-8 bg-gradient-to-br from-harvest-500 to-harvest-700 rounded-full flex items-center justify-center text-sm shrink-0 me-3 mt-0.5">
-                🌱
+              <div className="w-8 h-8 bg-gradient-to-br from-harvest-500 to-harvest-700 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 me-3 mt-0.5">
+                H
               </div>
               <div className="bg-gray-100 rounded-2xl rounded-ss-sm px-4 py-3">
                 <p className="text-xs text-gray-400 mb-1">{c.typing}</p>

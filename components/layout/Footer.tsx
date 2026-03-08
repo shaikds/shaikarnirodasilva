@@ -10,7 +10,7 @@ export function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
           <div>
-            <div className="text-2xl font-bold text-white mb-2">🌱 {t.nav.logo}</div>
+            <div className="text-2xl font-bold text-white mb-2">{t.nav.logo}</div>
             <p className="text-harvest-300 text-sm">{f.tagline}</p>
           </div>
 
