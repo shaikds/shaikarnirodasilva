@@ -10,13 +10,14 @@ import type { GroupBuy } from '@/types';
 interface GroupBuyCardProps {
   groupBuy: GroupBuy;
   onJoin: (groupBuy: GroupBuy) => void;
+  onStartTeam: (groupBuy: GroupBuy) => void;
 }
 
 function daysUntil(deadline: string): number {
   return Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000));
 }
 
-export function GroupBuyCard({ groupBuy: gb, onJoin }: GroupBuyCardProps) {
+export function GroupBuyCard({ groupBuy: gb, onJoin, onStartTeam }: GroupBuyCardProps) {
   const { t } = useI18n();
   const savePct = Math.round((1 - gb.group_price / gb.regular_price) * 100);
   const days = daysUntil(gb.deadline);
@@ -64,6 +65,17 @@ export function GroupBuyCard({ groupBuy: gb, onJoin }: GroupBuyCardProps) {
         <Button className="w-full" onClick={() => onJoin(gb)}>
           {t.groups.joinBtn}
         </Button>
+        <button
+          onClick={() => onStartTeam(gb)}
+          className="w-full text-sm font-medium text-harvest-600 hover:text-harvest-700 border border-harvest-200 hover:border-harvest-400 rounded-xl py-2 transition-all"
+        >
+          {t.teams.startTeam}
+          {gb.team_min_qty != null && (
+            <span className="text-xs text-gray-400 font-normal ms-1">
+              (min {gb.team_min_qty} {gb.unit})
+            </span>
+          )}
+        </button>
       </div>
     </Card>
   );

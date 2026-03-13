@@ -50,12 +50,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new group buy
-    const { product_id, target_qty, regular_price, group_price, deadline, city } = body;
+    const { product_id, target_qty, regular_price, group_price, deadline, city, cutoff_day, team_min_qty } = body;
     if (!product_id || !target_qty || !regular_price || !group_price || !deadline) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const id = createGroupBuy({ product_id, target_qty, regular_price, group_price, deadline, city: city || null });
+    const id = createGroupBuy({ product_id, target_qty, regular_price, group_price, deadline, city: city || null, cutoff_day: cutoff_day ?? 3, team_min_qty: team_min_qty ?? 10 });
     return NextResponse.json({ id }, { status: 201 });
   } catch (error: unknown) {
     console.error('Groups POST error:', error);

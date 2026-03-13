@@ -46,7 +46,32 @@ export interface GroupBuy {
   deadline: string;
   status: 'active' | 'completed' | 'cancelled';
   city: string | null;
+  cutoff_day: number | null;
+  team_min_qty: number | null;
   progress_pct: number;
+  created_at: string;
+}
+
+export interface BuyingTeam {
+  id: number;
+  group_buy_id: number;
+  invite_code: string;
+  creator_name: string;
+  creator_email: string;
+  current_qty: number;
+  status: 'forming' | 'completed' | 'expired';
+  // joined from group_buys:
+  product_name?: string;
+  product_id?: number;
+  image_url?: string;
+  group_price?: number;
+  regular_price?: number;
+  unit?: string;
+  team_min_qty?: number;
+  cutoff_day?: number;
+  city?: string;
+  deadline?: string;
+  supplier_name?: string;
   created_at: string;
 }
 

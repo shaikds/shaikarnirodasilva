@@ -29,12 +29,14 @@ export function createGroupBuy(data: {
   regular_price: number;
   group_price: number;
   deadline: string;
-  city?: string;
+  city?: string | null;
+  cutoff_day?: number;
+  team_min_qty?: number;
 }): number | bigint {
   const result = getDb().prepare(`
-    INSERT INTO group_buys (product_id, target_qty, regular_price, group_price, deadline, city)
-    VALUES (@product_id, @target_qty, @regular_price, @group_price, @deadline, @city)
-  `).run({ city: null, ...data });
+    INSERT INTO group_buys (product_id, target_qty, regular_price, group_price, deadline, city, cutoff_day, team_min_qty)
+    VALUES (@product_id, @target_qty, @regular_price, @group_price, @deadline, @city, @cutoff_day, @team_min_qty)
+  `).run({ city: null, cutoff_day: 3, team_min_qty: 10, ...data });
   return result.lastInsertRowid;
 }
 

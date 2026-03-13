@@ -122,6 +122,20 @@ export const agentTools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'create_buying_team',
+    description: 'Create a buying team within an active group buy. The consumer becomes the team creator and gets a shareable invite link to send to friends and neighbors. Use this when a consumer wants to invite specific people to buy together.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        group_buy_id: { type: 'number', description: 'The ID of the group buy to create a team within' },
+        customer_name: { type: 'string', description: 'Team creator full name' },
+        customer_email: { type: 'string', description: 'Team creator email address' },
+        quantity: { type: 'number', description: "Creator's own quantity to pledge" },
+      },
+      required: ['group_buy_id', 'customer_name', 'customer_email', 'quantity'],
+    },
+  },
+  {
     name: 'recommend_alternatives',
     description: 'When a local group could not be formed by the deadline, recommend nearby Israeli supermarkets and online grocery options.',
     input_schema: {

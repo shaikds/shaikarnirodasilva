@@ -16,6 +16,9 @@ import {
   registerBuyingIntent,
   getRequestsByEmail,
   findMatchingRequests,
+  createTeam,
+  getDayName,
+  getNextCutoffDate,
 } from '@/lib/db';
 
 const ISRAELI_SUPERMARKETS = [
@@ -148,6 +151,28 @@ export function executeTool(name: string, input: Record<string, unknown>): strin
         }
         const orders = getOrdersByEmail(customer_email);
         return JSON.stringify(orders.length > 0 ? orders : { message: 'No orders found for this email' });
+      }
+
+      case 'create_buying_team': {
+        const { group_buy_id, customer_name, customer_email, quantity } = input as {
+          group_buy_id: number; customer_name: string; customer_email: string; quantity: number;
+        };
+        const gb = getGroupBuyById(group_buy_id);
+        if (!gb) return JSON.stringify({ error: 'Group buy not found' });
+        const result = createTeam(group_buy_id, customer_name, customer_email, quantity);
+        const dayName = gb.cutoff_day != null ? getDayName(gb.cutoff_day) : 'Wednesday';
+        const nextCutoff = gb.cutoff_day != null ? getNextCutoffDate(gb.cutoff_day) : '';
+        return JSON.stringify({
+          success: true,
+          team_id: result.teamId,
+          invite_code: result.inviteCode,
+          invite_url: `/groups/team/${result.inviteCode}`,
+          cutoff_day: dayName,
+          next_cutoff: nextCutoff,
+          team_min_qty: gb.team_min_qty,
+          unit: gb.unit,
+          message: `Team created for ${gb.product_name}! Share the invite link /groups/team/${result.inviteCode} with friends. The team needs ${gb.team_min_qty} ${gb.unit} total. If reached by ${dayName} (next: ${nextCutoff}), all team orders will be confirmed at the group price of ILS ${gb.group_price}/${gb.unit}.`,
+        });
       }
 
       case 'recommend_alternatives': {

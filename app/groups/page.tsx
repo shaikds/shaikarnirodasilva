@@ -4,6 +4,7 @@ import { useI18n } from '@/lib/i18n';
 import { useGroupBuys } from '@/hooks/useGroupBuys';
 import { GroupBuyCard } from '@/components/groups/GroupBuyCard';
 import { JoinModal } from '@/components/groups/JoinModal';
+import { CreateTeamModal } from '@/components/groups/CreateTeamModal';
 import type { GroupBuy } from '@/types';
 
 export default function GroupsPage() {
@@ -11,12 +12,12 @@ export default function GroupsPage() {
   const g = t.groups;
   const { groupBuys, loading, refetch } = useGroupBuys();
   const [joinTarget, setJoinTarget] = useState<GroupBuy | null>(null);
+  const [teamTarget, setTeamTarget] = useState<GroupBuy | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
 
   const HOW_STEPS = t.lang === 'he'
-    ? ['מצא רכישה קבוצתית שמעניינת אותך', 'התחייב לכמות במחיר הקבוצתי', 'הקהילה מתחייבת ביחד לעבר היעד', 'היעד הושג → כל ההזמנות מאושרות אוטומטית!']
-    : ['Find a group buy you want to join', 'Pledge your quantity at the group price', 'Community pledges build up toward the target', 'Target reached → all orders auto-confirmed!'];
-  const HOW_ICONS = ['1', '2', '3', '4'];
+    ? ['מצא רכישה קבוצתית', 'הקם קבוצה או הצטרף', 'שתף עם שכנים מאותה עיר', 'הגיע למינימום ביום הנקוב — כולם מקבלים את המחיר']
+    : ['Find a group buy', 'Start a team or join one', 'Share with neighbors in your city', 'Reach the minimum by cutoff day — everyone gets the group price'];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -33,9 +34,7 @@ export default function GroupsPage() {
             <div className="bg-harvest-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0 mt-0.5">
               {i + 1}
             </div>
-            <div>
-              <p className="text-sm text-gray-600 mt-1">{step}</p>
-            </div>
+            <p className="text-sm text-gray-600 mt-1">{step}</p>
           </div>
         ))}
       </div>
@@ -63,7 +62,7 @@ export default function GroupsPage() {
         </div>
       ) : groupBuys.length === 0 ? (
         <div className="text-center py-20 text-gray-500">
-            <p className="text-lg font-medium">{g.noGroups}</p>
+          <p className="text-lg font-medium">{g.noGroups}</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -72,12 +71,12 @@ export default function GroupsPage() {
               key={gb.id}
               groupBuy={gb}
               onJoin={setJoinTarget}
+              onStartTeam={setTeamTarget}
             />
           ))}
         </div>
       )}
 
-      {/* Join Modal */}
       <JoinModal
         groupBuy={joinTarget}
         onClose={() => setJoinTarget(null)}
@@ -86,6 +85,11 @@ export default function GroupsPage() {
           refetch();
           setTimeout(() => setSuccessMsg(''), 6000);
         }}
+      />
+
+      <CreateTeamModal
+        groupBuy={teamTarget}
+        onClose={() => setTeamTarget(null)}
       />
     </div>
   );

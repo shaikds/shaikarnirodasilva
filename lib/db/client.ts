@@ -42,8 +42,22 @@ export const SCHEMA_SQL = `
     deadline TEXT NOT NULL,
     status TEXT DEFAULT 'active',
     city TEXT,
+    cutoff_day INTEGER DEFAULT 3,
+    team_min_qty INTEGER DEFAULT 10,
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (product_id) REFERENCES products(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS buying_teams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_buy_id INTEGER NOT NULL,
+    invite_code TEXT UNIQUE NOT NULL,
+    creator_name TEXT NOT NULL,
+    creator_email TEXT NOT NULL,
+    current_qty REAL DEFAULT 0,
+    status TEXT DEFAULT 'forming',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (group_buy_id) REFERENCES group_buys(id)
   );
 
   CREATE TABLE IF NOT EXISTS consumer_requests (
@@ -118,6 +132,10 @@ export function createDatabase(dbPath: string): Database.Database {
   db.exec(SCHEMA_SQL);
   // Migrations for existing databases
   try { db.exec('ALTER TABLE group_buys ADD COLUMN city TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE group_buys ADD COLUMN cutoff_day INTEGER DEFAULT 3'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE group_buys ADD COLUMN team_min_qty INTEGER DEFAULT 10'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE group_buy_participants ADD COLUMN team_id INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE orders ADD COLUMN team_id INTEGER'); } catch { /* already exists */ }
   return db;
 }
 

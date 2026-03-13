@@ -50,6 +50,7 @@ export default function SupplierPage() {
   });
   const [groupForm, setGroupForm] = useState({
     product_id: 0, city: '', target_qty: '', regular_price: '', group_price: '', deadline: '',
+    cutoff_day: '3', team_min_qty: '10',
   });
 
   useEffect(() => {
@@ -112,13 +113,15 @@ export default function SupplierPage() {
         regular_price: Number(groupForm.regular_price),
         group_price: Number(groupForm.group_price),
         deadline: groupForm.deadline,
+        cutoff_day: Number(groupForm.cutoff_day),
+        team_min_qty: Number(groupForm.team_min_qty),
       }),
     });
     const data = await res.json();
     if (data.id) {
       setAddResult(`Group buy opened successfully for ${groupForm.city}!`);
       setShowAddGroup(false);
-      setGroupForm({ product_id: 0, city: '', target_qty: '', regular_price: '', group_price: '', deadline: '' });
+      setGroupForm({ product_id: 0, city: '', target_qty: '', regular_price: '', group_price: '', deadline: '', cutoff_day: '3', team_min_qty: '10' });
     } else {
       setAddResult('Error: ' + (data.error || 'Failed'));
     }
@@ -449,6 +452,24 @@ export default function SupplierPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Deadline *</label>
                     <input required type="date" className="input" value={groupForm.deadline}
                       onChange={e => setGroupForm(f => ({ ...f, deadline: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Weekly cutoff day *</label>
+                    <select required className="input" value={groupForm.cutoff_day}
+                      onChange={e => setGroupForm(f => ({ ...f, cutoff_day: e.target.value }))}>
+                      {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d, i) => (
+                        <option key={d} value={i}>{d}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-400 mt-1">Teams that hit minimum by this day each week get confirmed.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Min quantity per team *</label>
+                    <input required type="number" min="1" className="input" placeholder="10" value={groupForm.team_min_qty}
+                      onChange={e => setGroupForm(f => ({ ...f, team_min_qty: e.target.value }))} />
+                    <p className="text-xs text-gray-400 mt-1">How much a single team must order to unlock the group price.</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
