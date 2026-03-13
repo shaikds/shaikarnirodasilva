@@ -9,3 +9,4 @@ export * from './subscriptions';
 export * from './seed';
 export * from './consumer_requests';
 export * from './teams';
+export * from './join-requests';

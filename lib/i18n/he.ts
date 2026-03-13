@@ -184,6 +184,47 @@ export const he = {
     moreNeeded: 'נוספים נדרשים לפתיחת המחיר הקבוצתי',
     cutoffExplain: 'אם הקבוצה שלך תגיע למינימום עד יום זה בכל שבוע, כל ההזמנות יאושרו במחיר הקבוצתי.',
     alreadyCompleted: 'הקבוצה הזו כבר השלימה את הרכישה.',
+    // Privacy
+    publicGroup: 'קבוצה פתוחה',
+    privateGroup: 'קבוצה סגורה',
+    makePrivate: 'הפוך לסגורה',
+    makePublic: 'הפוך לפתוחה',
+    requestToJoin: 'בקש להצטרף',
+    requestSent: 'הבקשה נשלחה!',
+    requestPending: 'ממתין לאישור',
+    pendingRequests: 'בקשות ממתינות',
+    approve: 'אשר',
+    reject: 'דחה',
+    approved: 'אושר',
+    rejected: 'נדחה',
+    // Location
+    selectCity: 'בחר עיר',
+    selectNeighborhood: 'בחר שכונה',
+    neighborhoodLabel: 'שכונה',
+    // Countdown
+    expiresIn: 'נותרו',
+    days: 'ימים',
+    hours: 'שעות',
+    minutes: 'דקות',
+    expired: 'פג תוקף',
+    groupExpireWarn: 'הקבוצה תימחק אם לא תגיע למינימום תוך 7 ימים!',
+    // Weekly reset
+    weeklyInfo: 'כל שבוע, אם הקבוצה לא מגיעה למינימום עד יום הקיצוץ — היא מתאפסת ויש להצטרף מחדש.',
+    weeklyReset: 'הקבוצה אופסה — הצטרפו מחדש לשבוע הבא!',
+    orderedForSupplier: 'הוזמן לספק',
+    notReached: 'לא הגיע למינימום — אופס לשבוע הבא',
+    // Social sharing
+    shareVia: 'שתף דרך',
+    shareWhatsapp: 'ווטסאפ',
+    shareTelegram: 'טלגרם',
+    shareGmail: 'ג׳ימייל',
+    shareMessage: 'היי! הצטרף לקבוצת הרכישה שלנו ב-LocalHarvest וקנה {{product}} במחיר מוזל של ₪{{price}}! הצטרף כאן: {{link}}',
+    shareSubject: 'הצטרף לקבוצת רכישה ב-LocalHarvest',
+    // All groups view
+    allGroups: 'כל הקבוצות',
+    myGroups: 'הקבוצות שלי',
+    filterByCity: 'סנן לפי עיר',
+    filterAll: 'הכל',
   },
 
   footer: {

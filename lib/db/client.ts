@@ -136,6 +136,25 @@ export function createDatabase(dbPath: string): Database.Database {
   try { db.exec('ALTER TABLE group_buys ADD COLUMN team_min_qty INTEGER DEFAULT 10'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE group_buy_participants ADD COLUMN team_id INTEGER'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE orders ADD COLUMN team_id INTEGER'); } catch { /* already exists */ }
+  // v2 migrations: groups privacy, neighborhoods, weekly reset
+  try { db.exec('ALTER TABLE buying_teams ADD COLUMN is_private INTEGER DEFAULT 0'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE buying_teams ADD COLUMN neighborhood TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE buying_teams ADD COLUMN city TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE buying_teams ADD COLUMN expires_at TEXT'); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE group_buys ADD COLUMN neighborhood TEXT`); } catch { /* already exists */ }
+  // Join requests table for private groups
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS team_join_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id INTEGER NOT NULL,
+      customer_name TEXT NOT NULL,
+      customer_email TEXT NOT NULL,
+      quantity REAL NOT NULL DEFAULT 1,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (team_id) REFERENCES buying_teams(id)
+    );
+  `);
   return db;
 }
 

@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTeamByInviteCode, getTeamMemberCount, createTeam, joinTeam, getDayName, getNextCutoffDate } from '@/lib/db';
+import { getTeamByInviteCode, getTeamMemberCount, createTeam, joinTeam, getDayName, getNextCutoffDate, getAllTeams, getTeamsByCity, setTeamPrivacy } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const inviteCode = searchParams.get('invite_code');
+    const listAll = searchParams.get('list');
+    const city = searchParams.get('city');
+
+    // List all teams
+    if (listAll === 'true') {
+      const teams = city ? getTeamsByCity(city) : getAllTeams();
+      return NextResponse.json(teams);
+    }
+
     if (!inviteCode) return NextResponse.json({ error: 'invite_code required' }, { status: 400 });
 
     const team = getTeamByInviteCode(inviteCode);
@@ -27,11 +36,14 @@ export async function POST(request: NextRequest) {
     const { action } = body;
 
     if (action === 'create') {
-      const { group_buy_id, customer_name, customer_email, quantity } = body;
+      const { group_buy_id, customer_name, customer_email, quantity, is_private, city, neighborhood } = body;
       if (!group_buy_id || !customer_name || !customer_email || !quantity) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
       }
-      const result = createTeam(Number(group_buy_id), customer_name, customer_email, Number(quantity));
+      const result = createTeam(
+        Number(group_buy_id), customer_name, customer_email, Number(quantity),
+        { is_private: !!is_private, city: city || undefined, neighborhood: neighborhood || undefined },
+      );
       return NextResponse.json({
         success: true,
         team_id: result.teamId,
@@ -56,6 +68,15 @@ export async function POST(request: NextRequest) {
           ? `Team target reached! All team orders for ${result.product_name} are now confirmed at the group price.`
           : `You joined the team! Once the team reaches its minimum quantity, all orders will be confirmed at the group price.`,
       }, { status: 201 });
+    }
+
+    if (action === 'set_privacy') {
+      const { team_id, is_private, admin_email } = body;
+      if (team_id == null || is_private == null || !admin_email) {
+        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      }
+      setTeamPrivacy(Number(team_id), !!is_private, admin_email);
+      return NextResponse.json({ success: true, is_private: !!is_private });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

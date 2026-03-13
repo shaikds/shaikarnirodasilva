@@ -195,6 +195,47 @@ export const en: Translations = {
     moreNeeded: 'more needed to unlock group price',
     cutoffExplain: 'If your team reaches the minimum by this day each week, all orders are confirmed at the group price.',
     alreadyCompleted: 'This team has already completed its purchase.',
+    // Privacy
+    publicGroup: 'Public Group',
+    privateGroup: 'Private Group',
+    makePrivate: 'Make Private',
+    makePublic: 'Make Public',
+    requestToJoin: 'Request to Join',
+    requestSent: 'Request sent!',
+    requestPending: 'Pending approval',
+    pendingRequests: 'Pending Requests',
+    approve: 'Approve',
+    reject: 'Reject',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    // Location
+    selectCity: 'Select city',
+    selectNeighborhood: 'Select neighborhood',
+    neighborhoodLabel: 'Neighborhood',
+    // Countdown
+    expiresIn: 'Expires in',
+    days: 'days',
+    hours: 'hours',
+    minutes: 'minutes',
+    expired: 'Expired',
+    groupExpireWarn: 'This group will be deleted if minimum is not reached within 7 days!',
+    // Weekly reset
+    weeklyInfo: 'Every week, if the group doesn\'t reach the minimum by cutoff day — it resets and members must rejoin.',
+    weeklyReset: 'Group reset — rejoin for next week!',
+    orderedForSupplier: 'Ordered for supplier',
+    notReached: 'Minimum not reached — reset for next week',
+    // Social sharing
+    shareVia: 'Share via',
+    shareWhatsapp: 'WhatsApp',
+    shareTelegram: 'Telegram',
+    shareGmail: 'Gmail',
+    shareMessage: 'Hey! Join our buying group on LocalHarvest and get {{product}} at a discounted price of ₪{{price}}! Join here: {{link}}',
+    shareSubject: 'Join a buying group on LocalHarvest',
+    // All groups view
+    allGroups: 'All Groups',
+    myGroups: 'My Groups',
+    filterByCity: 'Filter by city',
+    filterAll: 'All',
   },
 
   common: {

@@ -4,6 +4,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Badge } from '@/components/ui/Badge';
+import { CountdownTimer } from '@/components/groups/CountdownTimer';
+import { SocialShare } from '@/components/groups/SocialShare';
 import type { BuyingTeam } from '@/types';
 
 interface TeamPageData extends BuyingTeam {
@@ -19,7 +21,6 @@ export default function TeamInvitePage({ params }: { params: Promise<{ invite_co
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  // Join form
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [qty, setQty] = useState(1);
@@ -51,7 +52,6 @@ export default function TeamInvitePage({ params }: { params: Promise<{ invite_co
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to join');
       setJoinSuccess(data.message);
-      // Re-fetch updated team state
       const updated = await fetch(`/api/teams?invite_code=${invite_code}`).then(r => r.json());
       if (!updated.error) setTeam(updated);
     } catch (err) {
@@ -94,6 +94,8 @@ export default function TeamInvitePage({ params }: { params: Promise<{ invite_co
 
   const isCompleted = team.status === 'completed';
   const isExpired = team.status === 'expired';
+  const isPrivate = !!team.is_private;
+  const inviteUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   return (
     <div className="max-w-xl mx-auto px-4 py-10">
@@ -106,21 +108,31 @@ export default function TeamInvitePage({ params }: { params: Promise<{ invite_co
             fill
             className="object-cover"
           />
-          {savePct > 0 && (
-            <div className="absolute top-3 start-3">
-              <Badge variant="orange">Save {savePct}%</Badge>
-            </div>
-          )}
+          <div className="absolute top-3 start-3 flex gap-1.5">
+            {savePct > 0 && <Badge variant="orange">Save {savePct}%</Badge>}
+            {isPrivate ? <Badge variant="gray">Private</Badge> : <Badge variant="green">Public</Badge>}
+          </div>
           {isCompleted && (
-            <div className="absolute inset-0 bg-green-900/60 flex items-center justify-center">
+            <div className="absolute inset-0 bg-harvest-900/60 flex items-center justify-center">
               <span className="text-white text-xl font-bold">Team Complete!</span>
             </div>
           )}
         </div>
 
         <div className="p-5">
-          <h1 className="text-xl font-bold text-gray-900">{team.product_name}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{team.supplier_name}{team.city ? ` · ${team.city}` : ''}</p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">{team.product_name}</h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {team.supplier_name}
+                {team.city ? ` · ${team.city}` : ''}
+                {team.neighborhood ? ` · ${team.neighborhood}` : ''}
+              </p>
+            </div>
+            {team.expires_at && !isCompleted && !isExpired && (
+              <CountdownTimer expiresAt={team.expires_at} />
+            )}
+          </div>
 
           <div className="flex items-baseline gap-3 mt-3">
             <span className="text-2xl font-bold text-harvest-600">
@@ -155,7 +167,7 @@ export default function TeamInvitePage({ params }: { params: Promise<{ invite_co
               <span className="text-harvest-600 text-xs ms-1">(next: {team.next_cutoff_date})</span>
             )}
             <p className="text-xs text-harvest-600 mt-1">
-              If the team reaches the minimum by this day each week, all orders are confirmed at the group price.
+              Every week: if the team reaches the minimum by cutoff day, orders are confirmed. Otherwise the group resets and members need to rejoin.
             </p>
           </div>
         </div>
@@ -182,6 +194,11 @@ export default function TeamInvitePage({ params }: { params: Promise<{ invite_co
       {!isCompleted && !isExpired && !joinSuccess && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
           <h2 className="text-lg font-bold text-gray-900 mb-4">Join this Team</h2>
+          {isPrivate && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800 mb-4">
+              This is a private group. The admin will need to approve your request.
+            </div>
+          )}
           <form onSubmit={handleJoin} className="space-y-4">
             <label className="block text-sm font-medium text-gray-700">
               Your full name
@@ -210,14 +227,14 @@ export default function TeamInvitePage({ params }: { params: Promise<{ invite_co
         </div>
       )}
 
-      {/* Share section */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-        <h3 className="font-semibold text-gray-900 mb-2">Invite more people</h3>
-        <p className="text-sm text-gray-500 mb-3">Share this link with friends and neighbors in your city.</p>
+      {/* Share section with social buttons */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
+        <h3 className="font-semibold text-gray-900">Invite more people</h3>
+        <p className="text-sm text-gray-500">Share this link with friends and neighbors in your city.</p>
         <div className="flex gap-2">
           <input
             readOnly
-            value={typeof window !== 'undefined' ? window.location.href : ''}
+            value={inviteUrl}
             className="input flex-1 text-xs bg-gray-50"
             onFocus={e => e.target.select()}
           />
@@ -225,6 +242,12 @@ export default function TeamInvitePage({ params }: { params: Promise<{ invite_co
             {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
+
+        <SocialShare
+          inviteUrl={inviteUrl}
+          productName={team.product_name ?? ''}
+          groupPrice={team.group_price ?? 0}
+        />
       </div>
 
       <div className="mt-6 text-center">

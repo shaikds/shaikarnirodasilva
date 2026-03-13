@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { LocationPicker } from './LocationPicker';
+import { SocialShare } from './SocialShare';
 import { useI18n } from '@/lib/i18n';
 import type { GroupBuy } from '@/types';
 
@@ -15,6 +17,9 @@ export function CreateTeamModal({ groupBuy: gb, onClose }: CreateTeamModalProps)
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [qty, setQty] = useState(1);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [city, setCity] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [inviteUrl, setInviteUrl] = useState('');
@@ -24,15 +29,30 @@ export function CreateTeamModal({ groupBuy: gb, onClose }: CreateTeamModalProps)
 
   const inputCls = 'mt-1 block w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-harvest-500';
 
+  function resetForm() {
+    setName(''); setEmail(''); setQty(1); setIsPrivate(false);
+    setCity(''); setNeighborhood(''); setInviteUrl(''); setError('');
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!city) { setError(t.teams.selectCity); return; }
     setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', group_buy_id: gb!.id, customer_name: name, customer_email: email, quantity: qty }),
+        body: JSON.stringify({
+          action: 'create',
+          group_buy_id: gb!.id,
+          customer_name: name,
+          customer_email: email,
+          quantity: qty,
+          is_private: isPrivate,
+          city,
+          neighborhood: neighborhood || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create team');
@@ -58,16 +78,16 @@ export function CreateTeamModal({ groupBuy: gb, onClose }: CreateTeamModalProps)
   return (
     <Modal
       open={!!gb}
-      onClose={() => { onClose(); setInviteUrl(''); setName(''); setEmail(''); setQty(1); }}
+      onClose={() => { onClose(); resetForm(); }}
       title={`${t.teams.createTeamTitle}: ${gb.product_name}`}
       footer={
         inviteUrl ? (
-          <Button variant="secondary" onClick={() => { onClose(); setInviteUrl(''); setName(''); setEmail(''); setQty(1); }}>
-            Close
+          <Button variant="secondary" onClick={() => { onClose(); resetForm(); }}>
+            {t.common.cancel}
           </Button>
         ) : (
           <div className="flex gap-3 justify-end">
-            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button variant="secondary" onClick={onClose}>{t.common.cancel}</Button>
             <Button form="create-team-form" type="submit" disabled={loading}>
               {loading ? t.common.loading : t.teams.startTeam}
             </Button>
@@ -96,9 +116,20 @@ export function CreateTeamModal({ groupBuy: gb, onClose }: CreateTeamModalProps)
             </div>
           </div>
 
+          {/* Social Share */}
+          <SocialShare
+            inviteUrl={inviteUrl}
+            productName={gb.product_name}
+            groupPrice={gb.group_price}
+          />
+
           <div className="bg-harvest-50 border border-harvest-100 rounded-xl p-3 text-sm text-harvest-800">
             <strong>{t.teams.nextCutoff} {dayName}</strong>
             <p className="text-xs mt-1 text-harvest-700">{t.teams.cutoffExplain}</p>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+            {t.teams.groupExpireWarn}
           </div>
 
           <p className="text-xs text-gray-500">{t.teams.shareHint}</p>
@@ -109,27 +140,60 @@ export function CreateTeamModal({ groupBuy: gb, onClose }: CreateTeamModalProps)
 
           <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 rounded-xl p-3">
             <div>
-              <span className="text-gray-500">Group price</span>
+              <span className="text-gray-500">{t.groups.groupPrice}</span>
               <p className="font-bold text-harvest-600">{t.common.currency}{gb.group_price}/{gb.unit}</p>
             </div>
             <div>
-              <span className="text-gray-500">Team minimum</span>
+              <span className="text-gray-500">{t.lang === 'he' ? 'מינימום לקבוצה' : 'Team minimum'}</span>
               <p className="font-bold text-gray-900">{gb.team_min_qty ?? 10} {gb.unit}</p>
             </div>
           </div>
 
+          {/* Location picker */}
+          <LocationPicker
+            city={city}
+            neighborhood={neighborhood}
+            onCityChange={setCity}
+            onNeighborhoodChange={setNeighborhood}
+          />
+
+          {/* Privacy toggle */}
+          <label className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+            <input
+              type="checkbox"
+              checked={isPrivate}
+              onChange={e => setIsPrivate(e.target.checked)}
+              className="w-4 h-4 rounded text-harvest-600 focus:ring-harvest-500"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-700">
+                {isPrivate ? t.teams.privateGroup : t.teams.publicGroup}
+              </span>
+              <p className="text-xs text-gray-500">
+                {isPrivate
+                  ? (t.lang === 'he' ? 'אנשים יצטרכו לבקש אישור להצטרף' : 'People will need to request approval to join')
+                  : (t.lang === 'he' ? 'כל אחד יכול להצטרף ישירות' : 'Anyone can join directly')
+                }
+              </p>
+            </div>
+          </label>
+
           <label className="block text-sm font-medium text-gray-700">
-            Your full name
+            {t.groups.modalName}
             <input required className={inputCls} value={name} onChange={e => setName(e.target.value)} />
           </label>
           <label className="block text-sm font-medium text-gray-700">
-            Email address
+            {t.groups.modalEmail}
             <input type="email" required className={inputCls} value={email} onChange={e => setEmail(e.target.value)} />
           </label>
           <label className="block text-sm font-medium text-gray-700">
-            Your quantity ({gb.unit})
+            {t.groups.modalQty} ({gb.unit})
             <input type="number" min={0.5} step={0.5} required className={inputCls} value={qty} onChange={e => setQty(Number(e.target.value))} />
           </label>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+            {t.teams.weeklyInfo}
+          </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
         </form>

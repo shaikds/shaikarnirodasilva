@@ -46,6 +46,7 @@ export interface GroupBuy {
   deadline: string;
   status: 'active' | 'completed' | 'cancelled';
   city: string | null;
+  neighborhood: string | null;
   cutoff_day: number | null;
   team_min_qty: number | null;
   progress_pct: number;
@@ -60,6 +61,10 @@ export interface BuyingTeam {
   creator_email: string;
   current_qty: number;
   status: 'forming' | 'completed' | 'expired';
+  is_private: number;
+  neighborhood: string | null;
+  city: string | null;
+  expires_at: string | null;
   // joined from group_buys:
   product_name?: string;
   product_id?: number;
@@ -69,10 +74,23 @@ export interface BuyingTeam {
   unit?: string;
   team_min_qty?: number;
   cutoff_day?: number;
-  city?: string;
   deadline?: string;
   supplier_name?: string;
   created_at: string;
+}
+
+export interface TeamJoinRequest {
+  id: number;
+  team_id: number;
+  customer_name: string;
+  customer_email: string;
+  quantity: number;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  // joined fields:
+  invite_code?: string;
+  product_name?: string;
+  team_creator_name?: string;
 }
 
 export interface ConsumerRequest {

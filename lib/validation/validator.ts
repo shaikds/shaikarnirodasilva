@@ -17,8 +17,9 @@ export function validate<T>(schema: ZodSchema<T>, input: unknown): ValidationRes
     return { ok: true, data: result.data };
   }
 
-  const errors = result.error.errors.map(e => ({
-    field: e.path.join('.') || 'root',
+  const issues = 'issues' in result.error ? result.error.issues : [];
+  const errors = issues.map((e) => ({
+    field: e.path.map(String).join('.') || 'root',
     message: e.message,
   }));
 
