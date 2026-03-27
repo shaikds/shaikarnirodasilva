@@ -97,7 +97,7 @@ class SchedulerService {
 
     for (const scraper of scrapers) {
       const jobStmt = db.prepare(
-        'INSERT INTO scrape_jobs (user_id, platform, status, started_at) VALUES (?, ?, ?, datetime("now"))'
+        `INSERT INTO scrape_jobs (user_id, platform, status, started_at) VALUES (?, ?, ?, datetime('now'))`
       );
       const job = jobStmt.run(userId, scraper.getName(), 'running');
       const jobId = job.lastInsertRowid;
@@ -143,7 +143,7 @@ class SchedulerService {
         }
 
         db.prepare(
-          'UPDATE scrape_jobs SET status = ?, results_count = ?, completed_at = datetime("now") WHERE id = ?'
+          `UPDATE scrape_jobs SET status = ?, results_count = ?, completed_at = datetime('now') WHERE id = ?`
         ).run('completed', leadsToInsert.length, jobId);
 
         notificationService.notifyScrapeComplete(userId, scraper.getName(), leadsToInsert.length);
@@ -151,7 +151,7 @@ class SchedulerService {
       } catch (err) {
         logger.error(`Scrape job ${jobId} failed`, { error: err.message, platform: scraper.getName() });
         db.prepare(
-          'UPDATE scrape_jobs SET status = ?, completed_at = datetime("now") WHERE id = ?'
+          `UPDATE scrape_jobs SET status = ?, completed_at = datetime('now') WHERE id = ?`
         ).run('failed', jobId);
       }
     }
