@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         UserRole @default(MEMBER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Trend {
+  id         String        @id @default(uuid())
+  keyword    String
+  source     TrendSource
+  sourceUrl  String?
+  volume     Int
+  growthRate Float
+  category   String?
+  detectedAt DateTime      @default(now())
+  status     TrendStatus   @default(ACTIVE)
+  suppliers  TrendSupplier[]
+}
+
+model Supplier {
+  id               String          @id @default(uuid())
+  name             String
+  source           String
+  sourceUrl        String
+  rating           Float?
+  reviewCount      Int             @default(0)
+  responseTime     Int?
+  minOrderQty      Int?
+  priceRange       String?
+  country          String?
+  reliabilityScore Float           @default(0)
+  verified         Boolean         @default(false)
+  contactEmail     String?
+  lastScrapedAt    DateTime?
+  createdAt        DateTime        @default(now())
+  trends           TrendSupplier[]
+  outreaches       Outreach[]
+}
+
+model TrendSupplier {
+  id         String   @id @default(uuid())
+  trendId    String
+  supplierId String
+  matchScore Float
+  trend      Trend    @relation(fields: [trendId], references: [id])
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([trendId, supplierId])
+}
+
+model Outreach {
+  id          String          @id @default(uuid())
+  supplierId  String
+  supplier    Supplier        @relation(fields: [supplierId], references: [id])
+  channel     OutreachChannel
+  status      OutreachStatus
+  sentAt      DateTime?
+  respondedAt DateTime?
+  createdAt   DateTime        @default(now())
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum TrendSource {
+  REDDIT
+  GOOGLE_TRENDS
+}
+
+enum TrendStatus {
+  ACTIVE
+  STALE
+  ARCHIVED
+}
+
+enum OutreachChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum OutreachStatus {
+  PENDING
+  SENT
+  RESPONDED
+  FAILED
+}

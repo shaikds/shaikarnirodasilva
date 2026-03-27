@@ -31,15 +31,18 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
 # Prisma
-prisma/*.db
+backend/prisma/*.db
+backend/prisma/migrations/
 
 # Coverage
 coverage/
+.nyc_output/
 
 # Misc
 *.tsbuildinfo
