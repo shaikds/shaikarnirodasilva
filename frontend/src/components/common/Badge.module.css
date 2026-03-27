@@ -1,0 +1,54 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.sm {
+  padding: 2px 8px;
+  font-size: 0.7rem;
+}
+
+.md {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+.lg {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.default {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-blue);
+}
+
+.green {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-green);
+}
+
+.orange {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-orange);
+}
+
+.red {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--accent-red);
+}
+
+.purple {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--accent-purple);
+}
