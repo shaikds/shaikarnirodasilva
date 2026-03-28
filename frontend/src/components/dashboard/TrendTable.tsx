@@ -42,6 +42,12 @@ export function TrendTable({ trends }: TrendTableProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {trends.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+            <p className="text-lg font-medium">No data yet</p>
+            <p className="text-sm mt-1">Trigger a scrape from the <a href="/dashboard/admin" className="text-blue-600 hover:underline">Admin page</a> to get started.</p>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -73,6 +79,7 @@ export function TrendTable({ trends }: TrendTableProps) {
             </tbody>
           </table>
         </div>
+        )}
       </CardContent>
     </Card>
   );

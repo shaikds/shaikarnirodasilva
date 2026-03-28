@@ -49,7 +49,7 @@ export function TrendList({ trends, page, totalPages, onPageChange }: TrendListP
         </div>
         <h3 className="text-lg font-semibold mb-1">No trends found</h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-          Try adjusting your filters or check back later for new trends.
+          Try adjusting your filters, or trigger a scrape from the <a href="/dashboard/admin" className="text-blue-600 hover:underline">Admin page</a> to get started.
         </p>
       </div>
     );

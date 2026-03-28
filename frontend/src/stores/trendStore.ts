@@ -13,6 +13,7 @@ interface TrendStore {
   selectedTrend: Trend | null;
   filters: TrendFilters;
   loading: boolean;
+  error: string | null;
   page: number;
   pageSize: number;
   fetchTrends: () => Promise<void>;
@@ -31,6 +32,7 @@ export const useTrendStore = create<TrendStore>((set, get) => ({
     search: "",
   },
   loading: false,
+  error: null,
   page: 1,
   pageSize: 10,
 
@@ -49,11 +51,9 @@ export const useTrendStore = create<TrendStore>((set, get) => ({
         category: t.category || "Uncategorized",
         matchedSuppliers: t.suppliers?.length || 0,
       }));
-      set({ trends, loading: false });
+      set({ trends, loading: false, error: null });
     } catch {
-      // Fallback to mock data if backend is not available
-      const { mockTrends } = await import("@/lib/mock-data");
-      set({ trends: mockTrends, loading: false });
+      set({ trends: [], loading: false, error: "Failed to load trends" });
     }
   },
 

@@ -17,13 +17,14 @@ export class GoogleTrendsScraper implements ITrendScraper {
 
   async execute(params: Record<string, unknown>): Promise<ScraperResult<ScrapedTrendData>> {
     const keywords = (params.keywords as string[]) || [
-      "trending products 2024",
-      "viral products",
-      "best sellers",
-      "new gadgets",
-      "popular items",
+      "trending products to buy",
+      "viral products 2026",
+      "best selling items",
+      "popular gadgets",
+      "dropshipping products Israel",
     ];
-    const geo = (params.geo as string) || "US";
+    const geo = (params.geo as string) || "IL";
+    logger.info("Google Trends scraper starting", { serpApiConfigured: !!env.SERPAPI_KEY, keywordCount: keywords.length, geo });
     const errors: string[] = [];
     const trendData: ScrapedTrendData[] = [];
 
@@ -56,6 +57,7 @@ export class GoogleTrendsScraper implements ITrendScraper {
         }
 
         const data = await response.json();
+        logger.info("SerpAPI response", { keyword, status: response.status, hasData: !!data.related_queries });
 
         // Extract related queries (rising/top)
         const risingQueries: SerpApiTrendResult[] = data.related_queries?.rising || [];

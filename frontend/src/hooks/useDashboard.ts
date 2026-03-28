@@ -2,14 +2,23 @@
 
 import { useState, useEffect } from "react";
 import api from "@/lib/api";
-import { dashboardStats, generateChartData, mockTrends, mockActivities } from "@/lib/mock-data";
 
 export function useDashboard() {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState(dashboardStats);
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState({
+    totalTrends: 0,
+    activeSuppliers: 0,
+    outreachSent: 0,
+    responseRate: 0,
+    trendsChange: 0,
+    suppliersChange: 0,
+    outreachChange: 0,
+    responseRateChange: 0,
+  });
   const [chartData, setChartData] = useState<{ date: string; reddit: number; googleTrends: number }[]>([]);
-  const [recentTrends, setRecentTrends] = useState(mockTrends.slice(0, 5));
-  const [activities, setActivities] = useState(mockActivities);
+  const [recentTrends, setRecentTrends] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchDashboard() {
@@ -51,19 +60,29 @@ export function useDashboard() {
           })));
         }
 
-        setChartData(generateChartData());
+        setChartData([]);
+        setError(null);
         setLoading(false);
       } catch {
-        // Fallback to mock data
-        setStats(dashboardStats);
-        setChartData(generateChartData());
-        setRecentTrends(mockTrends.slice(0, 5));
-        setActivities(mockActivities);
+        setStats({
+          totalTrends: 0,
+          activeSuppliers: 0,
+          outreachSent: 0,
+          responseRate: 0,
+          trendsChange: 0,
+          suppliersChange: 0,
+          outreachChange: 0,
+          responseRateChange: 0,
+        });
+        setChartData([]);
+        setRecentTrends([]);
+        setActivities([]);
+        setError("Failed to load dashboard data");
         setLoading(false);
       }
     }
     fetchDashboard();
   }, []);
 
-  return { stats, chartData, recentTrends, activities, loading };
+  return { stats, chartData, recentTrends, activities, loading, error };
 }

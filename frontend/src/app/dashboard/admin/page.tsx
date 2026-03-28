@@ -125,7 +125,28 @@ function formatTimestamp(ts?: number | string) {
   return date.toLocaleString();
 }
 
+interface ConfigStatus {
+  database: boolean;
+  redis: boolean;
+  serpapi: boolean;
+  reddit: boolean;
+  resend: boolean;
+  greenapi: boolean;
+}
+
 export default function AdminPage() {
+  const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api.get("/dashboard/config-status")
+      .then((res) => {
+        setConfigStatus(res.data.data || res.data);
+        setBackendOnline(true);
+      })
+      .catch(() => setBackendOnline(false));
+  }, []);
+
   const [triggerLoading, setTriggerLoading] = useState<
     Record<TriggerKey, boolean>
   >({
@@ -229,6 +250,40 @@ export default function AdminPage() {
           Manage scraping jobs, monitor queues, and view job history
         </p>
       </div>
+
+      {/* Config Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Database className="h-4 w-4 text-blue-600" />
+            System Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {backendOnline === false ? (
+            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 text-sm text-red-700 dark:text-red-400">
+              Backend is offline. Make sure Docker containers are running.
+            </div>
+          ) : configStatus ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {Object.entries(configStatus).map(([key, configured]) => (
+                <div key={key} className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                  {configured ? (
+                    <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+                  )}
+                  <span className="text-xs font-medium capitalize">{key}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Checking...
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Job Trigger Section */}
       <Card>

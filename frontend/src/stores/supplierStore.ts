@@ -13,6 +13,7 @@ interface SupplierStore {
   selectedSupplier: Supplier | null;
   filters: SupplierFilters;
   loading: boolean;
+  error: string | null;
   fetchSuppliers: () => Promise<void>;
   setFilter: (key: keyof SupplierFilters, value: string) => void;
   setSelectedSupplier: (supplier: Supplier | null) => void;
@@ -28,6 +29,7 @@ export const useSupplierStore = create<SupplierStore>((set, get) => ({
     search: "",
   },
   loading: false,
+  error: null,
 
   fetchSuppliers: async () => {
     set({ loading: true });
@@ -52,15 +54,9 @@ export const useSupplierStore = create<SupplierStore>((set, get) => ({
         if (a.source === "ALIBABA" && b.source === "LOCAL") return 1;
         return b.reliabilityScore - a.reliabilityScore;
       });
-      set({ suppliers: sorted, loading: false });
+      set({ suppliers: sorted, loading: false, error: null });
     } catch {
-      const { mockSuppliers } = await import("@/lib/mock-data");
-      const sorted = [...mockSuppliers].sort((a, b) => {
-        if (a.source === "LOCAL" && b.source === "ALIBABA") return -1;
-        if (a.source === "ALIBABA" && b.source === "LOCAL") return 1;
-        return b.reliabilityScore - a.reliabilityScore;
-      });
-      set({ suppliers: sorted, loading: false });
+      set({ suppliers: [], loading: false, error: "Failed to load suppliers" });
     }
   },
 

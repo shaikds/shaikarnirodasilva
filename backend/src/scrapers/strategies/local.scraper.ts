@@ -6,106 +6,90 @@ export class LocalSupplierScraper implements ISupplierScraper {
   readonly name = "local";
 
   async execute(params: Record<string, unknown>): Promise<ScraperResult<ScrapedSupplierData>> {
-    const keywords = (params.keywords as string[]) || [];
-    const region = (params.region as string) || "US";
+    const keywords = (params.keywords as string[]) || ["electronics supplier", "wholesale products", "manufacturer"];
+    const region = (params.region as string) || "IL";
     const errors: string[] = [];
     const supplierData: ScrapedSupplierData[] = [];
 
-    try {
-      const { PlaywrightCrawler } = await import("crawlee");
-
-      const results: ScrapedSupplierData[] = [];
-
-      const crawler = new PlaywrightCrawler({
-        maxConcurrency: env.SCRAPE_CONCURRENCY,
-        requestHandlerTimeoutSecs: env.SCRAPE_REQUEST_TIMEOUT / 1000,
-        headless: true,
-        async requestHandler({ page, request }) {
-          try {
-            await page.waitForLoadState("networkidle", { timeout: 15000 });
-
-            const listings = await page.$$("[class*='result'], [class*='listing'], .business-card");
-
-            for (const listing of listings) {
-              try {
-                const name = await listing.$eval(
-                  "h2, h3, [class*='name'], [class*='title']",
-                  (el) => el.textContent?.trim() || ""
-                ).catch(() => "");
-
-                if (!name) continue;
-
-                const website = await listing.$eval(
-                  "a[href*='http']",
-                  (el) => (el as HTMLAnchorElement).href
-                ).catch(() => request.url);
-
-                const ratingText = await listing.$eval(
-                  "[class*='rating'], [class*='stars']",
-                  (el) => el.textContent?.trim() || "0"
-                ).catch(() => "0");
-
-                const reviewText = await listing.$eval(
-                  "[class*='review']",
-                  (el) => el.textContent?.trim() || "0"
-                ).catch(() => "0");
-
-                const locationText = await listing.$eval(
-                  "[class*='location'], [class*='address']",
-                  (el) => el.textContent?.trim() || ""
-                ).catch(() => "");
-
-                const emailText = await listing.$eval(
-                  "a[href^='mailto:']",
-                  (el) => (el as HTMLAnchorElement).href.replace("mailto:", "")
-                ).catch(() => null);
-
-                results.push({
-                  name,
-                  sourceUrl: website,
-                  rating: parseFloat(ratingText) || null,
-                  reviewCount: parseInt(reviewText.replace(/[^0-9]/g, ""), 10) || 0,
-                  responseTime: null,
-                  minOrderQty: null,
-                  priceRange: null,
-                  country: locationText || region,
-                  contactEmail: emailText,
-                  verified: false,
-                });
-              } catch (elementErr) {
-                const errMsg = elementErr instanceof Error ? elementErr.message : String(elementErr);
-                logger.debug("Failed to parse local listing", { error: errMsg });
-              }
-            }
-          } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            errors.push(`Failed to scrape local directory page: ${errMsg}`);
-          }
-        },
-      });
-
-      const requests: { url: string; userData: Record<string, unknown> }[] = [];
-      for (const keyword of keywords) {
-        requests.push({
-          url: `https://www.thomasnet.com/nsearch.html?cov=NA&heading=&what=${encodeURIComponent(keyword)}&where=${encodeURIComponent(region)}`,
-          userData: { keyword, region },
-        });
-      }
-
-      if (requests.length > 0) {
-        await crawler.run(requests);
-      }
-
-      supplierData.push(...results);
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      errors.push(`Local supplier scraper failed: ${errMsg}`);
-      logger.error("Local supplier scraper failed", { error: errMsg });
+    if (!env.SERPAPI_KEY) {
+      return { success: false, data: [], errors: ["SERPAPI_KEY not configured"], scrapedAt: new Date() };
     }
 
-    logger.info(`Local supplier scraper completed: ${supplierData.length} suppliers found`, {
-      errors: errors.length,
-    });
+    for (const keyword of keywords) {
+      try {
+        // Search for local suppliers using SerpAPI Google Search
+        const url = new URL("https://serpapi.com/search.json");
+        url.searchParams.set("engine", "google");
+        url.searchParams.set("q", `${keyword} supplier Israel`);
+        url.searchParams.set("gl", region.toLowerCase());
+        url.searchParams.set("hl", "en");
+        url.searchParams.set("num", "10");
+        url.searchParams.set("api_key", env.SERPAPI_KEY);
+
+        const response = await fetch(url.toString(), {
+          signal: AbortSignal.timeout(env.SCRAPE_REQUEST_TIMEOUT),
+        });
+
+        if (!response.ok) {
+          errors.push(`SerpAPI error for "${keyword}": HTTP ${response.status}`);
+          continue;
+        }
+
+        const data = await response.json();
+
+        // Extract from organic results
+        const organicResults = data.organic_results || [];
+        for (const result of organicResults) {
+          const name = result.title || "";
+          const sourceUrl = result.link || "";
+          const snippet = result.snippet || "";
+
+          // Skip non-supplier results
+          if (!name || !sourceUrl) continue;
+
+          // Try to extract email from snippet
+          const emailMatch = snippet.match(/[\w.-]+@[\w.-]+\.\w+/);
+
+          supplierData.push({
+            name: name.replace(/ - .*$/, "").trim(), // Clean title
+            sourceUrl,
+            rating: null,
+            reviewCount: 0,
+            responseTime: null,
+            minOrderQty: null,
+            priceRange: null,
+            country: "Israel",
+            contactEmail: emailMatch ? emailMatch[0] : null,
+            verified: false,
+          });
+        }
+
+        // Also extract from local/map results if available
+        const localResults = data.local_results?.places || [];
+        for (const place of localResults) {
+          supplierData.push({
+            name: place.title || place.name || "",
+            sourceUrl: place.link || place.website || "",
+            rating: place.rating || null,
+            reviewCount: place.reviews || 0,
+            responseTime: null,
+            minOrderQty: null,
+            priceRange: null,
+            country: "Israel",
+            contactEmail: null,
+            verified: !!place.rating,
+          });
+        }
+
+        logger.info(`Local scraper: "${keyword}" - found ${organicResults.length} organic + ${localResults.length} local results`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        errors.push(`Failed to search for "${keyword}": ${errMsg}`);
+        logger.error(`Local supplier scraper error for "${keyword}"`, { error: errMsg });
+      }
+    }
+
+    logger.info(`Local supplier scraper completed: ${supplierData.length} suppliers found`, { errors: errors.length });
 
     return {
       success: errors.length === 0,

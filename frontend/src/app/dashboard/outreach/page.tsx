@@ -2,8 +2,14 @@
 
 import { useState, useEffect } from "react";
 import api from "@/lib/api";
-import { mockOutreach } from "@/lib/mock-data";
-import type { OutreachItem } from "@/lib/mock-data";
+interface OutreachItem {
+  id: string;
+  supplierName: string;
+  trendKeyword: string;
+  sentAt: string;
+  status: string;
+  channel: string;
+}
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
@@ -59,7 +65,7 @@ function channelIcon(channel: string) {
 }
 
 export default function OutreachPage() {
-  const [outreach, setOutreach] = useState<OutreachItem[]>(mockOutreach);
+  const [outreach, setOutreach] = useState<OutreachItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -76,8 +82,7 @@ export default function OutreachPage() {
         }));
         setOutreach(data);
       } catch {
-        // Fallback to mock data
-        setOutreach(mockOutreach);
+        setOutreach([]);
       } finally {
         setLoading(false);
       }
@@ -146,49 +151,56 @@ export default function OutreachPage() {
         </Card>
       </div>
 
-      {/* Outreach Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Mail className="h-4 w-4 text-blue-600" />
-            Outreach History
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800">
-                  <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Supplier</th>
-                  <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Trend</th>
-                  <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Channel</th>
-                  <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Sent</th>
-                  <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {outreach.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-b border-slate-100 dark:border-slate-800/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
-                  >
-                    <td className="py-3 font-medium">{item.supplierName}</td>
-                    <td className="py-3 text-slate-600 dark:text-slate-300">{item.trendKeyword}</td>
-                    <td className="py-3">
-                      <div className="flex items-center gap-1.5">
-                        {channelIcon(item.channel)}
-                        <span className="text-xs">{item.channel}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 text-slate-500 dark:text-slate-400">{formatDate(item.sentAt)}</td>
-                    <td className="py-3">{statusBadge(item.status)}</td>
+      {/* Outreach Table or Empty State */}
+      {outreach.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+          <p className="text-lg font-medium">No data yet</p>
+          <p className="text-sm mt-1">Trigger a scrape from the <a href="/dashboard/admin" className="text-blue-600 hover:underline">Admin page</a> to get started.</p>
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Mail className="h-4 w-4 text-blue-600" />
+              Outreach History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800">
+                    <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Supplier</th>
+                    <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Trend</th>
+                    <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Channel</th>
+                    <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Sent</th>
+                    <th className="pb-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </thead>
+                <tbody>
+                  {outreach.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="border-b border-slate-100 dark:border-slate-800/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
+                    >
+                      <td className="py-3 font-medium">{item.supplierName}</td>
+                      <td className="py-3 text-slate-600 dark:text-slate-300">{item.trendKeyword}</td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-1.5">
+                          {channelIcon(item.channel)}
+                          <span className="text-xs">{item.channel}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 text-slate-500 dark:text-slate-400">{formatDate(item.sentAt)}</td>
+                      <td className="py-3">{statusBadge(item.status)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

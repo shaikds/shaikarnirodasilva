@@ -41,10 +41,10 @@ router.post("/trigger/scrape/:type", async (req: Request, res: Response, next: N
       params: type === "reddit"
         ? { subreddits: ["ecommerce", "dropshipping", "FulfillmentByAmazon", "Entrepreneur"], limit: 50 }
         : type === "google-trends"
-        ? { keywords: [], geo: "US" }
+        ? { keywords: ["trending products to buy", "viral products 2026", "best selling items online", "popular gadgets", "dropshipping products Israel"], geo: "IL" }
         : type === "alibaba"
         ? { keywords: [], maxResults: 20 }
-        : { keywords: [], region: "US" },
+        : { keywords: [], region: "IL" },
     });
 
     const response: ApiResponse<{ message: string; scraperType: string }> = {

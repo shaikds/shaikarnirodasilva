@@ -1,14 +1,17 @@
 "use client";
 
-import { mockOutreach } from "@/lib/mock-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, CheckCircle, Clock, AlertCircle } from "lucide-react";
 
-export function OutreachStats() {
-  const total = mockOutreach.length;
-  const responded = mockOutreach.filter((o) => o.status === "RESPONDED").length;
-  const pending = mockOutreach.filter((o) => ["SENT", "DELIVERED", "OPENED"].includes(o.status)).length;
-  const failed = mockOutreach.filter((o) => o.status === "FAILED").length;
+interface OutreachStatsProps {
+  outreach?: Array<{ status: string }>;
+}
+
+export function OutreachStats({ outreach = [] }: OutreachStatsProps) {
+  const total = outreach.length;
+  const responded = outreach.filter((o) => o.status === "RESPONDED").length;
+  const pending = outreach.filter((o) => ["SENT", "DELIVERED", "OPENED"].includes(o.status)).length;
+  const failed = outreach.filter((o) => o.status === "FAILED").length;
 
   const stats = [
     { label: "Total Sent", value: total, icon: Mail, color: "text-blue-600" },

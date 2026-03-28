@@ -1,7 +1,6 @@
 "use client";
 
 import type { Supplier } from "@/lib/mock-data";
-import { mockOutreach } from "@/lib/mock-data";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ReliabilityMeter } from "./ReliabilityMeter";
@@ -35,9 +34,7 @@ function outreachStatusBadge(status: string) {
 export function SupplierDetail({ supplier, open, onOpenChange }: SupplierDetailProps) {
   if (!supplier) return null;
 
-  const supplierOutreach = mockOutreach.filter(
-    (o) => o.supplierName === supplier.name
-  );
+  const supplierOutreach: Array<{ id: string; trendKeyword: string; sentAt: string; channel: string; status: string }> = [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -109,7 +106,7 @@ export function SupplierDetail({ supplier, open, onOpenChange }: SupplierDetailP
           <div>
             <h4 className="font-semibold text-sm mb-3">Outreach History</h4>
             {supplierOutreach.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No outreach sent yet.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">No outreach history. Outreach data will appear here once campaigns are triggered.</p>
             ) : (
               <div className="space-y-2">
                 {supplierOutreach.map((item) => (

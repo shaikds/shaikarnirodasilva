@@ -85,7 +85,7 @@ export default function DashboardPage() {
           <TrendTable trends={recentTrends} />
         </div>
         <div className="space-y-6">
-          <OutreachStats />
+          <OutreachStats outreach={[]} />
           <RecentActivity activities={activities} />
         </div>
       </div>
