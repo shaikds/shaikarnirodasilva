@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { suggest } from '../controllers/outreachController.js';
-import { authenticate } from '../middleware/auth.js';
+import { defaultUser } from '../middleware/defaultUser.js';
 import { validate, outreachValidation } from '../middleware/validator.js';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(defaultUser);
 
 router.get('/suggest/:leadId', validate(outreachValidation.suggest), suggest);
 

@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { getAll, getById, update, triggerScrape } from '../controllers/leadController.js';
-import { authenticate } from '../middleware/auth.js';
+import { defaultUser } from '../middleware/defaultUser.js';
 import { validate, leadValidation } from '../middleware/validator.js';
 import { scrapeLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(defaultUser);
 
 router.get('/', validate(leadValidation.getAll), getAll);
 router.post('/scrape', scrapeLimiter, validate(leadValidation.scrape), triggerScrape);

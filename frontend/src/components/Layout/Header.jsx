@@ -1,26 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import styles from './Header.module.css';
 
 export default function Header({ onMenuToggle }) {
-  const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
   const navigate = useNavigate();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -28,11 +14,6 @@ export default function Header({ onMenuToggle }) {
       navigate(`/leads?search=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery('');
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
   };
 
   return (
@@ -74,36 +55,11 @@ export default function Header({ onMenuToggle }) {
           )}
         </button>
 
-        <div className={styles.userMenu} ref={dropdownRef}>
-          <button
-            className={styles.userBtn}
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-          >
-            <div className={styles.avatar}>
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
-            </div>
-            <span className={styles.userName}>{user?.name || 'User'}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-          {dropdownOpen && (
-            <div className={styles.dropdown}>
-              <div className={styles.dropdownHeader}>
-                <div className={styles.dropdownName}>{user?.name || 'User'}</div>
-                <div className={styles.dropdownEmail}>{user?.email || ''}</div>
-              </div>
-              <div className={styles.dropdownDivider} />
-              <button className={styles.dropdownItem} onClick={handleLogout}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-                Logout
-              </button>
-            </div>
-          )}
+        <div className={styles.userMenu}>
+          <div className={styles.userBtn}>
+            <div className={styles.avatar}>U</div>
+            <span className={styles.userName}>User</span>
+          </div>
         </div>
       </div>
     </header>

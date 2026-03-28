@@ -6,10 +6,8 @@ class ApiService {
   }
 
   getHeaders() {
-    const token = localStorage.getItem('token');
     return {
       'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
     };
   }
 
@@ -18,13 +16,6 @@ class ApiService {
       ...options,
       headers: { ...this.getHeaders(), ...options.headers },
     });
-
-    if (response.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-      return;
-    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));

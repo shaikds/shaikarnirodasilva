@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { getStats } from '../controllers/dashboardController.js';
-import { authenticate } from '../middleware/auth.js';
+import { defaultUser } from '../middleware/defaultUser.js';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(defaultUser);
 
 router.get('/stats', getStats);
 
