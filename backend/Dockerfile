@@ -25,19 +25,8 @@ RUN cd backend && npx prisma generate
 # Verify migrations exist
 RUN ls -la /app/backend/prisma/migrations/ && ls -la /app/backend/prisma/migrations/0001_init/
 
-# Create entrypoint script that runs from the correct directory
-RUN cat > /app/entrypoint.sh << 'SCRIPT'
-#!/bin/sh
-set -e
-echo "Running Prisma migrations..."
-cd /app/backend
-ls -la prisma/migrations/
-npx prisma migrate deploy
-echo "Starting backend server..."
-cd /app
-exec npx ts-node --transpile-only -P backend/tsconfig.json backend/src/index.ts
-SCRIPT
-RUN chmod +x /app/entrypoint.sh
+# Create entrypoint script
+RUN printf '#!/bin/sh\nset -e\necho "Running Prisma migrations..."\ncd /app/backend\nls -la prisma/migrations/\nnpx prisma migrate deploy\necho "Starting backend server..."\ncd /app\nexec npx ts-node --transpile-only -P backend/tsconfig.json backend/src/index.ts\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 EXPOSE 3001
 CMD ["/app/entrypoint.sh"]
