@@ -5,12 +5,13 @@ import logger from '../utils/logger.js';
 
 export async function getAll(req, res, next) {
   try {
-    const { status, platform, minScore, limit, offset, sortBy, sortOrder } = req.query;
+    const { status, platform, minScore, search, limit, offset, sortBy, sortOrder } = req.query;
 
     const filters = {
       status,
       platform,
       minScore: minScore !== undefined ? Number(minScore) : undefined,
+      search,
       limit: limit ? Number(limit) : 50,
       offset: offset ? Number(offset) : 0,
       sortBy,

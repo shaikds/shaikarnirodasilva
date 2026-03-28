@@ -69,11 +69,12 @@ export default function OutreachSuggestion({ lead, isOpen, onClose }) {
           <div key={idx} className={styles.suggestion}>
             <div className={styles.suggestionHeader}>
               <span className={styles.suggestionTitle}>
-                {suggestion.title || `Suggestion ${idx + 1}`}
+                {suggestion.name || suggestion.title || `Suggestion ${idx + 1}`}
+                {suggestion.subject && <span className={styles.subject}> - {suggestion.subject}</span>}
               </span>
               <button
                 className={styles.copyBtn}
-                onClick={() => handleCopy(suggestion.content || suggestion.message || suggestion, idx)}
+                onClick={() => handleCopy(suggestion.body || suggestion.content || suggestion.message || suggestion, idx)}
               >
                 {copiedIdx === idx ? (
                   <>
@@ -94,7 +95,7 @@ export default function OutreachSuggestion({ lead, isOpen, onClose }) {
               </button>
             </div>
             <div className={styles.suggestionContent}>
-              {typeof suggestion === 'string' ? suggestion : suggestion.content || suggestion.message || JSON.stringify(suggestion)}
+              {typeof suggestion === 'string' ? suggestion : suggestion.body || suggestion.content || suggestion.message || JSON.stringify(suggestion)}
             </div>
           </div>
         ))}

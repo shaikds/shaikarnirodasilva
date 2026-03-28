@@ -25,7 +25,8 @@ export function useKeywords() {
 
   const addKeyword = useCallback(async (term, category) => {
     try {
-      const newKeyword = await api.post('/keywords', { term, category });
+      const data = await api.post('/keywords', { term, category });
+      const newKeyword = data.keyword || data;
       setKeywords((prev) => [...prev, newKeyword]);
       return newKeyword;
     } catch (err) {
@@ -36,7 +37,8 @@ export function useKeywords() {
 
   const updateKeyword = useCallback(async (id, updates) => {
     try {
-      const updated = await api.put(`/keywords/${id}`, updates);
+      const data = await api.put(`/keywords/${id}`, updates);
+      const updated = data.keyword || data;
       setKeywords((prev) => prev.map((k) => (k.id === id ? { ...k, ...updated } : k)));
       return updated;
     } catch (err) {

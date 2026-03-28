@@ -19,15 +19,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function LeadChart({ data = [] }) {
-  const chartData = data.length > 0 ? data : [
-    { date: 'Mon', leads: 12 },
-    { date: 'Tue', leads: 19 },
-    { date: 'Wed', leads: 8 },
-    { date: 'Thu', leads: 24 },
-    { date: 'Fri', leads: 16 },
-    { date: 'Sat', leads: 31 },
-    { date: 'Sun', leads: 22 },
-  ];
+  const chartData = data.length > 0
+    ? data.map(d => ({ date: d.date, leads: d.count ?? d.leads ?? 0 }))
+    : [{ date: 'Today', leads: 0 }];
 
   return (
     <div style={{ width: '100%', height: 300 }}>

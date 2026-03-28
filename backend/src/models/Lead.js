@@ -6,7 +6,7 @@ class Lead {
     return db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
   }
 
-  static findByUserId(userId, { status, platform, minScore, limit = 50, offset = 0, sortBy = 'discovered_at', sortOrder = 'DESC' } = {}) {
+  static findByUserId(userId, { status, platform, minScore, search, limit = 50, offset = 0, sortBy = 'discovered_at', sortOrder = 'DESC' } = {}) {
     const db = getDatabase();
     const conditions = ['user_id = ?'];
     const params = [userId];
@@ -14,6 +14,7 @@ class Lead {
     if (status) { conditions.push('status = ?'); params.push(status); }
     if (platform) { conditions.push('platform = ?'); params.push(platform); }
     if (minScore !== undefined) { conditions.push('score >= ?'); params.push(minScore); }
+    if (search) { conditions.push('(content LIKE ? OR author LIKE ? OR matched_keywords LIKE ?)'); params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
 
     const allowedSorts = ['discovered_at', 'score', 'status', 'platform'];
     const allowedOrders = ['ASC', 'DESC'];
@@ -25,13 +26,14 @@ class Lead {
     return db.prepare(query).all(...params);
   }
 
-  static countByUserId(userId, { status, platform, minScore } = {}) {
+  static countByUserId(userId, { status, platform, minScore, search } = {}) {
     const db = getDatabase();
     const conditions = ['user_id = ?'];
     const params = [userId];
     if (status) { conditions.push('status = ?'); params.push(status); }
     if (platform) { conditions.push('platform = ?'); params.push(platform); }
     if (minScore !== undefined) { conditions.push('score >= ?'); params.push(minScore); }
+    if (search) { conditions.push('(content LIKE ? OR author LIKE ? OR matched_keywords LIKE ?)'); params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
     const query = `SELECT COUNT(*) as count FROM leads WHERE ${conditions.join(' AND ')}`;
     return db.prepare(query).get(...params).count;
   }

@@ -40,7 +40,8 @@ export function useLeads(initialFilters = {}) {
 
   const updateLead = useCallback(async (id, updates) => {
     try {
-      const updated = await api.patch(`/leads/${id}`, updates);
+      const data = await api.patch(`/leads/${id}`, updates);
+      const updated = data.lead || data;
       setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...updated } : l)));
       return updated;
     } catch (err) {

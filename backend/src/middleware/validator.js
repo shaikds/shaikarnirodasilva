@@ -36,6 +36,7 @@ export const keywordValidation = {
     body('term').optional().trim().isLength({ min: 1, max: 200 }).withMessage('Term max 200 chars'),
     body('category').optional().trim().isLength({ max: 50 }).withMessage('Category max 50 chars'),
     body('isActive').optional().isBoolean().withMessage('isActive must be boolean'),
+    body('is_active').optional().isBoolean().withMessage('is_active must be boolean'),
   ],
   delete: [
     param('id').isInt({ min: 1 }).withMessage('Valid keyword ID required'),
@@ -63,7 +64,7 @@ export const leadValidation = {
   scrape: [
     body('platform').optional().isIn(['reddit', 'web', 'all']).withMessage('Invalid platform'),
     body('subreddits').optional().isArray({ max: 20 }).withMessage('Subreddits must be an array (max 20)'),
-    body('subreddits.*').isString().trim().isLength({ min: 1, max: 50 }).matches(/^[a-zA-Z0-9_]+$/).withMessage('Each subreddit must be a valid name (alphanumeric, max 50 chars)'),
+    body('subreddits.*').optional().isString().trim().isLength({ min: 1, max: 50 }).matches(/^[a-zA-Z0-9_]+$/).withMessage('Each subreddit must be a valid name (alphanumeric, max 50 chars)'),
   ],
 };
 

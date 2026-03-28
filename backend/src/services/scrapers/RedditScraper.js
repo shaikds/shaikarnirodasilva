@@ -3,8 +3,8 @@ import logger from '../../utils/logger.js';
 
 const DEFAULT_SUBREDDITS = [
   'smallbusiness', 'startups', 'SaaS', 'artificial', 'entrepreneur',
-  'MachineLearning', 'technology', 'software', 'business', 'Automate'
 ];
+
 
 const REDDIT_BASE = 'https://www.reddit.com';
 const USER_AGENT = process.env.REDDIT_USER_AGENT || 'AICustomerDiscovery/1.0';
@@ -48,6 +48,7 @@ class RedditScraper extends BaseScraper {
 
     const response = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {

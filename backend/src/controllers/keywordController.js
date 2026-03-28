@@ -37,7 +37,8 @@ export async function update(req, res, next) {
     const updates = {};
     if (req.body.term !== undefined) updates.term = sanitizeString(req.body.term);
     if (req.body.category !== undefined) updates.category = sanitizeString(req.body.category);
-    if (req.body.isActive !== undefined) updates.isActive = req.body.isActive;
+    const isActive = req.body.isActive !== undefined ? req.body.isActive : req.body.is_active;
+    if (isActive !== undefined) updates.isActive = isActive;
 
     const keyword = Keyword.update(Number(id), updates);
     logger.info('Keyword updated', { userId: req.user.id, keywordId: id });

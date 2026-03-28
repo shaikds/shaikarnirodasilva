@@ -41,6 +41,7 @@ class WebScraper extends BaseScraper {
 
     const response = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
