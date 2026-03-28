@@ -1,6 +1,9 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 
+# Install OpenSSL for Prisma on Alpine
+RUN apk add --no-cache openssl
+
 # Copy root workspace files
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/package.json ./shared/
@@ -12,6 +15,9 @@ RUN npm ci
 # Copy source code
 COPY shared/ ./shared/
 COPY backend/ ./backend/
+
+# Build the shared package so dist/index.js exists
+RUN cd shared && npx tsc
 
 # Generate Prisma client
 RUN cd backend && npx prisma generate
