@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Trend } from "@/lib/mock-data";
-import { mockTrends } from "@/lib/mock-data";
+import api from "@/lib/api";
 
 interface TrendFilters {
   source: string;
@@ -15,7 +15,7 @@ interface TrendStore {
   loading: boolean;
   page: number;
   pageSize: number;
-  fetchTrends: () => void;
+  fetchTrends: () => Promise<void>;
   setFilter: (key: keyof TrendFilters, value: string) => void;
   setSelectedTrend: (trend: Trend | null) => void;
   setPage: (page: number) => void;
@@ -34,12 +34,27 @@ export const useTrendStore = create<TrendStore>((set, get) => ({
   page: 1,
   pageSize: 10,
 
-  fetchTrends: () => {
+  fetchTrends: async () => {
     set({ loading: true });
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await api.get("/trends");
+      const trends = response.data.data.map((t: any) => ({
+        id: t.id,
+        keyword: t.keyword,
+        source: t.source,
+        volume: t.volume,
+        growthRate: t.growthRate,
+        status: t.status,
+        detectedAt: t.detectedAt,
+        category: t.category || "Uncategorized",
+        matchedSuppliers: t.suppliers?.length || 0,
+      }));
+      set({ trends, loading: false });
+    } catch {
+      // Fallback to mock data if backend is not available
+      const { mockTrends } = await import("@/lib/mock-data");
       set({ trends: mockTrends, loading: false });
-    }, 500);
+    }
   },
 
   setFilter: (key, value) => {

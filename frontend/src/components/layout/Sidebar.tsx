@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  Terminal,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/dashboard/suppliers", label: "Suppliers", icon: Users },
   { href: "/dashboard/outreach", label: "Outreach", icon: Mail },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/admin", label: "Admin", icon: Terminal },
 ];
 
 export function Sidebar() {

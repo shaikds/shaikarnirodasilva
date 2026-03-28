@@ -1,6 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import api from "@/lib/api";
 import { mockOutreach } from "@/lib/mock-data";
+import type { OutreachItem } from "@/lib/mock-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
@@ -56,9 +59,46 @@ function channelIcon(channel: string) {
 }
 
 export default function OutreachPage() {
-  const responded = mockOutreach.filter((o) => o.status === "RESPONDED").length;
-  const total = mockOutreach.length;
+  const [outreach, setOutreach] = useState<OutreachItem[]>(mockOutreach);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchOutreach() {
+      try {
+        const response = await api.get("/outreach");
+        const data = response.data.data.map((o: any) => ({
+          id: o.id,
+          supplierName: o.supplierName || o.supplier?.name || "Unknown",
+          trendKeyword: o.trendKeyword || o.trend?.keyword || "Unknown",
+          sentAt: o.sentAt || o.createdAt,
+          status: o.status,
+          channel: o.channel || "EMAIL",
+        }));
+        setOutreach(data);
+      } catch {
+        // Fallback to mock data
+        setOutreach(mockOutreach);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchOutreach();
+  }, []);
+
+  const responded = outreach.filter((o) => o.status === "RESPONDED").length;
+  const total = outreach.length;
   const responseRate = total > 0 ? ((responded / total) * 100).toFixed(1) : "0";
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Outreach</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -127,7 +167,7 @@ export default function OutreachPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockOutreach.map((item) => (
+                {outreach.map((item) => (
                   <tr
                     key={item.id}
                     className="border-b border-slate-100 dark:border-slate-800/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
