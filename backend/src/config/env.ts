@@ -21,6 +21,7 @@ const envSchema = z.object({
   RESEND_FROM_EMAIL: z.string().email().default("noreply@trendsupply.com"),
   GREENAPI_INSTANCE_ID: z.string().default(""),
   GREENAPI_API_TOKEN: z.string().default(""),
+  SERPAPI_KEY: z.string().default(""),
   SCRAPE_CONCURRENCY: z.coerce.number().default(3),
   SCRAPE_REQUEST_TIMEOUT: z.coerce.number().default(30000),
 });

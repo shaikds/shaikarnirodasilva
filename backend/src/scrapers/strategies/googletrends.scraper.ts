@@ -2,73 +2,131 @@ import type { ITrendScraper, ScrapedTrendData, ScraperResult } from "../interfac
 import { logger } from "../../utils/logger";
 import { env } from "../../config/env";
 
+interface SerpApiTrendResult {
+  title?: string;
+  query?: string;
+  search_volume?: number;
+  value?: number;
+  extracted_value?: number;
+  link?: string;
+  serpapi_link?: string;
+}
+
 export class GoogleTrendsScraper implements ITrendScraper {
   readonly name = "google-trends";
 
   async execute(params: Record<string, unknown>): Promise<ScraperResult<ScrapedTrendData>> {
-    const keywords = (params.keywords as string[]) || [];
+    const keywords = (params.keywords as string[]) || [
+      "trending products 2024",
+      "viral products",
+      "best sellers",
+      "new gadgets",
+      "popular items",
+    ];
     const geo = (params.geo as string) || "US";
     const errors: string[] = [];
     const trendData: ScrapedTrendData[] = [];
 
-    try {
-      const { PlaywrightCrawler } = await import("crawlee");
+    if (!env.SERPAPI_KEY) {
+      return {
+        success: false,
+        data: [],
+        errors: ["SERPAPI_KEY not configured"],
+        scrapedAt: new Date(),
+      };
+    }
 
-      const results: ScrapedTrendData[] = [];
-      const calcGrowth = this.calculateGrowthFromVolume;
+    for (const keyword of keywords) {
+      try {
+        // Use SerpAPI Google Trends endpoint
+        const url = new URL("https://serpapi.com/search.json");
+        url.searchParams.set("engine", "google_trends");
+        url.searchParams.set("q", keyword);
+        url.searchParams.set("geo", geo);
+        url.searchParams.set("data_type", "RELATED_QUERIES");
+        url.searchParams.set("api_key", env.SERPAPI_KEY);
 
-      const crawler = new PlaywrightCrawler({
-        maxConcurrency: env.SCRAPE_CONCURRENCY,
-        requestHandlerTimeoutSecs: env.SCRAPE_REQUEST_TIMEOUT / 1000,
-        headless: true,
-        async requestHandler({ page, request }) {
-          const keyword = request.userData.keyword as string;
+        const response = await fetch(url.toString(), {
+          signal: AbortSignal.timeout(env.SCRAPE_REQUEST_TIMEOUT),
+        });
 
-          try {
-            await page.waitForLoadState("networkidle", { timeout: 15000 });
+        if (!response.ok) {
+          errors.push(`SerpAPI error for "${keyword}": HTTP ${response.status}`);
+          continue;
+        }
 
-            const interestElements = await page.$$eval(
-              "[class*='interest'] [class*='value'], .trend-table-content .trend-table-value",
-              (els) => els.map((el) => el.textContent?.trim() || "0")
-            );
+        const data = await response.json();
 
-            const volume = interestElements.length > 0
-              ? parseInt(interestElements[0], 10) || 0
-              : Math.floor(Math.random() * 100);
+        // Extract related queries (rising/top)
+        const risingQueries: SerpApiTrendResult[] = data.related_queries?.rising || [];
+        const topQueries: SerpApiTrendResult[] = data.related_queries?.top || [];
 
-            const relatedQueries = await page.$$eval(
-              "[class*='related'] a, .related-queries a",
-              (els) => els.map((el) => el.textContent?.trim() || "").filter(Boolean)
-            );
+        // Each related query becomes a trend
+        for (const item of risingQueries.slice(0, 5)) {
+          const query = item.query || item.title || "";
+          if (!query) continue;
 
-            results.push({
+          trendData.push({
+            keyword: query,
+            volume: item.extracted_value || item.value || 0,
+            growthRate: this.parseGrowthRate(item),
+            sourceUrl: `https://trends.google.com/trends/explore?q=${encodeURIComponent(query)}&geo=${geo}`,
+            category: keyword,
+          });
+        }
+
+        for (const item of topQueries.slice(0, 3)) {
+          const query = item.query || item.title || "";
+          if (!query) continue;
+
+          trendData.push({
+            keyword: query,
+            volume: item.extracted_value || item.value || 50,
+            growthRate: this.estimateGrowthFromVolume(item.extracted_value || item.value || 50),
+            sourceUrl: `https://trends.google.com/trends/explore?q=${encodeURIComponent(query)}&geo=${geo}`,
+            category: keyword,
+          });
+        }
+
+        // Also fetch interest over time for the keyword itself
+        const interestUrl = new URL("https://serpapi.com/search.json");
+        interestUrl.searchParams.set("engine", "google_trends");
+        interestUrl.searchParams.set("q", keyword);
+        interestUrl.searchParams.set("geo", geo);
+        interestUrl.searchParams.set("data_type", "TIMESERIES");
+        interestUrl.searchParams.set("api_key", env.SERPAPI_KEY);
+
+        const interestResponse = await fetch(interestUrl.toString(), {
+          signal: AbortSignal.timeout(env.SCRAPE_REQUEST_TIMEOUT),
+        });
+
+        if (interestResponse.ok) {
+          const interestData = await interestResponse.json();
+          const timelineData = interestData.interest_over_time?.timeline_data || [];
+
+          if (timelineData.length > 0) {
+            const latest = timelineData[timelineData.length - 1];
+            const oldest = timelineData[0];
+            const latestValue = latest?.values?.[0]?.extracted_value ?? 0;
+            const oldestValue = oldest?.values?.[0]?.extracted_value ?? 1;
+            const growth = oldestValue > 0 ? ((latestValue - oldestValue) / oldestValue) * 100 : 0;
+
+            trendData.push({
               keyword,
-              volume: volume * 100,
-              growthRate: calcGrowth(volume),
-              sourceUrl: request.url,
-              category: relatedQueries.length > 0 ? relatedQueries[0] : null,
+              volume: latestValue * 100,
+              growthRate: Math.round(growth * 10) / 10,
+              sourceUrl: `https://trends.google.com/trends/explore?q=${encodeURIComponent(keyword)}&geo=${geo}`,
+              category: null,
             });
-          } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            errors.push(`Failed to scrape trends for "${keyword}": ${errMsg}`);
           }
-        },
-      });
+        }
 
-      const requests = keywords.map((keyword) => ({
-        url: `https://trends.google.com/trends/explore?q=${encodeURIComponent(keyword)}&geo=${geo}`,
-        userData: { keyword },
-      }));
-
-      if (requests.length > 0) {
-        await crawler.run(requests);
+        logger.info(`Google Trends: scraped "${keyword}" - found ${risingQueries.length} rising, ${topQueries.length} top queries`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        errors.push(`Failed to fetch trends for "${keyword}": ${errMsg}`);
+        logger.error(`Google Trends scraper error for "${keyword}"`, { error: errMsg });
       }
-
-      trendData.push(...results);
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      errors.push(`Google Trends scraper failed: ${errMsg}`);
-      logger.error("Google Trends scraper failed", { error: errMsg });
     }
 
     logger.info(`Google Trends scraper completed: ${trendData.length} trends found`, {
@@ -83,10 +141,18 @@ export class GoogleTrendsScraper implements ITrendScraper {
     };
   }
 
-  private calculateGrowthFromVolume(volume: number): number {
-    if (volume >= 80) return 150 + Math.random() * 100;
-    if (volume >= 50) return 50 + Math.random() * 100;
-    if (volume >= 20) return 10 + Math.random() * 40;
+  private parseGrowthRate(item: SerpApiTrendResult): number {
+    const value = item.extracted_value || item.value || 0;
+    // SerpAPI rising queries show % increase (e.g., 5000 = 5000% increase)
+    if (value > 1000) return value;
+    if (value > 100) return value;
+    return value * 10;
+  }
+
+  private estimateGrowthFromVolume(volume: number): number {
+    if (volume >= 80) return 150 + Math.random() * 50;
+    if (volume >= 50) return 50 + Math.random() * 50;
+    if (volume >= 20) return 10 + Math.random() * 30;
     return Math.random() * 10;
   }
 }
