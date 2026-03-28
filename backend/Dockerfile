@@ -1,32 +1,23 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 
-# Install dependencies
-FROM base AS deps
-COPY package.json package-lock.json ./
+# Copy root workspace files
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/package.json ./shared/
 COPY backend/package.json ./backend/
-RUN npm ci --workspace=shared --workspace=backend
 
-# Build shared
-FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/shared/node_modules ./shared/node_modules
-COPY --from=deps /app/backend/node_modules ./backend/node_modules
-COPY tsconfig.base.json ./
+# Install ALL workspace dependencies
+RUN npm ci
+
+# Copy source code
 COPY shared/ ./shared/
 COPY backend/ ./backend/
 
 # Generate Prisma client
 RUN cd backend && npx prisma generate
 
-# Production
-FROM base AS runner
-ENV NODE_ENV=production
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/shared ./shared
-COPY --from=builder /app/backend ./backend
-COPY tsconfig.base.json ./
+# Create entrypoint script
+RUN printf '#!/bin/sh\nset -e\necho "Running Prisma migrations..."\ncd /app/backend && npx prisma migrate deploy || echo "Migration skipped (DB may not be ready yet)"\necho "Starting backend server..."\ncd /app && exec npx ts-node --transpile-only -P backend/tsconfig.json backend/src/index.ts\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 EXPOSE 3001
-CMD ["npx", "ts-node", "--transpile-only", "-P", "backend/tsconfig.json", "backend/src/index.ts"]
+CMD ["/app/entrypoint.sh"]
