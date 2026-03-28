@@ -1,0 +1,46 @@
+/**
+ * Translations — Hebrew (default) and English.
+ * The widget detects language from document.documentElement.lang.
+ */
+var Translations = {
+  he: {
+    widgetTitle: 'הגדרות נגישות',
+    close: 'סגירה',
+    reset: 'איפוס הגדרות',
+    cancelHighlights: 'ביטול הנהובים',
+    monochrome: 'מונוכרום',
+    sepia: 'ספיה',
+    highContrast: 'ניגודיות גבוהה',
+    blackYellow: 'שחור צהוב',
+    invert: 'היפוך צבעים',
+    highlightHeadings: 'הדגשת כותרות',
+    highlightLinks: 'הדגשת קישורים',
+    imageAlt: 'תיאור קבוע',
+    readableFont: 'גופן קריא',
+    fontIncrease: 'הגדלת גופן',
+    fontDecrease: 'הקטנת גופן',
+    zoomIn: 'הגדלת מסך',
+    zoomOut: 'הקטנת מסך',
+    openMenu: 'פתח תפריט נגישות',
+  },
+  en: {
+    widgetTitle: 'Accessibility Settings',
+    close: 'Close',
+    reset: 'Reset Settings',
+    cancelHighlights: 'Cancel Highlights',
+    monochrome: 'Monochrome',
+    sepia: 'Sepia',
+    highContrast: 'High Contrast',
+    blackYellow: 'Black & Yellow',
+    invert: 'Invert Colors',
+    highlightHeadings: 'Highlight Headings',
+    highlightLinks: 'Highlight Links',
+    imageAlt: 'Image Descriptions',
+    readableFont: 'Readable Font',
+    fontIncrease: 'Increase Font',
+    fontDecrease: 'Decrease Font',
+    zoomIn: 'Zoom In',
+    zoomOut: 'Zoom Out',
+    openMenu: 'Open accessibility menu',
+  },
+};

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accessibility Widget — Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f8f9fa;
+    }
+    .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      padding: 60px 20px;
+      text-align: center;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    }
+    .hero h1 { font-size: 2.4em; margin-bottom: 12px; }
+    .hero p { font-size: 1.1em; opacity: 0.9; max-width: 600px; margin: 0 auto; }
+
+    /* Sections */
+    section {
+      background: #fff;
+      border-radius: 10px;
+      padding: 30px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    h2 { color: #1a1a2e; margin-bottom: 16px; font-size: 1.6em; border-bottom: 2px solid #4A90D9; padding-bottom: 8px; }
+    h3 { color: #0f3460; margin: 16px 0 8px; font-size: 1.2em; }
+    p { margin-bottom: 12px; }
+
+    /* Links */
+    a { color: #4A90D9; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Images */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .image-grid img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      border-radius: 8px;
+      display: block;
+    }
+
+    /* Cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .card {
+      background: #f0f4f8;
+      border-radius: 8px;
+      padding: 20px;
+      border-right: 4px solid #4A90D9;
+    }
+    .card h3 { margin-top: 0; }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 30px 20px;
+      color: #888;
+      font-size: 0.9em;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 1.6em; }
+      .hero { padding: 40px 16px; }
+      section { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Hero -->
+    <div class="hero">
+      <h1>דף הדגמה — ווידג'ט נגישות</h1>
+      <p>לחצו על כפתור הנגישות (♿) בפינה השמאלית התחתונה כדי לפתוח את תפריט הנגישות ולבדוק את כל התכונות.</p>
+    </div>
+
+    <!-- Section: Headings -->
+    <section>
+      <h2>כותרות לדוגמה</h2>
+      <p>סעיף זה מדגים כותרות ברמות שונות. השתמשו ב"הדגשת כותרות" כדי לראות אותן מודגשות.</p>
+      <h3>כותרת משנה (H3)</h3>
+      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+      <h3>כותרת משנה נוספת</h3>
+      <p>טקסט לדוגמה בעברית — הווידג'ט תומך בכיוון RTL מלא ובשפה העברית כשפת ברירת מחדל.</p>
+    </section>
+
+    <!-- Section: Links -->
+    <section>
+      <h2>קישורים לדוגמה</h2>
+      <p>השתמשו ב"הדגשת קישורים" כדי לראות קישורים מודגשים:</p>
+      <ul style="list-style:none;padding:0;">
+        <li style="margin-bottom:8px;">🔗 <a href="#link1">קישור ראשון — דף הבית</a></li>
+        <li style="margin-bottom:8px;">🔗 <a href="#link2">קישור שני — אודות</a></li>
+        <li style="margin-bottom:8px;">🔗 <a href="#link3">קישור שלישי — צור קשר</a></li>
+        <li style="margin-bottom:8px;">🔗 <a href="#link4">קישור רביעי — שירותים</a></li>
+      </ul>
+    </section>
+
+    <!-- Section: Images with Alt Text -->
+    <section>
+      <h2>תמונות עם תיאור</h2>
+      <p>השתמשו ב"תיאור קבוע" כדי לראות את טקסט ה-alt מוצג על גבי התמונות.</p>
+      <div class="image-grid">
+        <img src="https://picsum.photos/seed/a11y1/400/300" alt="נוף הרים ירוק עם שמיים כחולים">
+        <img src="https://picsum.photos/seed/a11y2/400/300" alt="חוף ים עם גלים ושקיעה כתומה">
+        <img src="https://picsum.photos/seed/a11y3/400/300" alt="עיר מודרנית עם גורדי שחקים בלילה">
+      </div>
+    </section>
+
+    <!-- Section: Cards -->
+    <section>
+      <h2>כרטיסיות תוכן</h2>
+      <div class="card-grid">
+        <div class="card">
+          <h3>מונוכרום</h3>
+          <p>הופך את כל העמוד לגווני אפור. שימושי למשתמשים עם רגישות לצבעים.</p>
+        </div>
+        <div class="card">
+          <h3>ניגודיות גבוהה</h3>
+          <p>מגביר את הניגודיות ב-50%. עוזר למשתמשים עם ראייה מוגבלת.</p>
+        </div>
+        <div class="card">
+          <h3>גופן קריא</h3>
+          <p>מחליף את הגופן לגופן ידידותי לדיסלקציה, מקל על הקריאה.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section: English Content -->
+    <section dir="ltr" style="text-align:left;">
+      <h2>English Content Section</h2>
+      <p>This section demonstrates that the widget works with English (LTR) content too. All accessibility features apply globally to the entire page regardless of language.</p>
+      <h3>Mixed Language Support</h3>
+      <p>The widget detects the page language from the <code>&lt;html lang="..."&gt;</code> attribute and adjusts its UI direction accordingly. Try changing to <code>lang="en"</code> to see the English version.</p>
+      <p>Visit <a href="#example">this example link</a> or <a href="#another">another link</a> to test link highlighting.</p>
+    </section>
+
+    <!-- Section: Long Text -->
+    <section>
+      <h2>טקסט ארוך — בדיקת גופן</h2>
+      <p>
+        הווידג'ט הזה הוא רכיב נגישות מותאם אישית שניתן להוסיף לכל אתר אינטרנט פשוט על ידי הוספת תגית script אחת.
+        הוא מספק מגוון תכונות נגישות כגון שינוי צבעים, הגדלת גופן, זום, הדגשת כותרות וקישורים, ועוד.
+        כל ההגדרות נשמרות באחסון המקומי של הדפדפן כך שהמשתמש לא צריך להגדיר מחדש בכל ביקור.
+      </p>
+      <p>
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus lacinia odio vitae vestibulum vestibulum.
+        Cras porttitor metus justo, ut fringilla velit fermentum a. Proin consequat, ante quis tempor sagittis,
+        arcu ante hendrerit lacus, vel interdum quam purus eu massa. Fusce accumsan felis sit amet lorem feugiat,
+        ut consequat nisi pharetra.
+      </p>
+    </section>
+  </div>
+
+  <footer>
+    <p>דף הדגמה לווידג'ט הנגישות — כל הזכויות שמורות</p>
+  </footer>
+
+  <!-- Drop-in: just one script tag -->
+  <script src="accessibility-widget.js"></script>
+
+</body>
+</html>
