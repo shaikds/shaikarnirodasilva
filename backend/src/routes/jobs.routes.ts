@@ -10,7 +10,7 @@ import type { ApiResponse } from "@trendsupply/shared";
 const router = Router();
 
 // Trigger full daily pipeline
-router.post("/trigger/full-pipeline", authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post("/trigger/full-pipeline", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     await runDailyTrendPipeline();
     const response: ApiResponse<{ message: string }> = {
@@ -24,7 +24,7 @@ router.post("/trigger/full-pipeline", authenticate, async (req: Request, res: Re
 });
 
 // Trigger individual scraper
-router.post("/trigger/scrape/:type", authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post("/trigger/scrape/:type", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { type } = req.params;
     const validTypes = ["reddit", "google-trends", "alibaba", "local"];
@@ -58,7 +58,7 @@ router.post("/trigger/scrape/:type", authenticate, async (req: Request, res: Res
 });
 
 // Trigger supplier discovery for a specific keyword
-router.post("/trigger/discover-suppliers", authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post("/trigger/discover-suppliers", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { keywords } = req.body;
     await supplierDiscoveryQueue.add("manual-discovery", {
@@ -79,7 +79,7 @@ router.post("/trigger/discover-suppliers", authenticate, async (req: Request, re
 });
 
 // Trigger reliability scoring
-router.post("/trigger/score", authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post("/trigger/score", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     await reliabilityScoringQueue.add("manual-scoring", {
       stage: "scoring",
@@ -98,7 +98,7 @@ router.post("/trigger/score", authenticate, async (req: Request, res: Response, 
 });
 
 // Get queue status (job counts)
-router.get("/status", authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get("/status", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const status: Record<string, { waiting: number; active: number; completed: number; failed: number }> = {};
 
@@ -118,7 +118,7 @@ router.get("/status", authenticate, async (req: Request, res: Response, next: Ne
 });
 
 // Get recent jobs from a queue
-router.get("/history/:queueName", authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get("/history/:queueName", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { queueName } = req.params;
     const queue = allQueues[queueName as keyof typeof allQueues];

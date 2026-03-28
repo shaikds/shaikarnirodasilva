@@ -21,12 +21,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("token");
-        window.location.href = "/login";
-      }
-    }
+    // TODO: re-enable auth redirect when login is fully wired up
     return Promise.reject(error);
   }
 );

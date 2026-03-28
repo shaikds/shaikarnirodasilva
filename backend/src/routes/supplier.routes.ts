@@ -12,7 +12,7 @@ const router = Router();
 
 router.get(
   "/",
-  authenticate,
+
   validate(supplierQuerySchema, "query"),
   SupplierController.getAll
 );
@@ -21,14 +21,14 @@ router.get("/:id", authenticate, SupplierController.getById);
 
 router.post(
   "/",
-  authenticate,
+
   validate(createSupplierSchema),
   SupplierController.create
 );
 
 router.patch(
   "/:id",
-  authenticate,
+
   validate(updateSupplierSchema),
   SupplierController.update
 );
@@ -37,7 +37,7 @@ router.delete("/:id", authenticate, SupplierController.delete);
 
 router.post(
   "/:id/recalculate-score",
-  authenticate,
+
   SupplierController.recalculateScore
 );
 

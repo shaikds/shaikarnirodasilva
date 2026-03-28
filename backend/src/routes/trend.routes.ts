@@ -13,7 +13,7 @@ const router = Router();
 
 router.get(
   "/",
-  authenticate,
+
   validate(trendQuerySchema, "query"),
   TrendController.getAll
 );
@@ -22,14 +22,14 @@ router.get("/:id", authenticate, TrendController.getById);
 
 router.post(
   "/",
-  authenticate,
+
   validate(createTrendSchema),
   TrendController.create
 );
 
 router.patch(
   "/:id",
-  authenticate,
+
   validate(updateTrendSchema),
   TrendController.update
 );
@@ -38,7 +38,7 @@ router.delete("/:id", authenticate, TrendController.delete);
 
 router.post(
   "/:id/suppliers",
-  authenticate,
+
   validate(linkSupplierToTrendSchema),
   TrendController.linkSupplier
 );

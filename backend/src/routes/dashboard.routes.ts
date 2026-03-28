@@ -4,6 +4,6 @@ import { authenticate } from "../middleware/auth.middleware";
 
 const router = Router();
 
-router.get("/stats", authenticate, DashboardController.getStats);
+router.get("/stats", DashboardController.getStats);
 
 export default router;

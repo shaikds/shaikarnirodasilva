@@ -6,7 +6,7 @@ import type { ApiResponse, PaginatedResponse } from "@trendsupply/shared";
 
 const router = Router();
 
-router.get("/", authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get("/", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
