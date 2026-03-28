@@ -1,7 +1,11 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Zap, TrendingUp, Users, Mail, ArrowRight, BarChart3, Shield, Globe } from "lucide-react";
 
 export default function Home() {
+  // Skip landing page — go straight to dashboard (auth will be added later)
+  redirect("/dashboard");
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
