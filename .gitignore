@@ -38,7 +38,7 @@ yarn-error.log*
 
 # Prisma
 backend/prisma/*.db
-backend/prisma/migrations/
+# Keep migrations tracked - they're needed for deployment
 
 # Coverage
 coverage/

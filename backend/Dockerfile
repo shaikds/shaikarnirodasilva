@@ -22,9 +22,6 @@ RUN cd shared && npx tsc
 # Generate Prisma client
 RUN cd backend && npx prisma generate
 
-# Verify migrations exist
-RUN ls -la /app/backend/prisma/migrations/ && ls -la /app/backend/prisma/migrations/0001_init/
-
 # Create entrypoint script
 RUN printf '#!/bin/sh\nset -e\necho "Running Prisma migrations..."\ncd /app/backend\nls -la prisma/migrations/\nnpx prisma migrate deploy\necho "Starting backend server..."\ncd /app\nexec npx ts-node --transpile-only -P backend/tsconfig.json backend/src/index.ts\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
