@@ -6,7 +6,7 @@ services:
     container_name: trendsupply-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -59,6 +59,7 @@ services:
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@trendsupply.com}
       GREENAPI_INSTANCE_ID: ${GREENAPI_INSTANCE_ID:-}
       GREENAPI_API_TOKEN: ${GREENAPI_API_TOKEN:-}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
       SCRAPE_CONCURRENCY: 3
       SCRAPE_REQUEST_TIMEOUT: 30000
     depends_on:
