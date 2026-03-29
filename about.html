@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>אודות — YogevB Barbershop</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">YOGEV BOKOBZA</a>
+      <ul class="nav-links">
+        <li><a href="index.html">בית</a></li>
+        <li><a href="about.html" class="active">אודות</a></li>
+      </ul>
+      <button class="nav-toggle" aria-label="תפריט">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- About Hero -->
+  <header class="page-hero">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <h1>הכירו את הצוות</h1>
+      <p class="hero-subtitle">מאחורי כל תספורת מושלמת עומד ספר מקצועי</p>
+    </div>
+  </header>
+
+  <!-- Team Section -->
+  <section class="section team-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>הצוות שלנו</h2>
+        <p>ספרים מנוסים עם תשוקה למקצוע</p>
+      </div>
+      <div class="team-grid">
+        <div class="team-card">
+          <div class="team-photo">
+            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face" alt="יוגב בוקובזה — ספר ראשי ומייסד">
+          </div>
+          <h3>יוגב בוקובזה</h3>
+          <span class="team-role">ספר ראשי ומייסד</span>
+          <p>ניסיון של למעלה מ-8 שנים בעיצוב שיער. מתמחה בפייד ובעיצוב זקן מקצועי.</p>
+        </div>
+        <div class="team-card">
+          <div class="team-photo">
+            <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face" alt="אלון דוד — ספר בכיר">
+          </div>
+          <h3>אלון דוד</h3>
+          <span class="team-role">ספר בכיר</span>
+          <p>מומחה בתספורות קלאסיות ומודרניות. בוגר בית הספר לספרות של תל אביב.</p>
+        </div>
+        <div class="team-card">
+          <div class="team-photo">
+            <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop&crop=face" alt="נועם לוי — ספר זוטר">
+          </div>
+          <h3>נועם לוי</h3>
+          <span class="team-role">ספר זוטר</span>
+          <p>כישרון צעיר עם עין חדה לפרטים. מתמחה בסגנונות עכשוויים וטרנדים.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Story Section -->
+  <section class="section story-section">
+    <div class="container">
+      <div class="story-content">
+        <div class="story-text">
+          <h2>הסיפור שלנו</h2>
+          <p>
+            המספרה של יוגב בוקובזה נוסדה מתוך אהבה אמיתית למקצוע הספרות.
+            מה שהתחיל כחלום קטן הפך לאחת המספרות המובילות בעיר.
+          </p>
+          <p>
+            אנחנו מאמינים שתספורת טובה היא לא רק עניין של מראה —
+            היא עניין של ביטחון עצמי, הרגשה טובה, ושירות אישי ומקצועי.
+            כל לקוח שנכנס אלינו יוצא עם חיוך.
+          </p>
+          <p>
+            המספרה שלנו משלבת אווירה מסורתית עם ציוד וטכניקות מתקדמות.
+            אנחנו משתמשים רק במוצרים איכותיים ומקפידים על היגיינה מושלמת.
+          </p>
+          <div class="story-stats">
+            <div class="stat">
+              <span class="stat-number">8+</span>
+              <span class="stat-label">שנות ניסיון</span>
+            </div>
+            <div class="stat">
+              <span class="stat-number">5,000+</span>
+              <span class="stat-label">לקוחות מרוצים</span>
+            </div>
+            <div class="stat">
+              <span class="stat-number">4.9</span>
+              <span class="stat-label">דירוג ממוצע</span>
+            </div>
+          </div>
+        </div>
+        <div class="story-image">
+          <img src="https://images.unsplash.com/photo-1585747860019-f4e64de5a347?w=600&h=800&fit=crop" alt="פנים המספרה — אווירה חמה ומקצועית">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section class="section contact-section" id="contact">
+    <div class="container">
+      <div class="section-header">
+        <h2>צרו קשר</h2>
+        <p>נשמח לשמוע מכם</p>
+      </div>
+      <div class="contact-grid">
+        <div class="contact-form-wrapper">
+          <form class="contact-form" onsubmit="event.preventDefault(); alert('ההודעה נשלחה בהצלחה!');">
+            <div class="form-group">
+              <label for="name">שם מלא</label>
+              <input type="text" id="name" name="name" required placeholder="הכנס את שמך">
+            </div>
+            <div class="form-group">
+              <label for="phone">טלפון</label>
+              <input type="tel" id="phone" name="phone" required placeholder="050-0000000">
+            </div>
+            <div class="form-group">
+              <label for="email">אימייל</label>
+              <input type="email" id="email" name="email" placeholder="your@email.com">
+            </div>
+            <div class="form-group">
+              <label for="message">הודעה</label>
+              <textarea id="message" name="message" rows="4" placeholder="איך נוכל לעזור?"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">שלח הודעה</button>
+          </form>
+        </div>
+        <div class="contact-info">
+          <div class="info-card">
+            <div class="info-icon">📍</div>
+            <h3>כתובת</h3>
+            <p>רחוב הרצל 42<br>תל אביב-יפו</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon">📞</div>
+            <h3>טלפון</h3>
+            <p>050-1234567</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon">🕐</div>
+            <h3>שעות פעילות</h3>
+            <p>ראשון-חמישי: 09:00-20:00<br>שישי: 08:00-14:00</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon">📧</div>
+            <h3>אימייל</h3>
+            <p>info@yogevb.co.il</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Map placeholder -->
+  <section class="map-section">
+    <div class="map-placeholder">
+      <div class="map-content">
+        <h3>📍 מצאו אותנו</h3>
+        <p>רחוב הרצל 42, תל אביב-יפו</p>
+        <a href="https://maps.google.com" target="_blank" rel="noopener" class="btn btn-outline">פתח במפות</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-col">
+          <h3>YOGEV BOKOBZA</h3>
+          <p>מספרה מקצועית לגברים. ניסיון של שנים בעיצוב שיער וזקן.</p>
+        </div>
+        <div class="footer-col">
+          <h3>שעות פעילות</h3>
+          <ul>
+            <li>ראשון - חמישי: 09:00 - 20:00</li>
+            <li>שישי: 08:00 - 14:00</li>
+            <li>שבת: סגור</li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h3>ניווט</h3>
+          <ul>
+            <li><a href="index.html">בית</a></li>
+            <li><a href="about.html">אודות</a></li>
+            <li><a href="about.html#contact">צור קשר</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>כל הזכויות שמורות &copy; 2026 YOGEV BOKOBZA</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Mobile nav toggle script -->
+  <script>
+    document.querySelector('.nav-toggle').addEventListener('click', function() {
+      document.querySelector('.nav-links').classList.toggle('nav-open');
+      this.classList.toggle('active');
+    });
+  </script>
+
+  <!-- Accessibility Widget — drop-in -->
+  <script src="accessibility-widget.js"></script>
+
+</body>
+</html>

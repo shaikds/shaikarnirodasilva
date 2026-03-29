@@ -3,183 +3,188 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Accessibility Widget — Demo</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      background: #f8f9fa;
-    }
-    .container { max-width: 960px; margin: 0 auto; padding: 20px; }
-
-    /* Hero */
-    .hero {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-      color: #fff;
-      padding: 60px 20px;
-      text-align: center;
-      border-radius: 12px;
-      margin-bottom: 30px;
-    }
-    .hero h1 { font-size: 2.4em; margin-bottom: 12px; }
-    .hero p { font-size: 1.1em; opacity: 0.9; max-width: 600px; margin: 0 auto; }
-
-    /* Sections */
-    section {
-      background: #fff;
-      border-radius: 10px;
-      padding: 30px;
-      margin-bottom: 24px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    h2 { color: #1a1a2e; margin-bottom: 16px; font-size: 1.6em; border-bottom: 2px solid #4A90D9; padding-bottom: 8px; }
-    h3 { color: #0f3460; margin: 16px 0 8px; font-size: 1.2em; }
-    p { margin-bottom: 12px; }
-
-    /* Links */
-    a { color: #4A90D9; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
-    /* Images */
-    .image-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin: 16px 0;
-    }
-    .image-grid img {
-      width: 100%;
-      height: 180px;
-      object-fit: cover;
-      border-radius: 8px;
-      display: block;
-    }
-
-    /* Cards */
-    .card-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 16px;
-      margin: 16px 0;
-    }
-    .card {
-      background: #f0f4f8;
-      border-radius: 8px;
-      padding: 20px;
-      border-right: 4px solid #4A90D9;
-    }
-    .card h3 { margin-top: 0; }
-
-    /* Footer */
-    footer {
-      text-align: center;
-      padding: 30px 20px;
-      color: #888;
-      font-size: 0.9em;
-    }
-
-    /* Responsive */
-    @media (max-width: 600px) {
-      .hero h1 { font-size: 1.6em; }
-      .hero { padding: 40px 16px; }
-      section { padding: 20px; }
-    }
-  </style>
+  <title>YogevB — Barbershop</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <div class="container">
-    <!-- Hero -->
-    <div class="hero">
-      <h1>דף הדגמה — ווידג'ט נגישות</h1>
-      <p>לחצו על כפתור הנגישות (♿) בפינה השמאלית התחתונה כדי לפתוח את תפריט הנגישות ולבדוק את כל התכונות.</p>
-    </div>
-
-    <!-- Section: Headings -->
-    <section>
-      <h2>כותרות לדוגמה</h2>
-      <p>סעיף זה מדגים כותרות ברמות שונות. השתמשו ב"הדגשת כותרות" כדי לראות אותן מודגשות.</p>
-      <h3>כותרת משנה (H3)</h3>
-      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <h3>כותרת משנה נוספת</h3>
-      <p>טקסט לדוגמה בעברית — הווידג'ט תומך בכיוון RTL מלא ובשפה העברית כשפת ברירת מחדל.</p>
-    </section>
-
-    <!-- Section: Links -->
-    <section>
-      <h2>קישורים לדוגמה</h2>
-      <p>השתמשו ב"הדגשת קישורים" כדי לראות קישורים מודגשים:</p>
-      <ul style="list-style:none;padding:0;">
-        <li style="margin-bottom:8px;">🔗 <a href="#link1">קישור ראשון — דף הבית</a></li>
-        <li style="margin-bottom:8px;">🔗 <a href="#link2">קישור שני — אודות</a></li>
-        <li style="margin-bottom:8px;">🔗 <a href="#link3">קישור שלישי — צור קשר</a></li>
-        <li style="margin-bottom:8px;">🔗 <a href="#link4">קישור רביעי — שירותים</a></li>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">YOGEV BOKOBZA</a>
+      <ul class="nav-links">
+        <li><a href="index.html" class="active">בית</a></li>
+        <li><a href="about.html">אודות</a></li>
       </ul>
-    </section>
+      <button class="nav-toggle" aria-label="תפריט">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
 
-    <!-- Section: Images with Alt Text -->
-    <section>
-      <h2>תמונות עם תיאור</h2>
-      <p>השתמשו ב"תיאור קבוע" כדי לראות את טקסט ה-alt מוצג על גבי התמונות.</p>
-      <div class="image-grid">
-        <img src="https://picsum.photos/seed/a11y1/400/300" alt="נוף הרים ירוק עם שמיים כחולים">
-        <img src="https://picsum.photos/seed/a11y2/400/300" alt="חוף ים עם גלים ושקיעה כתומה">
-        <img src="https://picsum.photos/seed/a11y3/400/300" alt="עיר מודרנית עם גורדי שחקים בלילה">
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <h1>YOGEV BOKOBZA</h1>
+      <p class="hero-subtitle">מספרה מקצועית</p>
+      <div class="hero-promo">
+        <span class="promo-badge">מבצע</span>
+        היי לקוחות יקרים יש לנו ממד אתם מזומנים להגיע מחיר תספורת+זקן 70 ש"ח
       </div>
-    </section>
+      <a href="about.html#contact" class="btn btn-primary">התחבר / הרשם</a>
+    </div>
+  </header>
 
-    <!-- Section: Cards -->
-    <section>
-      <h2>כרטיסיות תוכן</h2>
-      <div class="card-grid">
-        <div class="card">
-          <h3>מונוכרום</h3>
-          <p>הופך את כל העמוד לגווני אפור. שימושי למשתמשים עם רגישות לצבעים.</p>
+  <!-- Stories Section -->
+  <section class="section stories-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>סטוריז</h2>
+        <p>קולקציית התספורות שלנו</p>
+      </div>
+      <div class="stories-grid">
+        <div class="story-card">
+          <img src="https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&h=500&fit=crop" alt="תספורת קלאסית לגבר עם פייד נמוך">
+          <div class="story-label">קלאסי</div>
         </div>
-        <div class="card">
-          <h3>ניגודיות גבוהה</h3>
-          <p>מגביר את הניגודיות ב-50%. עוזר למשתמשים עם ראייה מוגבלת.</p>
+        <div class="story-card">
+          <img src="https://images.unsplash.com/photo-1605497788044-5a32c7078486?w=400&h=500&fit=crop" alt="תספורת מודרנית עם טקסטורה">
+          <div class="story-label">מודרני</div>
         </div>
-        <div class="card">
-          <h3>גופן קריא</h3>
-          <p>מחליף את הגופן לגופן ידידותי לדיסלקציה, מקל על הקריאה.</p>
+        <div class="story-card">
+          <img src="https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=400&h=500&fit=crop" alt="עיצוב זקן מקצועי">
+          <div class="story-label">זקן</div>
+        </div>
+        <div class="story-card">
+          <img src="https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&h=500&fit=crop" alt="תספורת פייד גבוה">
+          <div class="story-label">פייד</div>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <!-- Section: English Content -->
-    <section dir="ltr" style="text-align:left;">
-      <h2>English Content Section</h2>
-      <p>This section demonstrates that the widget works with English (LTR) content too. All accessibility features apply globally to the entire page regardless of language.</p>
-      <h3>Mixed Language Support</h3>
-      <p>The widget detects the page language from the <code>&lt;html lang="..."&gt;</code> attribute and adjusts its UI direction accordingly. Try changing to <code>lang="en"</code> to see the English version.</p>
-      <p>Visit <a href="#example">this example link</a> or <a href="#another">another link</a> to test link highlighting.</p>
-    </section>
+  <!-- Services Section -->
+  <section class="section services-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>השירותים שלנו</h2>
+        <p>מגוון שירותי טיפוח מקצועיים</p>
+      </div>
+      <div class="services-grid">
+        <div class="service-card">
+          <div class="service-icon">✂️</div>
+          <h3>תספורת גברים</h3>
+          <p>תספורת מקצועית בהתאמה אישית לצורת הפנים והסגנון שלך.</p>
+          <span class="service-price">60 ש"ח</span>
+        </div>
+        <div class="service-card">
+          <div class="service-icon">🪒</div>
+          <h3>עיצוב זקן</h3>
+          <p>עיצוב וטיפוח זקן מקצועי עם מוצרים איכותיים.</p>
+          <span class="service-price">30 ש"ח</span>
+        </div>
+        <div class="service-card featured">
+          <div class="service-badge">הכי פופולרי</div>
+          <div class="service-icon">💈</div>
+          <h3>תספורת + זקן</h3>
+          <p>חבילה משתלמת של תספורת ועיצוב זקן מלא.</p>
+          <span class="service-price">70 ש"ח</span>
+        </div>
+        <div class="service-card">
+          <div class="service-icon">🧴</div>
+          <h3>טיפול פנים</h3>
+          <p>טיפול פנים מרענן עם מוצרי פרימיום.</p>
+          <span class="service-price">50 ש"ח</span>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <!-- Section: Long Text -->
-    <section>
-      <h2>טקסט ארוך — בדיקת גופן</h2>
-      <p>
-        הווידג'ט הזה הוא רכיב נגישות מותאם אישית שניתן להוסיף לכל אתר אינטרנט פשוט על ידי הוספת תגית script אחת.
-        הוא מספק מגוון תכונות נגישות כגון שינוי צבעים, הגדלת גופן, זום, הדגשת כותרות וקישורים, ועוד.
-        כל ההגדרות נשמרות באחסון המקומי של הדפדפן כך שהמשתמש לא צריך להגדיר מחדש בכל ביקור.
-      </p>
-      <p>
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus lacinia odio vitae vestibulum vestibulum.
-        Cras porttitor metus justo, ut fringilla velit fermentum a. Proin consequat, ante quis tempor sagittis,
-        arcu ante hendrerit lacus, vel interdum quam purus eu massa. Fusce accumsan felis sit amet lorem feugiat,
-        ut consequat nisi pharetra.
-      </p>
-    </section>
-  </div>
+  <!-- Gallery Section -->
+  <section class="section gallery-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>מהעבודות שלנו</h2>
+        <p>תוצאות אמיתיות מלקוחות מרוצים</p>
+      </div>
+      <div class="gallery-grid">
+        <img src="https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=600&h=400&fit=crop" alt="לפני ואחרי תספורת - פייד קלאסי">
+        <img src="https://images.unsplash.com/photo-1585747860019-f4e64de5a347?w=600&h=400&fit=crop" alt="תספורת עם עיצוב צד מודרני">
+        <img src="https://images.unsplash.com/photo-1493256338651-d82f7acb2b38?w=600&h=400&fit=crop" alt="אווירת המספרה - כסאות ספרים קלאסיים">
+        <img src="https://images.unsplash.com/photo-1587909209111-5097ee578ec3?w=600&h=600&fit=crop" alt="כלי עבודה מקצועיים של ספר">
+        <img src="https://images.unsplash.com/photo-1582095133179-bfd08e2fc6b3?w=600&h=400&fit=crop" alt="ספר מעצב שיער ללקוח">
+        <img src="https://images.unsplash.com/photo-1634302086887-13b95f4d5b60?w=600&h=400&fit=crop" alt="מוצרי טיפוח לזקן ולשיער">
+      </div>
+    </div>
+  </section>
 
-  <footer>
-    <p>דף הדגמה לווידג'ט הנגישות — כל הזכויות שמורות</p>
+  <!-- Testimonials -->
+  <section class="section testimonials-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>מה הלקוחות אומרים</h2>
+      </div>
+      <div class="testimonials-grid">
+        <div class="testimonial-card">
+          <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
+          <p>"ספר מעולה! תמיד יוצא עם תספורת מושלמת. ממליץ בחום."</p>
+          <span class="testimonial-author">— דני כ.</span>
+        </div>
+        <div class="testimonial-card">
+          <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
+          <p>"מקצועי, מהיר ותמיד עם חיוך. המקום הכי טוב בעיר."</p>
+          <span class="testimonial-author">— אורי מ.</span>
+        </div>
+        <div class="testimonial-card">
+          <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
+          <p>"הזקן שלי מעולם לא נראה כל כך טוב. תודה יוגב!"</p>
+          <span class="testimonial-author">— רועי ד.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-col">
+          <h3>YOGEV BOKOBZA</h3>
+          <p>מספרה מקצועית לגברים. ניסיון של שנים בעיצוב שיער וזקן.</p>
+        </div>
+        <div class="footer-col">
+          <h3>שעות פעילות</h3>
+          <ul>
+            <li>ראשון - חמישי: 09:00 - 20:00</li>
+            <li>שישי: 08:00 - 14:00</li>
+            <li>שבת: סגור</li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h3>צור קשר</h3>
+          <ul>
+            <li>📞 050-1234567</li>
+            <li>📍 רחוב הרצל 42, תל אביב</li>
+            <li>📧 info@yogevb.co.il</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>כל הזכויות שמורות &copy; 2026 YOGEV BOKOBZA</p>
+      </div>
+    </div>
   </footer>
 
-  <!-- Drop-in: just one script tag -->
+  <!-- Mobile nav toggle script -->
+  <script>
+    document.querySelector('.nav-toggle').addEventListener('click', function() {
+      document.querySelector('.nav-links').classList.toggle('nav-open');
+      this.classList.toggle('active');
+    });
+  </script>
+
+  <!-- Accessibility Widget — drop-in -->
   <script src="accessibility-widget.js"></script>
 
 </body>

@@ -1,0 +1,9 @@
+{
+  "name": "accessibility-widget-demo",
+  "version": "1.0.0",
+  "description": "Drop-in accessibility widget with demo barbershop website",
+  "scripts": {
+    "start": "npx serve -l 3000",
+    "dev": "npx serve -l 3000 --no-clipboard"
+  }
+}
