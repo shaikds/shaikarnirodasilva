@@ -1,34 +1,70 @@
 /**
  * Widget Orchestrator — wires all components together.
  *
- * 1. Loads saved state from StorageManager
- * 2. Creates WidgetState (Observer)
- * 3. Builds UI via PanelBuilder (which uses ButtonFactory)
- * 4. Subscribes to state changes to apply/remove strategies
- * 5. Injects CSS and appends to DOM
- * 6. Restores saved state
+ * 1. Initializes LanguageManager
+ * 2. Loads saved state from StorageManager
+ * 3. Creates WidgetState (Observer)
+ * 4. Builds UI via PanelBuilder (which uses ButtonFactory + AccessibilityStatement)
+ * 5. Subscribes to state changes to apply/remove strategies
+ * 6. Listens for language changes and rebuilds UI
  */
 function Widget() {
+  var self = this;
+
   var saved = StorageManager.load();
   this.widgetState = new WidgetState(saved);
+  this._elements = null;
+  this._panelBuilder = null;
 
-  var panelBuilder = new PanelBuilder(this.widgetState);
-  var elements = panelBuilder.build();
+  this._buildUI();
+  this._subscribeStrategies();
 
-  // Inject CSS
+  if (saved) {
+    this.widgetState.notify();
+  }
+
+  // On language change: rebuild UI while preserving state + open/close
+  LanguageManager.onChange(function () {
+    var wasOpen = self._panelBuilder && self._panelBuilder.isOpen;
+    self._destroyUI();
+    self._buildUI();
+    self.widgetState.notify();
+    if (wasOpen) {
+      self._panelBuilder.togglePanel();
+    }
+  });
+}
+
+Widget.prototype._buildUI = function () {
+  this._panelBuilder = new PanelBuilder(this.widgetState);
+  this._elements = this._panelBuilder.build();
+
+  var existingStyle = document.getElementById('a11y-widget-styles');
+  if (existingStyle) existingStyle.parentNode.removeChild(existingStyle);
   var styleEl = document.createElement('style');
   styleEl.id = 'a11y-widget-styles';
   styleEl.textContent = getWidgetCSS();
   document.head.appendChild(styleEl);
 
-  // Append to <html> (not <body>) so filter strategies on <body> don't affect widget
-  document.documentElement.appendChild(elements.trigger);
-  document.documentElement.appendChild(elements.panel);
+  document.documentElement.appendChild(this._elements.trigger);
+  document.documentElement.appendChild(this._elements.panel);
+};
 
-  // Subscribe: apply/remove strategies on state change
+Widget.prototype._destroyUI = function () {
+  if (this._panelBuilder) {
+    this._panelBuilder.destroy();
+  }
+  if (this._elements) {
+    if (this._elements.trigger.parentNode) this._elements.trigger.parentNode.removeChild(this._elements.trigger);
+    if (this._elements.panel.parentNode) this._elements.panel.parentNode.removeChild(this._elements.panel);
+    this._elements = null;
+  }
+  this.widgetState.clearUIListeners();
+};
+
+Widget.prototype._subscribeStrategies = function () {
   var widgetState = this.widgetState;
-  widgetState.subscribe(function (state) {
-    // Clear body filter first, then let the active filter re-apply
+  var handler = function (state) {
     document.body.style.filter = '';
 
     var activeFilterKey = null;
@@ -45,23 +81,20 @@ function Widget() {
       }
     });
 
-    // Apply the single active filter strategy last
     if (activeFilterKey) {
       StrategyRegistry[activeFilterKey].apply();
     }
 
     applyFontSize(state.fontSizeDelta);
     applyZoom(state.zoomLevel);
-  });
-
-  // Restore saved state
-  if (saved) {
-    widgetState.notify();
-  }
-}
+  };
+  handler._isStrategy = true;
+  widgetState.subscribe(handler);
+};
 
 // Init
 function init() {
+  LanguageManager.init();
   new Widget();
 }
 

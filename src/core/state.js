@@ -29,6 +29,12 @@ WidgetState.prototype.subscribe = function (fn) {
   this.listeners.push(fn);
 };
 
+WidgetState.prototype.clearUIListeners = function () {
+  this.listeners = this.listeners.filter(function (fn) {
+    return fn._isStrategy;
+  });
+};
+
 WidgetState.prototype.notify = function () {
   var state = this.state;
   this.listeners.forEach(function (fn) {

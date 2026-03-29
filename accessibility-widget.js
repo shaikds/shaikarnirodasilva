@@ -34,6 +34,18 @@
       zoomIn: 'הגדלת מסך',
       zoomOut: 'הקטנת מסך',
       openMenu: 'פתח תפריט נגישות',
+      accessibilityStatement: 'הצהרת נגישות',
+      switchLang: 'English',
+      statementTitle: 'הצהרת נגישות',
+      statementBody:
+        'אתר זה מחויב לספק חוויית שימוש נגישה לכלל המשתמשים, כולל אנשים עם מוגבלויות.\n\n' +
+        'פעולות שננקטו:\n' +
+        '• התאמת האתר לתקן הנגישות הישראלי (ת"י 5568) ולהנחיות WCAG 2.1 ברמה AA.\n' +
+        '• שימוש ברכיב נגישות המאפשר התאמות תצוגה אישיות: שינוי גודל טקסט, ניגודיות, צבעים, הדגשת קישורים וכותרות, גופן קריא ועוד.\n' +
+        '• תמיכה בניווט מקלדת מלא וקורא מסך.\n' +
+        '• תמונות באתר כוללות טקסט חלופי (alt).\n\n' +
+        'אם נתקלתם בבעיית נגישות, נשמח לשמוע — צרו קשר ונטפל בהקדם.',
+      statementClose: 'סגור',
     },
     en: {
       widgetTitle: 'Accessibility Settings',
@@ -54,22 +66,69 @@
       zoomIn: 'Zoom In',
       zoomOut: 'Zoom Out',
       openMenu: 'Open accessibility menu',
+      accessibilityStatement: 'Accessibility Statement',
+      switchLang: 'עברית',
+      statementTitle: 'Accessibility Statement',
+      statementBody:
+        'This website is committed to providing an accessible experience for all users, including people with disabilities.\n\n' +
+        'Steps taken:\n' +
+        '• The site has been adapted to the Israeli accessibility standard (SI 5568) and WCAG 2.1 Level AA guidelines.\n' +
+        '• An accessibility widget is provided allowing personal display adjustments: text size, contrast, colors, link and heading highlighting, readable font, and more.\n' +
+        '• Full keyboard navigation and screen reader support.\n' +
+        '• All images include alternative text (alt).\n\n' +
+        'If you encounter an accessibility issue, please contact us and we will address it promptly.',
+      statementClose: 'Close',
     },
   };
 
-  function detectLanguage() {
-    var lang = document.documentElement.lang || 'he';
-    return lang.startsWith('en') ? 'en' : 'he';
-  }
+  // ========================================================
+  // SECTION: LanguageManager (Single Responsibility)
+  // ========================================================
+  var LanguageManager = {
+    _lang: null,
+    _listeners: [],
+    STORAGE_KEY: 'a11y-widget-lang',
 
-  function t(key) {
-    var lang = detectLanguage();
-    return (Translations[lang] && Translations[lang][key]) || Translations.he[key] || key;
-  }
+    init: function () {
+      try {
+        this._lang = localStorage.getItem(this.STORAGE_KEY);
+      } catch (e) { /* ignore */ }
+      if (!this._lang) {
+        var pageLang = document.documentElement.lang || 'he';
+        this._lang = pageLang.startsWith('en') ? 'en' : 'he';
+      }
+    },
 
-  function isRTL() {
-    return detectLanguage() === 'he';
-  }
+    getLang: function () {
+      return this._lang || 'he';
+    },
+
+    isRTL: function () {
+      return this.getLang() === 'he';
+    },
+
+    t: function (key) {
+      var lang = this.getLang();
+      return (Translations[lang] && Translations[lang][key]) || Translations.he[key] || key;
+    },
+
+    toggle: function () {
+      this._lang = this._lang === 'he' ? 'en' : 'he';
+      try {
+        localStorage.setItem(this.STORAGE_KEY, this._lang);
+      } catch (e) { /* ignore */ }
+      var lang = this._lang;
+      this._listeners.forEach(function (fn) { fn(lang); });
+    },
+
+    onChange: function (fn) {
+      this._listeners.push(fn);
+    },
+  };
+
+  // Convenience shortcuts
+  function t(key) { return LanguageManager.t(key); }
+  function isRTL() { return LanguageManager.isRTL(); }
 
   // ========================================================
   // SECTION: StorageManager
@@ -121,6 +180,12 @@
 
   WidgetState.prototype.subscribe = function (fn) {
     this.listeners.push(fn);
+  };
+
+  WidgetState.prototype.clearUIListeners = function () {
+    this.listeners = this.listeners.filter(function (fn) {
+      return fn._isStrategy;
+    });
   };
 
   WidgetState.prototype.notify = function () {
@@ -423,6 +488,10 @@
       '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>',
     cancelHighlights:
       '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>',
+    statement:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
+    language:
+      '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>',
   };
 
   // ========================================================
@@ -504,6 +573,40 @@
       '.a11y-widget-footer-btn.a11y-cancel-hl{background:#2c3e50;color:#fff;}' +
       '.a11y-widget-footer-btn.a11y-cancel-hl:hover{background:#34495e;}' +
       '.a11y-widget-footer-btn:focus-visible{box-shadow:0 0 0 3px rgba(74,144,217,0.5);}' +
+      // Bottom bar (statement + language)
+      '.a11y-widget-bottombar{' +
+      'display:flex;gap:8px;padding:8px 12px 12px;border-top:1px solid #0f3460;align-items:center;justify-content:center;' +
+      '}' +
+      '.a11y-widget-bottombar-btn{' +
+      'display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1px solid #4A90D9;' +
+      'background:transparent;color:#4A90D9;cursor:pointer;font-size:12px;font-weight:600;' +
+      'transition:all 0.2s;outline:none;font-family:Arial,Helvetica,sans-serif;' +
+      '}' +
+      '.a11y-widget-bottombar-btn:hover{background:rgba(74,144,217,0.15);}' +
+      '.a11y-widget-bottombar-btn:focus-visible{box-shadow:0 0 0 3px rgba(74,144,217,0.5);}' +
+      '.a11y-widget-bottombar-btn svg{width:16px;height:16px;flex-shrink:0;}' +
+      // Statement modal
+      '.a11y-statement-overlay{' +
+      'position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,0.7);display:flex;' +
+      'align-items:center;justify-content:center;padding:20px;' +
+      '}' +
+      '.a11y-statement-modal{' +
+      'background:#1a1a2e;color:#e0e0e0;border-radius:16px;max-width:560px;width:100%;' +
+      'max-height:80vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.5);' +
+      'font-family:Arial,Helvetica,sans-serif;direction:' + (isRTL() ? 'rtl' : 'ltr') + ';' +
+      '}' +
+      '.a11y-statement-header{' +
+      'display:flex;align-items:center;justify-content:space-between;padding:20px 24px;' +
+      'background:#16213e;border-radius:16px 16px 0 0;border-bottom:1px solid #0f3460;' +
+      '}' +
+      '.a11y-statement-header h3{font-size:18px;font-weight:700;color:#fff;margin:0;}' +
+      '.a11y-statement-body{padding:24px;line-height:1.8;font-size:14px;white-space:pre-line;}' +
+      '.a11y-statement-close{' +
+      'background:none;border:2px solid #e74c3c;border-radius:50%;width:32px;height:32px;' +
+      'color:#e74c3c;cursor:pointer;display:flex;align-items:center;justify-content:center;' +
+      'padding:0;transition:background 0.2s;outline:none;flex-shrink:0;' +
+      '}' +
+      '.a11y-statement-close:hover{background:#e74c3c;color:#fff;}' +
       '@media(max-width:480px){' +
       '.a11y-widget-container{width:calc(100vw - 24px);' +
       (isRTL() ? 'left:12px;' : 'right:12px;') +
@@ -600,6 +703,83 @@
     }
 
     return btn;
+  };
+
+  // ========================================================
+  // SECTION: AccessibilityStatement (Single Responsibility)
+  // ========================================================
+  function AccessibilityStatement() {
+    this.overlay = null;
+  }
+
+  AccessibilityStatement.prototype.open = function () {
+    if (this.overlay) return;
+    var self = this;
+
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'a11y-statement-overlay';
+    this.overlay.addEventListener('click', function (e) {
+      if (e.target === self.overlay) self.close();
+    });
+
+    var modal = document.createElement('div');
+    modal.className = 'a11y-statement-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-label', t('statementTitle'));
+    modal.setAttribute('aria-modal', 'true');
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'a11y-statement-header';
+
+    var title = document.createElement('h3');
+    title.textContent = t('statementTitle');
+
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'a11y-statement-close';
+    closeBtn.setAttribute('aria-label', t('statementClose'));
+    closeBtn.innerHTML = Icons.close;
+    closeBtn.addEventListener('click', function () { self.close(); });
+
+    if (isRTL()) {
+      header.appendChild(closeBtn);
+      header.appendChild(title);
+    } else {
+      header.appendChild(title);
+      header.appendChild(closeBtn);
+    }
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'a11y-statement-body';
+    body.textContent = t('statementBody');
+
+    modal.appendChild(header);
+    modal.appendChild(body);
+    this.overlay.appendChild(modal);
+    document.documentElement.appendChild(this.overlay);
+
+    closeBtn.focus();
+
+    // Escape to close (stop propagation to prevent panel from also closing)
+    this._escHandler = function (e) {
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation();
+        self.close();
+      }
+    };
+    document.addEventListener('keydown', this._escHandler);
+  };
+
+  AccessibilityStatement.prototype.close = function () {
+    if (this.overlay && this.overlay.parentNode) {
+      this.overlay.parentNode.removeChild(this.overlay);
+    }
+    this.overlay = null;
+    if (this._escHandler) {
+      document.removeEventListener('keydown', this._escHandler);
+      this._escHandler = null;
+    }
   };
 
   // ========================================================
@@ -700,13 +880,41 @@
     footer.appendChild(resetBtn);
     footer.appendChild(cancelHLBtn);
 
+    // Bottom bar (accessibility statement + language toggle)
+    var bottomBar = document.createElement('div');
+    bottomBar.className = 'a11y-widget-bottombar';
+
+    // Accessibility statement button
+    this._statementObj = new AccessibilityStatement();
+    var statementObj = this._statementObj;
+    var statementBtn = document.createElement('button');
+    statementBtn.className = 'a11y-widget-bottombar-btn';
+    statementBtn.innerHTML = Icons.statement + '<span>' + t('accessibilityStatement') + '</span>';
+    statementBtn.setAttribute('aria-label', t('accessibilityStatement'));
+    statementBtn.addEventListener('click', function () {
+      statementObj.open();
+    });
+
+    // Language toggle button
+    var langBtn = document.createElement('button');
+    langBtn.className = 'a11y-widget-bottombar-btn';
+    langBtn.innerHTML = Icons.language + '<span>' + t('switchLang') + '</span>';
+    langBtn.setAttribute('aria-label', t('switchLang'));
+    langBtn.addEventListener('click', function () {
+      LanguageManager.toggle();
+    });
+
+    bottomBar.appendChild(statementBtn);
+    bottomBar.appendChild(langBtn);
+
     // Assemble panel
     this.panel.appendChild(header);
     this.panel.appendChild(body);
     this.panel.appendChild(footer);
+    this.panel.appendChild(bottomBar);
 
     // Keyboard support: Escape to close + focus trap
-    document.addEventListener('keydown', function (e) {
+    this._keyHandler = function (e) {
       if (!self.isOpen) return;
       if (e.key === 'Escape') {
         self.togglePanel();
@@ -730,7 +938,8 @@
           }
         }
       }
-    });
+    };
+    document.addEventListener('keydown', this._keyHandler);
 
     return { trigger: this.trigger, panel: this.panel };
   };
@@ -749,31 +958,87 @@
     }
   };
 
+  PanelBuilder.prototype.destroy = function () {
+    // Remove keydown listener (prevents leak)
+    if (this._keyHandler) {
+      document.removeEventListener('keydown', this._keyHandler);
+      this._keyHandler = null;
+    }
+    // Close any open statement modal
+    if (this._statementObj) {
+      this._statementObj.close();
+      this._statementObj = null;
+    }
+  };
+
   // ========================================================
   // SECTION: Widget Orchestrator
   // ========================================================
   function Widget() {
+    var self = this;
+
     // Load saved state
     var saved = StorageManager.load();
     this.widgetState = new WidgetState(saved);
+    this._elements = null;
+    this._panelBuilder = null;
 
-    // Build UI
-    var panelBuilder = new PanelBuilder(this.widgetState);
-    var elements = panelBuilder.build();
+    // Build and mount UI
+    this._buildUI();
 
-    // Inject CSS
+    // Subscribe to state changes — apply/remove strategies
+    this._subscribeStrategies();
+
+    // Apply saved state on load
+    if (saved) {
+      this.widgetState.notify();
+    }
+
+    // On language change: rebuild UI while preserving state + open/close
+    LanguageManager.onChange(function () {
+      var wasOpen = self._panelBuilder && self._panelBuilder.isOpen;
+      self._destroyUI();
+      self._buildUI();
+      self.widgetState.notify(); // re-apply strategies + update button states
+      if (wasOpen) {
+        self._panelBuilder.togglePanel();
+      }
+    });
+  }
+
+  Widget.prototype._buildUI = function () {
+    this._panelBuilder = new PanelBuilder(this.widgetState);
+    this._elements = this._panelBuilder.build();
+
+    // Inject/update CSS (direction-aware, so must refresh on lang change)
+    var existingStyle = document.getElementById('a11y-widget-styles');
+    if (existingStyle) existingStyle.parentNode.removeChild(existingStyle);
     var styleEl = document.createElement('style');
     styleEl.id = 'a11y-widget-styles';
     styleEl.textContent = getWidgetCSS();
     document.head.appendChild(styleEl);
 
     // Append to <html> (not <body>) so filter strategies on <body> don't affect widget
-    document.documentElement.appendChild(elements.trigger);
-    document.documentElement.appendChild(elements.panel);
+    document.documentElement.appendChild(this._elements.trigger);
+    document.documentElement.appendChild(this._elements.panel);
+  };
 
-    // Subscribe to state changes — apply/remove strategies
+  Widget.prototype._destroyUI = function () {
+    if (this._panelBuilder) {
+      this._panelBuilder.destroy();
+    }
+    if (this._elements) {
+      if (this._elements.trigger.parentNode) this._elements.trigger.parentNode.removeChild(this._elements.trigger);
+      if (this._elements.panel.parentNode) this._elements.panel.parentNode.removeChild(this._elements.panel);
+      this._elements = null;
+    }
+    // Remove stale UI subscribers (keep strategy subscriber)
+    this.widgetState.clearUIListeners();
+  };
+
+  Widget.prototype._subscribeStrategies = function () {
     var widgetState = this.widgetState;
-    widgetState.subscribe(function (state) {
+    var handler = function (state) {
       // First: clear the filter property, then let the active filter re-apply
       document.body.style.filter = '';
 
@@ -782,7 +1047,6 @@
       Object.keys(StrategyRegistry).forEach(function (key) {
         var strategy = StrategyRegistry[key];
         if (state[key]) {
-          // Defer filter strategies — apply the active one last
           if (FILTER_GROUP.indexOf(key) !== -1) {
             activeFilterKey = key;
           } else {
@@ -793,7 +1057,7 @@
         }
       });
 
-      // Apply the single active filter strategy last (avoids order issues)
+      // Apply the single active filter strategy last
       if (activeFilterKey) {
         StrategyRegistry[activeFilterKey].apply();
       }
@@ -801,18 +1065,16 @@
       // Apply size settings
       applyFontSize(state.fontSizeDelta);
       applyZoom(state.zoomLevel);
-    });
-
-    // Apply saved state on load
-    if (saved) {
-      widgetState.notify();
-    }
-  }
+    };
+    handler._isStrategy = true;
+    widgetState.subscribe(handler);
+  };
 
   // ========================================================
   // SECTION: Init
   // ========================================================
   function init() {
+    LanguageManager.init();
     new Widget();
   }
 

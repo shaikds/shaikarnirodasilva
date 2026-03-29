@@ -4,7 +4,8 @@
  * Creates:
  *   - Floating trigger button (wheelchair icon)
  *   - Panel with header (title + close), body (button grid), footer (reset + cancel)
- *   - Keyboard support (Escape to close)
+ *   - Bottom bar (accessibility statement + language toggle)
+ *   - Keyboard support (Escape to close, focus trap)
  */
 function PanelBuilder(widgetState) {
   this.widgetState = widgetState;
@@ -74,12 +75,14 @@ PanelBuilder.prototype.build = function () {
   var resetBtn = document.createElement('button');
   resetBtn.className = 'a11y-widget-footer-btn a11y-reset';
   resetBtn.innerHTML = Icons.reset + '<span>' + t('reset') + '</span>';
+  resetBtn.setAttribute('aria-label', t('reset'));
   resetBtn.addEventListener('click', function () {
     self.widgetState.reset();
   });
   var cancelHLBtn = document.createElement('button');
   cancelHLBtn.className = 'a11y-widget-footer-btn a11y-cancel-hl';
   cancelHLBtn.innerHTML = Icons.cancelHighlights + '<span>' + t('cancelHighlights') + '</span>';
+  cancelHLBtn.setAttribute('aria-label', t('cancelHighlights'));
   cancelHLBtn.addEventListener('click', function () {
     self.widgetState.state.highlightHeadings = false;
     self.widgetState.state.highlightLinks = false;
@@ -88,17 +91,63 @@ PanelBuilder.prototype.build = function () {
   footer.appendChild(resetBtn);
   footer.appendChild(cancelHLBtn);
 
+  // Bottom bar (accessibility statement + language toggle)
+  var bottomBar = document.createElement('div');
+  bottomBar.className = 'a11y-widget-bottombar';
+
+  this._statementObj = new AccessibilityStatement();
+  var statementObj = this._statementObj;
+  var statementBtn = document.createElement('button');
+  statementBtn.className = 'a11y-widget-bottombar-btn';
+  statementBtn.innerHTML = Icons.statement + '<span>' + t('accessibilityStatement') + '</span>';
+  statementBtn.setAttribute('aria-label', t('accessibilityStatement'));
+  statementBtn.addEventListener('click', function () {
+    statementObj.open();
+  });
+
+  var langBtn = document.createElement('button');
+  langBtn.className = 'a11y-widget-bottombar-btn';
+  langBtn.innerHTML = Icons.language + '<span>' + t('switchLang') + '</span>';
+  langBtn.setAttribute('aria-label', t('switchLang'));
+  langBtn.addEventListener('click', function () {
+    LanguageManager.toggle();
+  });
+
+  bottomBar.appendChild(statementBtn);
+  bottomBar.appendChild(langBtn);
+
   // Assemble
   this.panel.appendChild(header);
   this.panel.appendChild(body);
   this.panel.appendChild(footer);
+  this.panel.appendChild(bottomBar);
 
-  // Escape key
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && self.isOpen) {
+  // Keyboard: Escape to close + focus trap
+  this._keyHandler = function (e) {
+    if (!self.isOpen) return;
+    if (e.key === 'Escape') {
       self.togglePanel();
+      return;
     }
-  });
+    if (e.key === 'Tab') {
+      var focusable = self.panel.querySelectorAll('button, [tabindex]:not([tabindex="-1"])');
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  };
+  document.addEventListener('keydown', this._keyHandler);
 
   return { trigger: this.trigger, panel: this.panel };
 };
@@ -114,5 +163,16 @@ PanelBuilder.prototype.togglePanel = function () {
     this.panel.classList.remove('a11y-open');
     this.trigger.style.display = 'flex';
     this.trigger.focus();
+  }
+};
+
+PanelBuilder.prototype.destroy = function () {
+  if (this._keyHandler) {
+    document.removeEventListener('keydown', this._keyHandler);
+    this._keyHandler = null;
+  }
+  if (this._statementObj) {
+    this._statementObj.close();
+    this._statementObj = null;
   }
 };
