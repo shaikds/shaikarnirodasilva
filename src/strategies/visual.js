@@ -18,44 +18,53 @@ function deactivateSiblings(widgetState, key) {
   });
 }
 
+// Filters are applied to <body> so the widget (appended to <html>) is unaffected.
 var VisualStrategies = {
   monochrome: {
     apply: function () {
-      document.documentElement.style.filter = 'grayscale(100%)';
+      document.body.style.filter = 'grayscale(100%)';
     },
     remove: function () {
-      document.documentElement.style.filter = '';
+      document.body.style.filter = '';
     },
   },
   sepia: {
     apply: function () {
-      document.documentElement.style.filter = 'sepia(100%)';
+      document.body.style.filter = 'sepia(100%)';
     },
     remove: function () {
-      document.documentElement.style.filter = '';
+      document.body.style.filter = '';
     },
   },
   highContrast: {
     apply: function () {
-      document.documentElement.style.filter = 'contrast(150%)';
+      document.body.style.filter = 'contrast(150%)';
     },
     remove: function () {
-      document.documentElement.style.filter = '';
+      document.body.style.filter = '';
     },
   },
   invert: {
     apply: function () {
-      document.documentElement.style.filter = 'invert(100%)';
+      document.body.style.filter = 'invert(100%)';
     },
     remove: function () {
-      document.documentElement.style.filter = '';
+      document.body.style.filter = '';
     },
   },
   blackYellow: {
     apply: function () {
       injectStyle(
         'a11y-black-yellow',
-        'html *:not(.a11y-widget-container):not(.a11y-widget-container *) { background-color: #000 !important; color: #ff0 !important; border-color: #ff0 !important; }'
+        'html *:not(.a11y-widget-container):not(.a11y-widget-container *):not(.a11y-widget-trigger):not(.a11y-widget-trigger *) ' +
+        '{ background-color: #000 !important; color: #ff0 !important; border-color: #ff0 !important; }' +
+        '.a11y-widget-container .a11y-widget-btn { background: #f5f5f5 !important; color: #333 !important; }' +
+        '.a11y-widget-container .a11y-widget-btn.a11y-active { background: #4A90D9 !important; color: #fff !important; }' +
+        '.a11y-widget-container .a11y-widget-header { background: #16213e !important; }' +
+        '.a11y-widget-container .a11y-widget-title { color: #fff !important; }' +
+        '.a11y-widget-container .a11y-widget-body { color: #e0e0e0 !important; }' +
+        '.a11y-widget-container .a11y-widget-footer-btn { background: #2c3e50 !important; color: #fff !important; }' +
+        '.a11y-widget-container .a11y-widget-close { color: #e74c3c !important; border-color: #e74c3c !important; background: transparent !important; }'
       );
     },
     remove: function () {

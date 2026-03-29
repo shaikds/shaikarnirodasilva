@@ -11,7 +11,11 @@ var ContentStrategies = {
     apply: function () {
       injectStyle(
         'a11y-highlight-headings',
-        'h1, h2, h3, h4, h5, h6 { outline: 3px solid #f39c12 !important; background-color: rgba(243,156,18,0.15) !important; padding: 4px !important; }'
+        'h1, h2, h3, h4, h5, h6 ' +
+        '{ outline: 3px solid #f39c12 !important; background-color: rgba(243,156,18,0.15) !important; padding: 4px !important; }' +
+        '.a11y-widget-container h1, .a11y-widget-container h2, .a11y-widget-container h3, ' +
+        '.a11y-widget-container h4, .a11y-widget-container h5, .a11y-widget-container h6 ' +
+        '{ outline: none !important; background-color: transparent !important; padding: 0 !important; }'
       );
     },
     remove: function () {
@@ -23,7 +27,7 @@ var ContentStrategies = {
     apply: function () {
       injectStyle(
         'a11y-highlight-links',
-        'a { outline: 3px solid #3498db !important; background-color: rgba(52,152,219,0.15) !important; text-decoration: underline !important; padding: 2px !important; }'
+        'a:not(.a11y-widget-container a) { outline: 3px solid #3498db !important; background-color: rgba(52,152,219,0.15) !important; text-decoration: underline !important; padding: 2px !important; }'
       );
     },
     remove: function () {
@@ -36,7 +40,7 @@ var ContentStrategies = {
     apply: function () {
       this.remove();
       var self = this;
-      var images = document.querySelectorAll('img[alt]');
+      var images = document.querySelectorAll('img[alt]:not(.a11y-widget-container img)');
       images.forEach(function (img) {
         var alt = img.getAttribute('alt');
         if (!alt || !alt.trim()) return;
@@ -70,7 +74,8 @@ var ContentStrategies = {
     apply: function () {
       injectStyle(
         'a11y-readable-font',
-        'html *:not(.a11y-widget-container):not(.a11y-widget-container *) { font-family: "Comic Sans MS", "OpenDyslexic", cursive, sans-serif !important; }'
+        'html *:not(.a11y-widget-container):not(.a11y-widget-container *):not(.a11y-widget-trigger):not(.a11y-widget-trigger *) ' +
+        '{ font-family: "Comic Sans MS", "OpenDyslexic", cursive, sans-serif !important; }'
       );
     },
     remove: function () {

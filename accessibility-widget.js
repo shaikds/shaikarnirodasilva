@@ -194,44 +194,53 @@
   }
 
   // --- Visual Strategies ---
+  // Filters are applied to <body> so the widget (appended to <html>) is unaffected.
   var VisualStrategies = {
     monochrome: {
       apply: function () {
-        document.documentElement.style.filter = 'grayscale(100%)';
+        document.body.style.filter = 'grayscale(100%)';
       },
       remove: function () {
-        document.documentElement.style.filter = '';
+        document.body.style.filter = '';
       },
     },
     sepia: {
       apply: function () {
-        document.documentElement.style.filter = 'sepia(100%)';
+        document.body.style.filter = 'sepia(100%)';
       },
       remove: function () {
-        document.documentElement.style.filter = '';
+        document.body.style.filter = '';
       },
     },
     highContrast: {
       apply: function () {
-        document.documentElement.style.filter = 'contrast(150%)';
+        document.body.style.filter = 'contrast(150%)';
       },
       remove: function () {
-        document.documentElement.style.filter = '';
+        document.body.style.filter = '';
       },
     },
     invert: {
       apply: function () {
-        document.documentElement.style.filter = 'invert(100%)';
+        document.body.style.filter = 'invert(100%)';
       },
       remove: function () {
-        document.documentElement.style.filter = '';
+        document.body.style.filter = '';
       },
     },
     blackYellow: {
       apply: function () {
         injectStyle(
           'a11y-black-yellow',
-          'html *:not(.a11y-widget-container):not(.a11y-widget-container *) { background-color: #000 !important; color: #ff0 !important; border-color: #ff0 !important; }'
+          'html *:not(.a11y-widget-container):not(.a11y-widget-container *):not(.a11y-widget-trigger):not(.a11y-widget-trigger *) ' +
+          '{ background-color: #000 !important; color: #ff0 !important; border-color: #ff0 !important; }' +
+          '.a11y-widget-container .a11y-widget-btn { background: #f5f5f5 !important; color: #333 !important; }' +
+          '.a11y-widget-container .a11y-widget-btn.a11y-active { background: #4A90D9 !important; color: #fff !important; }' +
+          '.a11y-widget-container .a11y-widget-header { background: #16213e !important; }' +
+          '.a11y-widget-container .a11y-widget-title { color: #fff !important; }' +
+          '.a11y-widget-container .a11y-widget-body { color: #e0e0e0 !important; }' +
+          '.a11y-widget-container .a11y-widget-footer-btn { background: #2c3e50 !important; color: #fff !important; }' +
+          '.a11y-widget-container .a11y-widget-close { color: #e74c3c !important; border-color: #e74c3c !important; background: transparent !important; }'
         );
       },
       remove: function () {
@@ -246,7 +255,11 @@
       apply: function () {
         injectStyle(
           'a11y-highlight-headings',
-          'h1, h2, h3, h4, h5, h6 { outline: 3px solid #f39c12 !important; background-color: rgba(243,156,18,0.15) !important; padding: 4px !important; }'
+          'h1, h2, h3, h4, h5, h6 ' +
+          '{ outline: 3px solid #f39c12 !important; background-color: rgba(243,156,18,0.15) !important; padding: 4px !important; }' +
+          '.a11y-widget-container h1, .a11y-widget-container h2, .a11y-widget-container h3, ' +
+          '.a11y-widget-container h4, .a11y-widget-container h5, .a11y-widget-container h6 ' +
+          '{ outline: none !important; background-color: transparent !important; padding: 0 !important; }'
         );
       },
       remove: function () {
@@ -257,7 +270,7 @@
       apply: function () {
         injectStyle(
           'a11y-highlight-links',
-          'a { outline: 3px solid #3498db !important; background-color: rgba(52,152,219,0.15) !important; text-decoration: underline !important; padding: 2px !important; }'
+          'a:not(.a11y-widget-container a) { outline: 3px solid #3498db !important; background-color: rgba(52,152,219,0.15) !important; text-decoration: underline !important; padding: 2px !important; }'
         );
       },
       remove: function () {
@@ -269,7 +282,7 @@
       apply: function () {
         this.remove();
         var self = this;
-        var images = document.querySelectorAll('img[alt]');
+        var images = document.querySelectorAll('img[alt]:not(.a11y-widget-container img)');
         images.forEach(function (img) {
           var alt = img.getAttribute('alt');
           if (!alt || !alt.trim()) return;
@@ -302,8 +315,8 @@
       apply: function () {
         injectStyle(
           'a11y-readable-font',
-          '@font-face { font-family: "A11yReadable"; src: local("OpenDyslexic"), local("Comic Sans MS"); } ' +
-            'html *:not(.a11y-widget-container):not(.a11y-widget-container *) { font-family: "Comic Sans MS", "OpenDyslexic", cursive, sans-serif !important; }'
+          'html *:not(.a11y-widget-container):not(.a11y-widget-container *):not(.a11y-widget-trigger):not(.a11y-widget-trigger *) ' +
+          '{ font-family: "Comic Sans MS", "OpenDyslexic", cursive, sans-serif !important; }'
         );
       },
       remove: function () {
@@ -473,6 +486,10 @@
       '.a11y-widget-btn.a11y-active{background:#4A90D9;color:#fff;border-color:#3a7bc8;}' +
       '.a11y-widget-btn svg{width:24px;height:24px;flex-shrink:0;}' +
       '.a11y-widget-btn.a11y-active svg{fill:#fff;stroke:#fff;color:#fff;}' +
+      '.a11y-widget-btn.a11y-btn-close{border:2px solid #e74c3c;background:#fff;}' +
+      '.a11y-widget-btn.a11y-btn-close:hover{background:#e74c3c;color:#fff;}' +
+      '.a11y-widget-btn.a11y-btn-close svg{fill:#e74c3c;color:#e74c3c;}' +
+      '.a11y-widget-btn.a11y-btn-close:hover svg{fill:#fff;color:#fff;}' +
       '.a11y-widget-footer{' +
       'display:flex;gap:8px;padding:12px 12px 16px;border-top:1px solid #0f3460;' +
       '}' +
@@ -533,7 +550,7 @@
 
   ButtonFactory.prototype.create = function (config) {
     var btn = document.createElement('button');
-    btn.className = 'a11y-widget-btn';
+    btn.className = 'a11y-widget-btn' + (config.key === 'close' ? ' a11y-btn-close' : '');
     btn.innerHTML = config.icon + '<span>' + t(config.label) + '</span>';
     btn.setAttribute('aria-label', t(config.label));
 
@@ -750,15 +767,15 @@
     styleEl.textContent = getWidgetCSS();
     document.head.appendChild(styleEl);
 
-    // Append to DOM
-    document.body.appendChild(elements.trigger);
-    document.body.appendChild(elements.panel);
+    // Append to <html> (not <body>) so filter strategies on <body> don't affect widget
+    document.documentElement.appendChild(elements.trigger);
+    document.documentElement.appendChild(elements.panel);
 
     // Subscribe to state changes — apply/remove strategies
     var widgetState = this.widgetState;
     widgetState.subscribe(function (state) {
       // First: clear the filter property, then let the active filter re-apply
-      document.documentElement.style.filter = '';
+      document.body.style.filter = '';
 
       // Apply/remove all strategies
       var activeFilterKey = null;

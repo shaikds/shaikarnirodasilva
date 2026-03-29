@@ -21,26 +21,33 @@ function Widget() {
   styleEl.textContent = getWidgetCSS();
   document.head.appendChild(styleEl);
 
-  // Append to DOM
-  document.body.appendChild(elements.trigger);
-  document.body.appendChild(elements.panel);
+  // Append to <html> (not <body>) so filter strategies on <body> don't affect widget
+  document.documentElement.appendChild(elements.trigger);
+  document.documentElement.appendChild(elements.panel);
 
   // Subscribe: apply/remove strategies on state change
   var widgetState = this.widgetState;
   widgetState.subscribe(function (state) {
+    // Clear body filter first, then let the active filter re-apply
+    document.body.style.filter = '';
+
+    var activeFilterKey = null;
     Object.keys(StrategyRegistry).forEach(function (key) {
+      var strategy = StrategyRegistry[key];
       if (state[key]) {
-        StrategyRegistry[key].apply();
+        if (FILTER_GROUP.indexOf(key) !== -1) {
+          activeFilterKey = key;
+        } else {
+          strategy.apply();
+        }
       } else {
-        StrategyRegistry[key].remove();
+        strategy.remove();
       }
     });
 
-    var anyFilterActive = FILTER_GROUP.some(function (k) {
-      return state[k];
-    });
-    if (!anyFilterActive) {
-      document.documentElement.style.filter = '';
+    // Apply the single active filter strategy last
+    if (activeFilterKey) {
+      StrategyRegistry[activeFilterKey].apply();
     }
 
     applyFontSize(state.fontSizeDelta);
