@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SilvA.i - New Project</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div class="logo-icon">S</div>
+                <div class="logo-text">Silv<span>A.i</span></div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="index.html">
+                    <span class="nav-icon">&#9632;</span>
+                    Dashboard
+                </a>
+                <a href="new-project.html" class="active">
+                    <span class="nav-icon">&#43;</span>
+                    New Project
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                Project Manager v1.0
+            </div>
+        </aside>
+
+        <!-- Overlay for mobile -->
+        <div class="overlay"></div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Mobile Header -->
+            <div class="mobile-header">
+                <button class="mobile-menu-btn">&#9776;</button>
+                <span style="font-weight: 700;">SilvA.i</span>
+            </div>
+
+            <div class="wizard-container">
+                <div class="page-header text-center">
+                    <h1>New Project</h1>
+                    <p>Set up a new client project in 3 easy steps</p>
+                </div>
+
+                <!-- Wizard Steps Indicator -->
+                <div class="wizard-steps">
+                    <div class="wizard-step-item active">
+                        <div class="step-num">1</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="wizard-step-item">
+                        <div class="step-num">2</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="wizard-step-item">
+                        <div class="step-num">3</div>
+                    </div>
+                </div>
+
+                <!-- Step 1: Client Information -->
+                <div id="step-1" class="wizard-card">
+                    <div class="wizard-card-header">
+                        <h2>Step 1 of 3: Client Information</h2>
+                        <p>Select an existing client or create a new one</p>
+                    </div>
+                    <div class="wizard-card-body">
+                        <div class="form-group">
+                            <label for="existing-client">Existing Client</label>
+                            <select class="form-select" id="existing-client">
+                                <option value="">-- Select a client --</option>
+                            </select>
+                        </div>
+
+                        <div class="divider-text">OR create a new client</div>
+
+                        <div id="new-client-fields">
+                            <div class="form-group">
+                                <label for="client-name">Name *</label>
+                                <input type="text" class="form-input" id="client-name" placeholder="Full name">
+                            </div>
+                            <div class="form-group">
+                                <label for="client-company">Company</label>
+                                <input type="text" class="form-input" id="client-company" placeholder="Company name">
+                            </div>
+                            <div class="form-group">
+                                <label for="client-email">Email</label>
+                                <input type="email" class="form-input" id="client-email" placeholder="email@example.com">
+                            </div>
+                            <div class="form-group">
+                                <label for="client-phone">Phone</label>
+                                <input type="tel" class="form-input" id="client-phone" placeholder="+1 (555) 000-0000">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="wizard-card-footer">
+                        <a href="index.html" class="btn btn-ghost">Cancel</a>
+                        <button class="btn btn-primary" data-action="next">Next &#8594;</button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Project Details -->
+                <div id="step-2" class="wizard-card hidden">
+                    <div class="wizard-card-header">
+                        <h2>Step 2 of 3: Project Details</h2>
+                        <p>Define the project scope and service type</p>
+                    </div>
+                    <div class="wizard-card-body">
+                        <div class="form-group">
+                            <label for="project-name">Project Name *</label>
+                            <input type="text" class="form-input" id="project-name" placeholder="e.g. Client Dashboard, AI Chatbot">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Service Type *</label>
+                            <div class="service-grid">
+                                <div class="service-option" data-service="ai_agents">
+                                    <span class="service-icon" style="color: var(--purple);">&#9881;</span>
+                                    <span class="service-name">AI Agents</span>
+                                </div>
+                                <div class="service-option" data-service="nocode_to_prod">
+                                    <span class="service-icon" style="color: var(--orange);">&#8635;</span>
+                                    <span class="service-name">NoCode to Prod</span>
+                                </div>
+                                <div class="service-option" data-service="web_dev">
+                                    <span class="service-icon" style="color: var(--primary);">&#9002;</span>
+                                    <span class="service-name">Web Dev</span>
+                                </div>
+                                <div class="service-option" data-service="retainer">
+                                    <span class="service-icon" style="color: var(--success);">&#9874;</span>
+                                    <span class="service-name">Retainer</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="project-budget">Budget ($)</label>
+                            <input type="number" class="form-input" id="project-budget" placeholder="5000" min="0" step="100">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="project-timeline">Timeline (weeks)</label>
+                            <input type="number" class="form-input" id="project-timeline" placeholder="4" min="1" max="52">
+                        </div>
+                    </div>
+                    <div class="wizard-card-footer">
+                        <button class="btn btn-secondary" data-action="prev">&#8592; Back</button>
+                        <button class="btn btn-primary" data-action="next">Next &#8594;</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Review & Create -->
+                <div id="step-3" class="wizard-card hidden">
+                    <div class="wizard-card-header">
+                        <h2>Step 3 of 3: Review & Create</h2>
+                        <p>Confirm the details below and create your project</p>
+                    </div>
+                    <div class="wizard-card-body">
+                        <div id="review-content">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                    <div class="wizard-card-footer">
+                        <button class="btn btn-secondary" data-action="prev">&#8592; Back</button>
+                        <button class="btn btn-success btn-lg" id="btn-create">&#9654; Create Project</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/new-project.js"></script>
+</body>
+</html>
