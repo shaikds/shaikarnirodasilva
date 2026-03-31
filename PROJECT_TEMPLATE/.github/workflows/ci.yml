@@ -1,0 +1,132 @@
+# CI/CD Pipeline - Runs on every PR and push to main
+# Customize this for your specific tech stack
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==========================================
+  # JOB 1: Lint & Format Check
+  # ==========================================
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Node.js Project ---
+      # Uncomment for JavaScript/TypeScript projects
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+      #     cache: 'npm'
+      # - run: npm ci
+      # - run: npm run lint
+      # - run: npm run format:check
+
+      # --- Python Project ---
+      # Uncomment for Python projects
+      # - uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.12'
+      # - run: pip install ruff
+      # - run: ruff check .
+      # - run: ruff format --check .
+
+      # --- Java Project ---
+      # Uncomment for Java projects
+      # - uses: actions/setup-java@v4
+      #   with:
+      #     java-version: '21'
+      #     distribution: 'temurin'
+      #     cache: 'maven'
+      # - run: mvn checkstyle:check
+
+      - run: echo "Configure linting for your tech stack"
+
+  # ==========================================
+  # JOB 2: Tests
+  # ==========================================
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: lint  # Only run tests if lint passes
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Node.js ---
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+      #     cache: 'npm'
+      # - run: npm ci
+      # - run: npm test
+      # - run: npm run test:coverage  # Optional: coverage report
+
+      # --- Python ---
+      # - uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.12'
+      # - run: pip install -r requirements.txt
+      # - run: pytest --cov=src tests/
+
+      # --- Java ---
+      # - uses: actions/setup-java@v4
+      #   with:
+      #     java-version: '21'
+      #     distribution: 'temurin'
+      #     cache: 'maven'
+      # - run: mvn test
+
+      - run: echo "Configure tests for your tech stack"
+
+  # ==========================================
+  # JOB 3: Build
+  # ==========================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test  # Only build if tests pass
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Node.js ---
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+      #     cache: 'npm'
+      # - run: npm ci
+      # - run: npm run build
+
+      # --- Java ---
+      # - uses: actions/setup-java@v4
+      #   with:
+      #     java-version: '21'
+      #     distribution: 'temurin'
+      #     cache: 'maven'
+      # - run: mvn package -DskipTests
+
+      - run: echo "Configure build for your tech stack"
+
+  # ==========================================
+  # JOB 4: Security Audit (Optional but recommended)
+  # ==========================================
+  # security:
+  #   name: Security Audit
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     # Node.js
+  #     # - run: npm audit --audit-level=high
+  #     # Python
+  #     # - run: pip-audit

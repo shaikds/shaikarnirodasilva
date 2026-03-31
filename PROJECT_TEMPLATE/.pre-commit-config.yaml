@@ -1,0 +1,48 @@
+# Pre-commit hooks configuration
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+# Docs: https://pre-commit.com
+
+repos:
+  # General hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace        # Remove trailing whitespace
+      - id: end-of-file-fixer          # Ensure files end with newline
+      - id: check-yaml                 # Validate YAML syntax
+      - id: check-json                 # Validate JSON syntax
+      - id: check-added-large-files    # Prevent large files (>500KB)
+        args: ['--maxkb=500']
+      - id: check-merge-conflict       # Prevent merge conflict markers
+      - id: detect-private-key         # Prevent committing private keys
+      - id: no-commit-to-branch        # Prevent direct commits to main
+        args: ['--branch', 'main']
+
+  # Commit message format (conventional commits)
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  # ============================
+  # Uncomment for your tech stack:
+  # ============================
+
+  # --- JavaScript/TypeScript ---
+  # - repo: https://github.com/pre-commit/mirrors-eslint
+  #   rev: v8.56.0
+  #   hooks:
+  #     - id: eslint
+  #       files: \.[jt]sx?$
+  #       additional_dependencies:
+  #         - eslint@8.56.0
+  #         - eslint-config-prettier@9.1.0
+
+  # --- Python ---
+  # - repo: https://github.com/astral-sh/ruff-pre-commit
+  #   rev: v0.1.11
+  #   hooks:
+  #     - id: ruff        # Linter
+  #     - id: ruff-format # Formatter

@@ -1,0 +1,41 @@
+# EditorConfig - Consistent coding style across all editors
+# https://editorconfig.org
+
+root = true
+
+# Default for all files
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Java files - 4 spaces is standard
+[*.java]
+indent_size = 4
+
+# Python files - 4 spaces per PEP 8
+[*.py]
+indent_size = 4
+
+# Kotlin files
+[*.kt]
+indent_size = 4
+
+# Markdown - trailing whitespace can be intentional
+[*.md]
+trim_trailing_whitespace = false
+
+# Makefiles MUST use tabs
+[Makefile]
+indent_style = tab
+
+# YAML
+[*.{yml,yaml}]
+indent_size = 2
+
+# JSON
+[*.json]
+indent_size = 2

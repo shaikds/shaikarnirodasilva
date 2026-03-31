@@ -1,0 +1,107 @@
+# ============================
+# Dependencies
+# ============================
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+.gradle/
+.m2/
+
+# ============================
+# Build Outputs
+# ============================
+dist/
+build/
+out/
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.egg-info/
+*.egg
+
+# ============================
+# Environment & Secrets
+# ============================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+*.pem
+*.key
+*.cert
+credentials.json
+serviceAccountKey.json
+google-services.json
+
+# ============================
+# IDE & Editor
+# ============================
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# ============================
+# OS Files
+# ============================
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ============================
+# Logs
+# ============================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================
+# Testing
+# ============================
+coverage/
+.nyc_output/
+.pytest_cache/
+htmlcov/
+.tox/
+
+# ============================
+# Package Managers
+# ============================
+# Uncomment if you don't want to commit lock files
+# package-lock.json
+# yarn.lock
+# Pipfile.lock
+
+# ============================
+# Docker
+# ============================
+# docker-compose.override.yml
+
+# ============================
+# Misc
+# ============================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.cache
+.parcel-cache/
+.next/
+.nuxt/
