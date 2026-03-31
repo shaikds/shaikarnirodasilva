@@ -1,0 +1,8 @@
+services:
+  silvai:
+    build: ./platform
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./platform/.env
+    restart: unless-stopped
