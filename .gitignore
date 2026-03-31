@@ -52,3 +52,4 @@ logs/
 
 # mypy
 .mypy_cache/
+.claude/worktrees/
