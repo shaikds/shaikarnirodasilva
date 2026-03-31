@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 
 from pydantic import BaseModel, ConfigDict
 
@@ -67,7 +69,7 @@ class ProjectPhaseOut(BaseModel):
     status: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    actions: list[PhaseActionOut] = []
+    actions: List[PhaseActionOut] = []
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +106,7 @@ class ProjectOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     client: ClientOut
-    phases: list[ProjectPhaseOut] = []
+    phases: List[ProjectPhaseOut] = []
 
 
 class ProjectListOut(BaseModel):
@@ -135,7 +137,7 @@ class DashboardStats(BaseModel):
     completed_projects: int
     on_hold_projects: int
     cancelled_projects: int
-    phases_breakdown: dict[str, int]
+    phases_breakdown: Dict[str, int]
 
 
 class TimelineProject(BaseModel):
