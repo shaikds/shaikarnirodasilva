@@ -1,6 +1,8 @@
 """Client API endpoints."""
 from __future__ import annotations
 
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -16,7 +18,7 @@ def create_client(data: ClientCreate, db: Session = Depends(get_db)):
     return client_service.create_client(db, data)
 
 
-@router.get("", response_model=list[ClientOut])
+@router.get("", response_model=List[ClientOut])
 def list_clients(db: Session = Depends(get_db)):
     return client_service.get_clients(db)
 

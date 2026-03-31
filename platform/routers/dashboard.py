@@ -1,6 +1,8 @@
 """Dashboard API endpoints."""
 from __future__ import annotations
 
+from typing import List
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 
@@ -40,7 +42,7 @@ def get_dashboard(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/timeline", response_model=list[TimelineProject])
+@router.get("/timeline", response_model=List[TimelineProject])
 def get_timeline(db: Session = Depends(get_db)):
     projects = (
         db.query(Project)

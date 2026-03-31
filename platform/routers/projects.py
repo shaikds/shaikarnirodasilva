@@ -1,7 +1,7 @@
 """Project API endpoints."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -29,7 +29,7 @@ def create_project(data: ProjectCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("", response_model=list[ProjectListOut])
+@router.get("", response_model=List[ProjectListOut])
 def list_projects(
     status: Optional[str] = None,
     service_type: Optional[str] = None,
