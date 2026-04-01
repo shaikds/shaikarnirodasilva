@@ -21,11 +21,16 @@ def test_dashboard_returns_projects_for_kanban(client, sample_client):
 
     # Advance project B through phase 1 so it's in a different phase
     # Start phase 1, complete all actions, then advance
-    client.post(f"/api/projects/{p2['id']}/phases/1/start")
     phase1 = next(ph for ph in p2["phases"] if ph["phase_number"] == 1)
-    for action in phase1["actions"]:
-        client.post(f"/api/projects/{p2['id']}/actions/{action['id']}/toggle")
-    client.post(f"/api/projects/{p2['id']}/phases/1/complete")
+    phase1_id = phase1["id"]
+    client.post(f"/api/projects/{p2['id']}/phases/{phase1_id}/start")
+    # Re-fetch project to get updated action IDs/statuses after phase start
+    p2_fresh = client.get(f"/api/projects/{p2['id']}").json()
+    phase1_fresh = next(ph for ph in p2_fresh["phases"] if ph["phase_number"] == 1)
+    for action in phase1_fresh["actions"]:
+        if action["action_type"] == "manual" and action["status"] != "done":
+            client.put(f"/api/actions/{action['id']}/toggle")
+    client.post(f"/api/projects/{p2['id']}/phases/{phase1_id}/complete")
     client.post(f"/api/projects/{p2['id']}/advance")
 
     # Dashboard should return both projects with phase info
