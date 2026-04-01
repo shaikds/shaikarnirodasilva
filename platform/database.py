@@ -7,7 +7,8 @@ from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/silvai.db")
+_default_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "silvai.db")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{_default_db}")
 
 if DATABASE_URL.startswith("postgresql"):
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
