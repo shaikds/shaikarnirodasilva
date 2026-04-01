@@ -16,6 +16,11 @@ const ProjectView = {
     },
 
     _viewPhase(phaseNumber) {
+        // FORWARD LOCK: can only go back or to current, never forward
+        if (phaseNumber > this._project.current_phase) {
+            Toast.warning('Complete the current phase first before moving forward.');
+            return;
+        }
         this._viewingPhase = phaseNumber === this._project.current_phase ? null : phaseNumber;
         const container = document.getElementById('app');
         container.innerHTML = this._html();
@@ -126,10 +131,13 @@ const ProjectView = {
         const doneCount = phase.actions.filter(a => a.status === 'done').length;
         const statusIcon = phase.status === 'completed' ? '&#10003;' : phase.status === 'skipped' ? '&#8211;' : phase.status === 'in_progress' ? '&#9679;' : '&#9675;';
         const statusClass = phase.status === 'completed' ? 'completed' : phase.status === 'in_progress' ? 'current' : phase.status === 'skipped' ? 'skipped' : 'pending';
+        const canNavigate = phase.phase_number <= this._project.current_phase;
+        const clickHandler = canNavigate ? `onclick="ProjectView._viewPhase(${phase.phase_number})"` : '';
+        const lockedClass = canNavigate ? '' : ' accordion-locked';
 
         return `
-            <div class="accordion-item accordion-${statusClass}">
-                <div class="accordion-header" onclick="ProjectView._viewPhase(${phase.phase_number})">
+            <div class="accordion-item accordion-${statusClass}${lockedClass}">
+                <div class="accordion-header" ${clickHandler}>
                     <span class="accordion-icon">${statusIcon}</span>
                     <span class="accordion-title">Phase ${phase.phase_number}: ${Utils.esc(phase.phase_name)}</span>
                     <span class="accordion-meta">${doneCount}/${phase.actions.length} tasks</span>
