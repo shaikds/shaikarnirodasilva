@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from schemas import PhaseActionOut, ProjectCreate, ProjectOut, ProjectPhaseOut, ProjectUpdate
-from services import project_service
+from schemas import ActionDocumentUpdate, PhaseActionOut, ProjectCreate, ProjectOut, ProjectPhaseOut, ProjectUpdate
+from services import document_service, phase_navigation_service, project_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 actions_router = APIRouter(prefix="/actions", tags=["actions"])
@@ -55,6 +55,11 @@ def skip_phase(project_id: int, phase_id: int, db: Session = Depends(get_db)):
     return project_service.skip_phase(db, project_id, phase_id)
 
 
+@router.post("/{project_id}/phases/{phase_id}/reopen", response_model=ProjectPhaseOut)
+def reopen_phase(project_id: int, phase_id: int, db: Session = Depends(get_db)):
+    return phase_navigation_service.reopen_phase(db, project_id, phase_id)
+
+
 @router.post("/{project_id}/advance", response_model=ProjectOut)
 def advance(project_id: int, db: Session = Depends(get_db)):
     return project_service.advance_project(db, project_id)
@@ -67,4 +72,9 @@ def toggle_action(action_id: int, db: Session = Depends(get_db)):
 
 @actions_router.get("/{action_id}/document")
 def get_document(action_id: int, db: Session = Depends(get_db)):
-    return project_service.get_action_document(db, action_id)
+    return document_service.get_document(db, action_id)
+
+
+@actions_router.put("/{action_id}/document")
+def update_document(action_id: int, data: ActionDocumentUpdate, db: Session = Depends(get_db)):
+    return document_service.update_document(db, action_id, data.content)

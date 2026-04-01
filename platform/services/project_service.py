@@ -162,14 +162,6 @@ def toggle_action(db: Session, action_id: int) -> PhaseAction:
     return action
 
 
-def get_action_document(db: Session, action_id: int) -> Dict[str, str]:
-    action = db.query(PhaseAction).filter(PhaseAction.id == action_id).first()
-    if not action:
-        raise HTTPException(404, "Action not found")
-    if not action.auto_result:
-        raise HTTPException(404, "No document generated for this action")
-    return {"action_id": action.id, "description": action.description, "content": action.auto_result}
-
 
 def _load_full_project(db: Session, project_id: int) -> Optional[Project]:
     return db.query(Project).options(

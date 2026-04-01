@@ -99,6 +99,12 @@ class ProjectOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ---------- Document Update ----------
+
+class ActionDocumentUpdate(BaseModel):
+    content: str = Field(..., min_length=1)
+
+
 # ---------- Dashboard ----------
 
 class AlertOut(BaseModel):
