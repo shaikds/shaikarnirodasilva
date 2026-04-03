@@ -1,0 +1,14 @@
+# Project configs (may contain secrets)
+config/backup.yaml
+projects/*/backup.yaml
+projects/*/.status
+projects/*/.lock
+
+# Logs
+logs/
+projects/*/logs/
+
+# Temp
+/tmp/
+__pycache__/
+*.pyc

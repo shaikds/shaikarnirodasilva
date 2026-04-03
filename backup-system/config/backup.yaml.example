@@ -1,0 +1,163 @@
+backup:
+  project_name: "my-project"
+
+  # Services to backup: "auto" = detect automatically, true = always, false = skip
+  services:
+    postgresql:
+      enabled: auto
+      host: localhost
+      port: 5432
+      user: postgres
+      databases: []
+      dump_format: custom
+      docker_container: ""
+
+    mysql:
+      enabled: auto
+      host: localhost
+      port: 3306
+      user: root
+      password: ""
+      databases: []
+      docker_container: ""
+
+    mongodb:
+      enabled: auto
+      host: localhost
+      port: 27017
+      uri: ""
+      databases: []
+      docker_container: ""
+
+    sqlite:
+      enabled: auto
+      paths:
+        - "./**/*.db"
+        - "./**/*.sqlite"
+        - "./**/*.sqlite3"
+
+    redis:
+      enabled: auto
+      host: localhost
+      port: 6379
+      docker_container: ""
+
+    elasticsearch:
+      enabled: auto
+      host: localhost
+      port: 9200
+      protocol: http
+      user: ""
+      password: ""
+      indices: []
+      snapshot_repo: "backup_repo"
+      docker_container: ""
+
+    n8n:
+      enabled: auto
+      docker_container: ""
+
+    kubernetes:
+      enabled: auto
+      kubeconfig: ""
+      namespaces: []
+      resources:
+        - deployments
+        - services
+        - configmaps
+        - secrets
+        - persistentvolumeclaims
+        - ingresses
+        - statefulsets
+      backup_pvcs: true
+
+    docker:
+      enabled: auto
+      backup_volumes: true
+      backup_compose: true
+      volumes: []
+      exclude_volumes:
+        - "node_modules"
+        - ".git"
+
+  files:
+    enabled: true
+    include:
+      - "./config/"
+      - "./.env"
+      - "./docker-compose*.yml"
+    exclude:
+      - "node_modules"
+      - ".git"
+      - "*.log"
+      - "__pycache__"
+      - ".venv"
+
+  git:
+    enabled: auto
+    bundle: true
+
+  # At least one destination required
+  destinations:
+    local:
+      enabled: true
+      path: "/backup/restic-repo"
+
+    s3:
+      enabled: false
+      bucket: ""
+      region: ""
+      access_key: ""
+      secret_key: ""
+
+    google_drive:
+      enabled: false
+      rclone_remote: "gdrive"
+      path: "/backups"
+
+    sftp:
+      enabled: false
+      host: ""
+      user: ""
+      path: "/backups"
+      key_file: ""
+
+  retention:
+    keep_hourly: 24
+    keep_daily: 30
+    keep_weekly: 12
+    keep_monthly: 12
+    keep_yearly: 5
+
+  encryption:
+    password: ""
+    password_file: ""
+
+  notifications:
+    slack:
+      enabled: false
+      webhook_url: ""
+    email:
+      enabled: false
+      to: ""
+      smtp_host: ""
+      smtp_port: 587
+      smtp_user: ""
+      smtp_password: ""
+    webhook:
+      enabled: false
+      url: ""
+      method: POST
+
+  schedule:
+    enabled: false
+    interval: daily
+    time: "02:00"
+
+  settings:
+    log_file: "./backup-system/logs/backup.log"
+    log_max_size: "10M"
+    dry_run: false
+    verbose: false
+    parallel: false
+    temp_dir: "/tmp/backup-staging"
