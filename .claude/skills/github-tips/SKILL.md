@@ -1,52 +1,116 @@
 ---
-name: github-tips
-description: "GitHub & GitHub Actions best practices - 30 tips as on-demand reference"
-disable-model-invocation: true
+name: applying-github-best-practices
+description: "Applies GitHub and GitHub Actions best practices when creating workflows, PRs, issues, repo configs, and CI/CD pipelines. Use when setting up a new repository, creating GitHub Actions workflows, configuring branch protection, writing PR/issue templates, or any GitHub-related task."
 ---
 
 # GitHub & GitHub Actions Best Practices
 
-When this skill is invoked, apply the following best practices to any GitHub-related task.
-Reference files are organized by category under `reference/`.
+Apply these best practices to any GitHub-related task. Reference files are organized by category.
 
----
+## Quick start
 
-## GitHub Actions (reference/actions/)
+Minimal CI workflow with best practices applied:
 
-| # | File | Rule |
-|---|------|------|
-| 1 | `concurrency.md` | ALWAYS add `concurrency` with `cancel-in-progress: true` |
-| 2 | `caching.md` | ALWAYS cache dependencies to speed up builds |
-| 3 | `timeout.md` | ALWAYS set `timeout-minutes` on jobs and long steps |
-| 4 | `matrix-strategy.md` | Use `fail-fast: false` to get full test results |
-| 5 | `parallel-jobs.md` | Use `needs` to run independent jobs in parallel |
-| 6 | `environment-secrets.md` | Use Environment Secrets, not Repository Secrets for deploy |
-| 7 | `paths-filter.md` | Use `paths` / `paths-ignore` to skip irrelevant CI runs |
-| 8 | `reusable-workflows.md` | Use `workflow_call` for DRY workflows across repos |
-| 9 | `composite-actions.md` | Bundle repeated steps into composite actions |
-| 10 | `event-payload.md` | Use `github.event` for rich event data |
-| 11 | `github-output.md` | Use `GITHUB_OUTPUT`, NEVER `set-output` (deprecated) |
-| 12 | `artifacts.md` | Use artifacts with `retention-days` to save storage |
-| 13 | `permissions.md` | ALWAYS set minimal `permissions` (least privilege) |
-| 14 | `conditional-steps.md` | Use `if: always()` / `failure()` for notifications and cleanup |
-| 15 | `dependabot-automerge.md` | Set up Dependabot + auto-merge for dependency updates |
+```yaml
+name: CI
+on:
+  push:
+    paths: ['src/**', 'package.json']
+    paths-ignore: ['**.md']
 
-## General GitHub (reference/github/)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-| # | File | Rule |
-|---|------|------|
-| 16 | `branch-protection.md` | ALWAYS enable branch protection on `main` |
-| 17 | `codeowners.md` | ALWAYS create CODEOWNERS for automatic review assignment |
-| 18 | `conventional-commits.md` | Use Conventional Commits format for all commits |
-| 19 | `pr-templates.md` | Create PR templates with checklist |
-| 20 | `issue-forms.md` | Use Issue Forms (not just templates) with validation |
-| 21 | `github-cli.md` | Use `gh` CLI for PRs, issues, releases from terminal |
-| 22 | `gitattributes.md` | Configure `.gitattributes` for line endings and linguist |
-| 23 | `release-notes.md` | Use auto-generated release notes with label categories |
-| 24 | `saved-replies.md` | Set up Saved Replies for common review comments |
-| 25 | `search-operators.md` | Use GitHub search operators for advanced search |
-| 26 | `git-blame.md` | Use `.git-blame-ignore-revs` to skip formatting commits |
-| 27 | `projects-v2.md` | Use GitHub Projects V2 with custom fields and workflows |
-| 28 | `security.md` | Enable CodeQL, Secret Scanning, and Dependabot Alerts |
-| 29 | `devcontainers.md` | Create `devcontainer.json` for consistent dev environments |
-| 30 | `funding.md` | Add `FUNDING.yml` for sponsor button on open source repos |
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test
+```
+
+## Determine the task type
+
+**Creating/editing a GitHub Actions workflow?** → See [GitHub Actions](#github-actions) below
+**Setting up a new repository?** → See [General GitHub](#general-github) below
+**Both?** → Read both sections
+
+## GitHub Actions
+
+**Essentials** (apply to every workflow):
+- [concurrency.md](reference/actions/concurrency.md) - Cancel redundant runs
+- [permissions.md](reference/actions/permissions.md) - Least privilege permissions
+- [timeout.md](reference/actions/timeout.md) - Prevent stuck jobs
+
+**Performance**:
+- [caching.md](reference/actions/caching.md) - Cache dependencies
+- [paths-filter.md](reference/actions/paths-filter.md) - Skip irrelevant CI runs
+- [parallel-jobs.md](reference/actions/parallel-jobs.md) - Run jobs in parallel with `needs`
+
+**Advanced patterns**:
+- [reusable-workflows.md](reference/actions/reusable-workflows.md) - DRY workflows across repos
+- [composite-actions.md](reference/actions/composite-actions.md) - Bundle repeated steps
+- [matrix-strategy.md](reference/actions/matrix-strategy.md) - Test across versions/OS
+
+**Outputs & artifacts**:
+- [github-output.md](reference/actions/github-output.md) - NEVER use deprecated `set-output`
+- [artifacts.md](reference/actions/artifacts.md) - Share files between jobs
+- [event-payload.md](reference/actions/event-payload.md) - Access rich event data
+
+**Notifications & deployment**:
+- [conditional-steps.md](reference/actions/conditional-steps.md) - `if: always()` / `failure()`
+- [environment-secrets.md](reference/actions/environment-secrets.md) - Per-environment secrets
+- [dependabot-automerge.md](reference/actions/dependabot-automerge.md) - Auto-update dependencies
+
+## General GitHub
+
+**Repository setup** (apply when creating a new repo):
+- [branch-protection.md](reference/github/branch-protection.md) - Protect `main` branch
+- [codeowners.md](reference/github/codeowners.md) - Automatic review assignment
+- [gitattributes.md](reference/github/gitattributes.md) - Line endings and linguist config
+- [security.md](reference/github/security.md) - CodeQL, Secret Scanning, Dependabot
+
+**Templates & forms**:
+- [pr-templates.md](reference/github/pr-templates.md) - PR template with checklist
+- [issue-forms.md](reference/github/issue-forms.md) - Structured issue forms with validation
+- [conventional-commits.md](reference/github/conventional-commits.md) - Commit message format
+
+**Productivity**:
+- [github-cli.md](reference/github/github-cli.md) - `gh` CLI reference
+- [search-operators.md](reference/github/search-operators.md) - Advanced GitHub search
+- [saved-replies.md](reference/github/saved-replies.md) - Common review comments
+
+**Project management**:
+- [release-notes.md](reference/github/release-notes.md) - Auto-generated changelogs
+- [projects-v2.md](reference/github/projects-v2.md) - Project boards with custom fields
+- [git-blame.md](reference/github/git-blame.md) - Skip formatting commits in blame
+- [devcontainers.md](reference/github/devcontainers.md) - Consistent dev environments
+- [funding.md](reference/github/funding.md) - Sponsor button for open source
+
+## New repo setup checklist
+
+When setting up a new repository, copy and track progress:
+
+```
+Repo Setup:
+- [ ] Branch protection on main
+- [ ] CODEOWNERS file
+- [ ] .gitattributes
+- [ ] PR template
+- [ ] Issue forms (bug report + feature request)
+- [ ] CI workflow with concurrency, cache, timeout, permissions
+- [ ] Dependabot config
+- [ ] CodeQL security scanning
+- [ ] .git-blame-ignore-revs
+- [ ] devcontainer.json (if team project)
+```
