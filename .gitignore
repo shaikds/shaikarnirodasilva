@@ -1,0 +1,25 @@
+# Exported data lives here — never commit it
+data/
+
+# Local config with credentials
+config.local.yaml
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store

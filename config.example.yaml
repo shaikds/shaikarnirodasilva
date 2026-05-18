@@ -1,0 +1,38 @@
+# Copy to ~/.config/ai-export/config.yaml and fill in.
+#
+# Every setting can also be overridden by:
+#   - environment variables (AI_EXPORT_PROVIDER, AI_EXPORT_MODEL, ...)
+#   - CLI flags (--provider, --model, ...)
+
+llm:
+  # provider: anthropic | openai | ollama | llamacpp
+  provider: anthropic
+  model: claude-opus-4-7
+
+  anthropic:
+    # api_key: sk-ant-...        # or set ANTHROPIC_API_KEY
+  openai:
+    # api_key: sk-...             # or set OPENAI_API_KEY
+  ollama:
+    host: http://localhost:11434
+  llamacpp:
+    base_url: http://localhost:8080/v1
+    # api_key: ignored-by-most-local-servers
+
+# Where exports land on disk
+data_dir: ~/ai-export-data
+
+# IMAP credentials for polling export-ready emails
+email:
+  imap_host: imap.gmail.com
+  imap_port: 993
+  username: you@example.com
+  # password: use an app password; or set AI_EXPORT_EMAIL_PASSWORD
+  mailbox: INBOX
+
+# Per-service overrides (optional)
+services:
+  chatgpt:
+    # Sender / subject patterns the poller looks for
+    email_from: noreply@tm.openai.com
+    email_subject_contains: ChatGPT - Your data export is ready

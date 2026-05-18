@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ai-export canonical dump",
+  "type": "object",
+  "required": ["service", "exported_at", "conversations"],
+  "properties": {
+    "service": { "type": "string" },
+    "exported_at": { "type": "string", "format": "date-time" },
+    "source_export_id": { "type": ["string", "null"] },
+    "conversations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "messages"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "created_at": { "type": ["string", "null"] },
+          "updated_at": { "type": ["string", "null"] },
+          "model": { "type": ["string", "null"] },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["user", "assistant", "system", "tool"]
+                },
+                "content": { "type": "string" },
+                "timestamp": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
