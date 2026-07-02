@@ -46,12 +46,19 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pct = v => Math.round(v * 100) + '%';
 
+// storage can throw in sandboxed iframes / strict file:// modes —
+// the nemesis just loses its long-term memory there, nothing else
+const store = {
+  get(k)    { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* no memory */ } },
+};
+
 // ============================================================
 // Player profile — the data the Nemesis learns from
 // ============================================================
 class PlayerProfile {
   constructor() {
-    const saved = localStorage.getItem('nemesis-profile');
+    const saved = store.get('nemesis-profile');
     Object.assign(this, {
       lights: 0, heavies: 0, specials: 0, blocks: 0, dodges: 0,
       hits: 0, attacks: 0,
@@ -65,7 +72,7 @@ class PlayerProfile {
       rounds: 0,
     }, saved ? JSON.parse(saved) : {});
   }
-  save() { localStorage.setItem('nemesis-profile', JSON.stringify(this)); }
+  save() { store.set('nemesis-profile', JSON.stringify(this)); }
 
   ema(key, value, a = 0.15) { this[key] = lerp(this[key], value, a); }
 
@@ -90,7 +97,7 @@ class PlayerProfile {
 // ============================================================
 class SyncEngine {
   constructor() {
-    const saved = localStorage.getItem('nemesis-rating');
+    const saved = store.get('nemesis-rating');
     this.rating = saved ? +saved : 1000;
     this.wins = 0; this.losses = 0;
   }
@@ -103,7 +110,7 @@ class SyncEngine {
     const margin = (playerHp - nemesisHp) / MAX_HP;      // -1..1
     const actual = (won ? 1 : 0) * 0.7 + (margin * 0.5 + 0.5) * 0.3;
     this.rating += 90 * (actual - 0.5);                  // expected score is always 0.5
-    localStorage.setItem('nemesis-rating', this.rating.toFixed(0));
+    store.set('nemesis-rating', this.rating.toFixed(0));
   }
 }
 
