@@ -1,0 +1,36 @@
+{
+  "poll_interval_seconds": 20,
+  "idle_break_seconds": 120,
+  "stuck_minutes": 20,
+  "skim_max_segment_seconds": 25,
+  "skim_window_minutes": 5,
+  "skim_count_threshold": 8,
+  "context_switch_window_minutes": 10,
+  "context_switch_threshold": 12,
+  "no_break_minutes": 90,
+  "flag_cooldown_minutes": 10,
+
+  "categories": {
+    "coding": ["Xcode", "IntelliJ IDEA", "Android Studio", "Visual Studio Code", "Code",
+               "Terminal", "iTerm2", "PyCharm", "Cursor"],
+    "research": ["Safari", "Google Chrome", "Firefox", "Arc"],
+    "communication": ["Slack", "Mail", "Messages", "Zoom", "Microsoft Teams"],
+    "design": ["Figma", "Sketch"],
+    "distraction": ["Twitter", "Instagram", "Reddit", "TikTok"]
+  },
+
+  "research_subcategories": {
+    "learning": ["stack overflow", "docs", "documentation", "medium", "youtube",
+                 "tutorial", "geeksforgeeks", "developer.apple.com", "github"],
+    "distraction": ["twitter", "reddit", "instagram", "facebook", "tiktok"]
+  },
+
+  "tips": {
+    "stuck_coding": "Stuck this long usually means the mental model is wrong, not the syntax. Re-read the error from the top, or explain the problem out loud (rubber duck) before changing more code.",
+    "stuck_research": "Long single-source reading without progress is a sign to switch source or format: try the official docs example, or a 10-minute hands-on instead of more reading.",
+    "skimming": "Frequent tab-hopping under 25s each means nothing is landing. Pick one resource, and write a 1-line note per section before moving on.",
+    "context_switch": "Too many app switches in a short window fragments focus. Close unrelated tabs/apps and commit to one task for the next 25 minutes.",
+    "no_break": "Long continuous stretch with no break. Take 5-10 minutes away from the screen; retention and problem-solving drop sharply past ~90 minutes.",
+    "passive": "Long idle-heavy stretch in a learning app (likely watching/reading passively). Switch to active recall: pause and try to reproduce what you just saw from memory."
+  }
+}
