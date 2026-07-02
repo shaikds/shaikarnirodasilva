@@ -15,6 +15,9 @@ The AI opponent is not scripted. It builds a live profile of *you*:
 |---|---|
 | How often you attack vs defend | Its own aggression |
 | Light vs heavy attack preference | Its strike selection |
+| How often you fire your special | Its special usage |
+| Time you spend on walls / in the air | Its climbing & jumping |
+| Whether you press after landing a hit | Its combo pressure |
 | Whether you block or dodge under pressure | Its escape habits |
 | The distance you like to attack from | Its spacing |
 | How fast you react to its windups | Its reaction time |
@@ -33,11 +36,33 @@ come back tomorrow, and your nemesis is still your nemesis.
 | Key | Action |
 |---|---|
 | `A` / `D` | Move |
+| `W` | Jump / climb up a wall |
 | `J` | Light attack (fast, weak) |
 | `K` | Heavy attack (slow, strong, hurts through block) |
-| `S` (hold) | Block |
+| `L` | **Special** — charged energy bolt, aimed at the enemy (needs a full ◆ meter) |
+| `S` (hold) | Block on the ground / slide down a wall / drop from the ceiling |
 | `SPACE` | Dodge (invincibility frames) |
 | `ENTER` | Start / next round |
+
+## Arena traversal
+
+The whole cage is playable. Hold `A`/`D` **into a wall while airborne** to grab
+it, climb with `W`, and keep climbing past the top to **hang from the ceiling**
+and stalk sideways above the fight. Press away from a wall to leap off with a
+wall-jump. The Nemesis learns how much air time you take — camp the ceiling and
+it will climb after you or snipe you off it with its special.
+
+## Specials, combos & blood
+
+- **Special attack** — both fighters carry an energy meter (builds over time,
+  faster when landing or taking hits). At full charge, `L` fires a glowing
+  bolt aimed at the enemy from anywhere — ground, wall, or ceiling. Blockable
+  for half damage, dodgeable outright.
+- **Combos** — consecutive clean hits chain: damage scales up, hit counters
+  flash, shockwave rings burst on big chains, and a 5-hit chain triggers
+  **SAVAGE** slow-motion. The Nemesis copies how hard you press after a hit.
+- **Blood** — hits spray blood that splatters and stays: pools on the floor,
+  drips down the walls. You bleed red; the Nemesis bleeds dark ichor.
 
 ## How the adaptation works
 
