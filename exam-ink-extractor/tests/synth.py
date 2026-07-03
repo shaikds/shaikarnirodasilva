@@ -23,33 +23,32 @@ SCALE = DPI / 72.0
 class GroundTruth:
     page: int
     bbox_px: tuple[int, int, int, int]  # in the 300-DPI template pixel frame
+    qname: str  # question zone this handwriting belongs to, e.g. "Q1A"
 
 
 def make_blank_pdf(path: str) -> None:
-    """Two-page 'exam': multilingual printed text, answer lines, boxes, a table."""
+    """Two-page 'exam': numbered questions (continuing across pages) with
+    lettered sub-questions, multilingual text, answer lines, a box, a table."""
     doc = fitz.open()
     for page_no in range(2):
+        q = page_no * 4
         page = doc.new_page(width=PAGE_W, height=PAGE_H)
         page.insert_text((60, 60), f"FINAL EXAM — page {page_no + 1}", fontsize=16)
-        questions = [
-            "Q1. Explain the theorem below and prove it:",
-            "Q2. Complete la phrase suivante:",
-            "Q3. Zeichnen Sie das Diagramm:",
-            "Q4. Answer inside the box only:",
-        ]
-        y = 110
-        for q in questions:
-            page.insert_text((60, y), q, fontsize=11)
-            for line in range(2):
-                ly = y + 25 + line * 28
-                page.draw_line((60, ly), (535, ly), width=0.7)
-            y += 100
-        page.draw_rect(fitz.Rect(60, y, 535, y + 160), width=1.0)
-        # a small grid/table
+        page.insert_text((60, 110), f"{q + 1}. Explain the theorem below and prove it:", fontsize=11)
+        page.insert_text((70, 135), "a. First derive the identity:", fontsize=10)
+        page.draw_line((70, 165), (535, 165), width=0.7)
+        page.insert_text((70, 190), "b. Then prove the general case:", fontsize=10)
+        page.draw_line((70, 220), (535, 220), width=0.7)
+        page.insert_text((60, 250), f"{q + 2}. Complete la phrase suivante:", fontsize=11)
+        page.draw_line((60, 275), (535, 275), width=0.7)
+        page.draw_line((60, 303), (535, 303), width=0.7)
+        page.insert_text((60, 340), f"{q + 3}. Zeichnen Sie das Diagramm:", fontsize=11)
+        page.draw_rect(fitz.Rect(60, 355, 535, 515), width=1.0)
+        page.insert_text((60, 530), f"{q + 4}. Fill the table:", fontsize=11)
         for i in range(4):
-            page.draw_line((60, y + 200 + i * 22), (300, y + 200 + i * 22), width=0.5)
+            page.draw_line((60, 550 + i * 22), (300, 550 + i * 22), width=0.5)
         for i in range(5):
-            page.draw_line((60 + i * 60, y + 200), (60 + i * 60, y + 266), width=0.5)
+            page.draw_line((60 + i * 60, 550), (60 + i * 60, 616), width=0.5)
     doc.save(path)
     doc.close()
 
@@ -80,26 +79,34 @@ def add_handwriting(template: np.ndarray, page: int, rng: random.Random) -> tupl
     """Overlay dense text-like scribbles, a sparse check-mark, and a drawn shape."""
     img = template.copy()
     truths: list[GroundTruth] = []
+    q = page * 4
 
     def s(v: float) -> int:
         return int(v * SCALE)
 
-    # dense scribble over the Q1 answer lines (crosses printed rules on purpose)
-    box = (s(70), s(125), s(430), s(60))
+    # dense scribble on sub-question (q+1)a's answer line (crosses the rule)
+    box = (s(90), s(148), s(400), s(26))
     _scribble(img, *box, rng)
-    truths.append(GroundTruth(page, (box[0], box[1], box[0] + box[2], box[1] + box[3])))
+    truths.append(GroundTruth(page, (box[0], box[1], box[0] + box[2], box[1] + box[3]), f"Q{q + 1}A"))
 
-    # sparse mark: a lone check-mark near Q2
-    cx, cy = s(120), s(240)
+    # dense scribble on sub-question (q+1)b's answer line
+    box = (s(90), s(204), s(400), s(24))
+    _scribble(img, *box, rng)
+    truths.append(GroundTruth(page, (box[0], box[1], box[0] + box[2], box[1] + box[3]), f"Q{q + 1}B"))
+
+    # sparse mark: a lone check-mark in question (q+2)'s area
+    cx, cy = s(120), s(290)
     pts = np.array([(cx, cy), (cx + s(6), cy + s(8)), (cx + s(18), cy - s(10))])
     cv2.polylines(img, [pts], False, 30, thickness=5, lineType=cv2.LINE_AA)
-    truths.append(GroundTruth(page, (cx - 8, cy - s(10) - 8, cx + s(18) + 8, cy + s(8) + 8)))
+    truths.append(GroundTruth(page, (cx - 8, cy - s(10) - 8, cx + s(18) + 8, cy + s(8) + 8), f"Q{q + 2}"))
 
-    # a drawn shape (circle + arrow) inside the big box region
-    cx, cy, r = s(200), s(560), s(28)
+    # a drawn shape (circle + arrow) inside question (q+3)'s big box
+    cx, cy, r = s(200), s(430), s(28)
     cv2.circle(img, (cx, cy), r, 50, thickness=4, lineType=cv2.LINE_AA)
     cv2.arrowedLine(img, (cx + r, cy), (cx + r + s(60), cy - s(20)), 50, 4, line_type=cv2.LINE_AA)
-    truths.append(GroundTruth(page, (cx - r - 8, cy - r - s(20) - 8, cx + r + s(60) + 8, cy + r + 8)))
+    truths.append(
+        GroundTruth(page, (cx - r - 8, cy - r - s(20) - 8, cx + r + s(60) + 8, cy + r + 8), f"Q{q + 3}")
+    )
 
     return img, truths
 

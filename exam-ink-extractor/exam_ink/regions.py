@@ -68,53 +68,87 @@ def denoise(mask: np.ndarray, dpi: float = REF_DPI) -> np.ndarray:
     return (keep[labels] * 255).astype(np.uint8)
 
 
-def group_regions(mask: np.ndarray, dpi: float = REF_DPI) -> list[Region]:
-    """Cluster handwriting ink into regions via morphological closing."""
+def group_regions(
+    mask: np.ndarray, dpi: float = REF_DPI, cut_lines: list[int] | None = None
+) -> list[Region]:
+    """Cluster handwriting ink into regions via morphological closing.
+
+    `cut_lines` are horizontal question-zone boundaries (px): clustering never
+    bridges them, so answers to adjacent (sub)questions stay separate regions.
+    Ink strokes are never split — a stroke crossing a boundary follows the
+    side holding most of its pixels.
+    """
     k = _scaled(CLUSTER_KERNEL, dpi)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     blocks = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    h, w = mask.shape
+    cuts = sorted(int(y) for y in (cut_lines or []) if 0 < y < h)
+    for y in cuts:
+        blocks[y, :] = 0  # a 1px gap: 8-connectivity cannot jump 2 rows
+
+    n, labels = cv2.connectedComponents(blocks, connectivity=8)
+    ni, ilabels, istats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    if ni <= 1 or n <= 1:
+        return []
+    # Assign each ink component wholly to the block owning most of its pixels
+    pair = ilabels.astype(np.int64) * np.int64(n) + labels.astype(np.int64)
+    counts = np.bincount(pair[mask > 0], minlength=ni * n).reshape(ni, n)
+    counts[:, 0] = 0  # pixels landing on a cut row / outside any block
+    owner = counts.argmax(axis=1)
+
+    groups: dict[int, list[int]] = {}
+    for ic in range(1, ni):
+        if counts[ic].sum() > 0 and owner[ic] > 0:
+            groups.setdefault(int(owner[ic]), []).append(ic)
 
     pad = _scaled(REGION_PAD, dpi)
     min_ink = _scaled(MIN_REGION_INK, dpi)
-    h, w = mask.shape
-    n, labels = cv2.connectedComponents(blocks, connectivity=8)
     regions: list[Region] = []
-    for i in range(1, n):
-        ys, xs = np.nonzero((labels == i) & (mask > 0))
-        if len(xs) == 0:
-            continue
-        ink = int(len(xs))
+    for comps in groups.values():
+        ink = int(sum(istats[c, cv2.CC_STAT_AREA] for c in comps))
         if ink < min_ink:
             continue
-        x0, x1 = int(xs.min()), int(xs.max())
-        y0, y1 = int(ys.min()), int(ys.max())
+        x0 = int(min(istats[c, cv2.CC_STAT_LEFT] for c in comps))
+        y0 = int(min(istats[c, cv2.CC_STAT_TOP] for c in comps))
+        x1 = int(max(istats[c, cv2.CC_STAT_LEFT] + istats[c, cv2.CC_STAT_WIDTH] for c in comps))
+        y1 = int(max(istats[c, cv2.CC_STAT_TOP] + istats[c, cv2.CC_STAT_HEIGHT] for c in comps))
         regions.append(
             Region(
                 bbox=(max(0, x0 - pad), max(0, y0 - pad), min(w, x1 + pad + 1), min(h, y1 + pad + 1)),
                 ink_area=ink,
             )
         )
-    regions = _merge_overlapping(regions)
+    regions = _merge_overlapping(regions, cuts)
     regions.sort(key=lambda r: (r.bbox[1], r.bbox[0]))
     return regions
 
 
-def _merge_overlapping(regions: list[Region]) -> list[Region]:
-    """Union intersecting bounding boxes so no answer is cropped twice."""
+def _band(cuts: list[int], y: float) -> int:
+    import bisect
+
+    return bisect.bisect(cuts, y)
+
+
+def _merge_overlapping(regions: list[Region], cuts: list[int]) -> list[Region]:
+    """Union intersecting boxes so no answer is cropped twice — but never
+    across a question-zone boundary."""
     merged = True
     while merged:
         merged = False
         for i in range(len(regions)):
             for j in range(i + 1, len(regions)):
                 a, b = regions[i].bbox, regions[j].bbox
-                if a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]:
-                    regions[i] = Region(
-                        bbox=(min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])),
-                        ink_area=regions[i].ink_area + regions[j].ink_area,
-                    )
-                    del regions[j]
-                    merged = True
-                    break
+                if not (a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]):
+                    continue
+                if _band(cuts, (a[1] + a[3]) / 2) != _band(cuts, (b[1] + b[3]) / 2):
+                    continue
+                regions[i] = Region(
+                    bbox=(min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])),
+                    ink_area=regions[i].ink_area + regions[j].ink_area,
+                )
+                del regions[j]
+                merged = True
+                break
             if merged:
                 break
     return regions

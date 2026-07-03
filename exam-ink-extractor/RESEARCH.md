@@ -100,10 +100,29 @@ filled.pdf ─rasterize──▶ scan pages ──page pairing──▶ registra
      components → padded bounding boxes → merge overlapping boxes. Makes no
      assumption about what handwriting *is*: a lone check-mark, a dense
      essay, and a drawn diagram all come out as regions.
-7. **Output**: per region, a crop of the registered grayscale scan (natural
-   input for downstream HTR) plus an ink-only mask crop, and `regions.json`
-   with page pairing, bboxes in pixels and PDF points, ink area, and
-   confidence metrics.
+7. **Question zoning** (`questions.py`): word-processor exams carry a text
+   layer, so question markers are read from the blank PDF with coordinates —
+   no OCR, script-agnostic. Detection is structural: a marker candidate is a
+   short token (`6.`, `א`, `b)`) at the *reading-order start* of a visual
+   line (RTL-aware; a detached dot token within 8pt counts). Candidates are
+   validated hard, because prose can start a line with a short token:
+   - main markers must share an x-column (±12pt) *and* form the longest
+     increasing numeric sequence in document order — this rejected a `1.–4.`
+     list and a mid-line `8.` on the real exam;
+   - sub markers must form alphabet-consecutive runs (א,ב,ג… / a,b,c…)
+     restarting under each main question.
+   Zones are horizontal bands from each anchor to the next (subs nest inside
+   mains, questions continue across pages). Region clustering is cut at zone
+   boundaries — whole ink strokes still follow their majority side — so
+   adjacent answers never merge, and each (sub)question emits one crop
+   (`Q6A.png`) spanning its band, extended only if the student's ink itself
+   overflows. Limitations: single-column layouts; a blank PDF without a text
+   layer skips zoning (OCR anchors = future work).
+8. **Output**: one crop per (sub)question (`Q6.png`, `Q6A.png`…) plus per
+   region a crop of the registered grayscale scan (natural input for
+   downstream HTR) and an ink-only mask crop, and `regions.json` with page
+   pairing, per-region question labels, bboxes in pixels and PDF points, ink
+   area, and confidence metrics.
 
 ## Validation
 

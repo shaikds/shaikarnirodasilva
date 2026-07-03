@@ -32,12 +32,23 @@ Output, per input page:
 ```
 out/
   page_01/
-    region_01.png        # crop of the registered scan (feed this to HTR)
-    region_01_ink.png    # same crop, handwriting ink only, white background
+    Q6.png, Q6A.png, ...  # one crop per (sub)question: the question's zone
+                          # containing that question's entire handwritten answer
+    region_01.png         # raw handwriting-region crop (feed this to HTR)
+    region_01_ink.png     # same crop, handwriting ink only, white background
     ...
-  regions.json           # page pairing, bboxes (px + PDF points), ink area,
-                         # alignment quality and low_confidence flags
+  regions.json            # page pairing, per-region + per-question bboxes
+                          # (px + PDF points), question labels, ink area,
+                          # alignment quality and low_confidence flags
 ```
+
+Question zones (`Q6`, `Q6A`…) are read from the blank PDF's **text layer**:
+question numbers (1, 2, 3…) and sub-question letters (a, b… / א, ב…) are
+detected by position + sequence validation — script-agnostic, no OCR. Each
+crop spans its question's band and never reaches into the next question,
+except when the student's ink itself overflows (the whole answer always wins).
+If the blank PDF has no text layer (e.g. it is itself a scan), question
+grouping is skipped and only `region_*.png` crops are produced.
 
 Pages whose alignment quality is poor are marked `"low_confidence": true` in
 `regions.json` with the reasons — review those instead of trusting them blindly.

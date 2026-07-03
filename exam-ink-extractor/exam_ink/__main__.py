@@ -30,9 +30,10 @@ def main() -> None:
     )
     for p in pages:
         flag = "  [LOW CONFIDENCE: " + "; ".join(p.confidence_reasons) + "]" if p.low_confidence else ""
+        qnames = ", ".join(q.name for q in p.questions) or "-"
         print(
             f"page {p.filled_page} -> template {p.template_page}: "
-            f"{len(p.regions)} region(s), ecc={p.ecc_score:.2f}{flag}"
+            f"{len(p.regions)} region(s), questions: {qnames}, ecc={p.ecc_score:.2f}{flag}"
         )
     print(f"crops + regions.json written to {args.out}/")
 

@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 from . import dropout as dropout_mod
-from . import ingest, pagematch, regions as regions_mod
+from . import ingest, pagematch, questions as questions_mod, regions as regions_mod
 from .register import RegistrationResult, register
 
 
@@ -22,6 +22,18 @@ class RegionOut:
     ink_area: int
     crop_path: str
     mask_crop_path: str
+    question: str | None = None  # "Q6A" — set when question zoning is available
+
+
+@dataclass
+class QuestionOut:
+    name: str  # "Q6", "Q6A"
+    main: str
+    sub: str | None
+    bbox_px: tuple[int, int, int, int]
+    bbox_pts: tuple[float, float, float, float] | None
+    region_ids: list[int]
+    crop_path: str
 
 
 @dataclass
@@ -35,6 +47,7 @@ class PageOut:
     ecc_score: float
     median_residual_px: float
     regions: list[RegionOut] = field(default_factory=list)
+    questions: list[QuestionOut] = field(default_factory=list)
 
 
 def _px_to_pts(bbox: tuple[int, int, int, int], page: ingest.Page) -> tuple | None:
@@ -78,6 +91,14 @@ def extract_handwriting(
     if filled_doc.annotations:
         # Lossless fast path: the filled PDF carries a digital ink layer.
         return _extract_from_annotations(filled_doc, out_dir)
+
+    # Question zones come from the blank PDF's text layer; empty when the
+    # blank has none (question grouping is then skipped).
+    zones = (
+        questions_mod.detect_zones(blank_path)
+        if blank_path.lower().endswith(".pdf")
+        else []
+    )
 
     # Template ink maps are computed once per template page (vector PDFs
     # render clean, so plain Otsu would work too — Sauvola keeps one code path).
@@ -146,7 +167,16 @@ def extract_handwriting(
             overlay[hw_mask > 0] = (0, 0, 255)
             _save_debug(page_dir, "debug_overlay.png", overlay)
 
-        for k, region in enumerate(regions_mod.group_regions(hw_mask, dpi=dpi), start=1):
+        # question-zone starts on this page act as clustering boundaries so
+        # neighbouring answers never merge into one region
+        cut_ys = [
+            int(y0)
+            for _, y0, _ in questions_mod.zones_on_page(zones, ti, tpage.dpi)
+            if y0 > 0
+        ]
+        for k, region in enumerate(
+            regions_mod.group_regions(hw_mask, dpi=dpi, cut_lines=cut_ys), start=1
+        ):
             x0, y0, x1, y1 = region.bbox
             crop = reg.aligned[y0:y1, x0:x1]
             mask_crop = 255 - hw_mask[y0:y1, x0:x1]  # ink-only view, white bg
@@ -164,11 +194,82 @@ def extract_handwriting(
                     mask_crop_path=os.path.relpath(mask_path, out_dir),
                 )
             )
+        out.questions = _emit_question_crops(
+            zones, ti, tpage, reg.aligned, template_inks[ti], out.regions, page_dir, out_dir
+        )
         pages_out.append(out)
 
     with open(os.path.join(out_dir, "regions.json"), "w") as f:
-        json.dump([asdict(p) for p in pages_out], f, indent=2)
+        json.dump([asdict(p) for p in pages_out], f, indent=2, ensure_ascii=False)
     return pages_out
+
+
+def _emit_question_crops(
+    zones: list,
+    template_page_index: int,
+    tpage: ingest.Page,
+    aligned: np.ndarray,
+    template_ink: np.ndarray,
+    regions: list[RegionOut],
+    page_dir: str,
+    out_dir: str,
+) -> list[QuestionOut]:
+    """Assign regions to question zones and write one crop per (sub)question.
+
+    The crop spans the zone's band (never reaching into the next question's
+    anchor) and is extended only when an assigned region's ink overflows the
+    band — the whole answer beats zone purity.
+    """
+    zones_px = questions_mod.zones_on_page(zones, template_page_index, tpage.dpi)
+    if not zones_px:
+        return []
+    H, W = aligned.shape
+
+    # Horizontal extent: the template's printed content column, padded.
+    cols = np.nonzero(template_ink.max(axis=0))[0]
+    x_lo, x_hi = (int(cols[0]), int(cols[-1]) + 1) if len(cols) else (0, W)
+    pad = max(4, int(round(12 * tpage.dpi / 300.0)))
+    x_lo, x_hi = max(0, x_lo - pad), min(W, x_hi + pad)
+
+    by_zone: dict[str, list[RegionOut]] = {}
+    zone_lookup: dict[str, tuple] = {}
+    for r in regions:
+        cy = (r.bbox_px[1] + r.bbox_px[3]) / 2
+        z = questions_mod.assign(zones_px, cy)
+        if z is None:
+            continue
+        r.question = z.name
+        by_zone.setdefault(z.name, []).append(r)
+        if z.name not in zone_lookup:
+            band = next((y0, y1) for zz, y0, y1 in zones_px if zz is z)
+            zone_lookup[z.name] = (z, *band)
+
+    out: list[QuestionOut] = []
+    for name, zregions in by_zone.items():
+        z, y0, y1 = zone_lookup[name]
+        y0, y1 = int(y0), int(min(y1, H))
+        ry0 = min(r.bbox_px[1] for r in zregions)
+        ry1 = max(r.bbox_px[3] for r in zregions)
+        rx0 = min(r.bbox_px[0] for r in zregions)
+        rx1 = max(r.bbox_px[2] for r in zregions)
+        cy0, cy1 = min(y0, ry0), max(y1, ry1)
+        cx0, cx1 = min(x_lo, rx0), max(x_hi, rx1)
+        crop_path = os.path.join(page_dir, f"{name}.png")
+        cv2.imwrite(crop_path, aligned[cy0:cy1, cx0:cx1])
+        bbox = (cx0, cy0, cx1, cy1)
+        out.append(
+            QuestionOut(
+                name=name,
+                main=z.main,
+                sub=z.sub,
+                bbox_px=bbox,
+                bbox_pts=_px_to_pts(bbox, tpage),
+                region_ids=[r.id for r in zregions],
+                crop_path=os.path.relpath(crop_path, out_dir),
+            )
+        )
+    out.sort(key=lambda q: q.bbox_px[1])
+    return out
 
 
 def _extract_from_annotations(doc: ingest.Document, out_dir: str) -> list[PageOut]:
