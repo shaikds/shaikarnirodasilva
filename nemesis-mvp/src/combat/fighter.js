@@ -123,6 +123,7 @@ export class Fighter {
     this.stateT = def.windup;
     this.hitLanded = false;
     this._setState('attack');
+    this.onAction?.(def.kind);          // profiler hook (FR-3.3)
     return true;
   }
 
@@ -132,6 +133,7 @@ export class Fighter {
     this.blockT = 0;
     this.attackType = null; this.phase = null;
     this._setState('block');
+    this.onAction?.('block');
     return true;
   }
   stopBlock() {
@@ -157,6 +159,7 @@ export class Fighter {
     if (len > 0.01) this.dodgeVec.set(dirX / len, dirZ / len);
     else this.dodgeVec.set(-Math.sin(this.yaw), -Math.cos(this.yaw));
     this._setState('dodge');
+    this.onAction?.('dodge');
     return true;
   }
 

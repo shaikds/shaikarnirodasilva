@@ -447,12 +447,12 @@ leads, code follows.
 | FR-2.3 Progression algorithm | P4 | not started |
 | FR-3.1 Taunt engine | P6 | not started |
 | FR-3.2 Macro GOAP (Hunt/Train/Ambush) | P6 | not started |
-| FR-3.3 Adaptive style mirroring | P3 | not started |
-| FR-3.4 Micro GOAP (combat tactics) | P3 | not started |
+| FR-3.3 Adaptive style mirroring | P3 | **done** (p3: learning + mirroring split; AC-3.3.2 verified as two checks) |
+| FR-3.4 Micro GOAP (combat tactics) | P3 | **done** (p3: BreakGuard 70%+, goal exposure) |
 | FR-4.1 Movement & camera | P1 | **done** (p1_movement 14/14) |
 | FR-4.2 Attacks | P2 | **done** (p2_combat) |
 | FR-4.3 Defense (block/parry) | P2 | **done** (p2_combat) |
-| FR-4.4 Special attack | P3 | not started |
+| FR-4.4 Special attack | P3 | **done** (p3: clean 18 / blocked 9 / cost) |
 | FR-4.5 Combo & damage rules | P2 | **done** (p2_combat) |
 | FR-4.6 Game feel | P2/P7 | P2 part done (buffering/cancels/hitstop/reactions); fps+polish at P7 |
 | FR-5.1 The zone | P5 | not started |

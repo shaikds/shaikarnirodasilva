@@ -69,7 +69,7 @@ demonstrably per its AC numbers.
 parry window, buffer executes with 0 idle frames, combo scaling math,
 hitstop durations read from the loop's freeze channel.
 
-## `[ ]` P3 — The rival fights: profile, sync, micro-GOAP
+## `[x]` P3 — The rival fights: profile, sync, micro-GOAP
 **Closes:** FR-3.3, FR-3.4, FR-4.4 (special) · **Modules:** `ai/goap.js`, `microActions.js`, `rivalAgent.js`, `playerProfile.js`, `syncEngine.js`, `combat/projectiles.js`
 
 - Port PlayerProfile + SyncEngine; wire profiling into the resolver events.

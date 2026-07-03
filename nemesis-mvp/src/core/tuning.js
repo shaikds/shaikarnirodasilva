@@ -33,3 +33,18 @@ export const CAMERA = {
 export const INPUT = {
   bufferMs: 150,         // AC-4.6.1
 };
+
+// Skill scaling (AC-3.3.4): [at skill 0, at skill 1], lerped by sync skill.
+export const AI = {
+  reactionMs: [420, 130],
+  planDepth: [2, 4],
+  replanS: [0.5, 0.15],
+  costNoise: [0.6, 0.05],
+  mistakeRate: [0.30, 0.04],
+  defendScale: [0.6, 1.15],
+  rubberBand: 0.25,      // in-round skill drift vs hp difference
+  meleeRange: 1.9,       // "inRange" atom threshold (m)
+  midRange: 6.0,
+  pressureHits: 3,       // hits taken within pressureWindow => underPressure
+  pressureWindow: 2.0,
+};

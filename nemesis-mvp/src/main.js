@@ -8,7 +8,12 @@ import { Fighter } from './combat/fighter.js';
 import { PlayerController } from './combat/controller.js';
 import { Resolver } from './combat/resolver.js';
 import { DummyBrain } from './combat/dummy.js';
+import { Projectiles } from './combat/projectiles.js';
 import { Hud } from './ui/hud.js';
+import { PlayerProfile, Profiler } from './ai/playerProfile.js';
+import { SyncEngine } from './ai/syncEngine.js';
+import { RivalAgent } from './ai/rivalAgent.js';
+import { PlayerBot } from './ai/bots.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -49,28 +54,62 @@ const dummy = new Fighter({
   color: 0x8a8aa5, emissive: 0x15151f,
   pos: [0, 0, -3],
 });
+const rival = new Fighter({
+  scene, name: 'rival',
+  color: 0xff4d6a, emissive: 0x38101a,
+  pos: [9, 0, -9],
+});
 
 const input = new Input(canvas);
 const rig = new CameraRig(camera, player, zone);
 const controller = new PlayerController(player, input, rig);
-controller.candidates = [dummy];
+controller.candidates = [dummy, rival];
 const dummyBrain = new DummyBrain(dummy, player);
 const hud = new Hud({ camera });
-hud.track(player, dummy);
+hud.track(player, rival);
 
 // ---------- loop ----------
 const statsEl = document.getElementById('stats');
 let lastRender = performance.now();
 let resolver;   // needs loop; created after
 
+// fighters shouldn't share the same square meter
+function separate(a, b) {
+  if (!a.alive || !b.alive) return;
+  const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
+  const d = Math.hypot(dx, dz), min = a.radius + b.radius;
+  if (d > 0.001 && d < min) {
+    const push = (min - d) / 2;
+    a.pos.x -= dx / d * push; a.pos.z -= dz / d * push;
+    b.pos.x += dx / d * push; b.pos.z += dz / d * push;
+  }
+}
+
+// the player's driver is swappable: human controller or a test bot
+let playerDriver = controller;
+function setPlayerDriver(spec) {
+  if (spec === 'human') playerDriver = controller;
+  else playerDriver = new PlayerBot(player, rival, spec);   // 'aggressive'|'turtle'|'heavyOnly'
+  return playerDriver;
+}
+
 const loop = new Loop({
   update(dt) {
-    controller.update(dt);
+    playerDriver.update(dt);
     dummyBrain.update(dt);
+    rivalAgent.update(dt, loop.simTime);
     player.update(dt, zone, loop.simTime);
     dummy.update(dt, zone, loop.simTime);
+    rival.update(dt, zone, loop.simTime);
+    separate(player, dummy); separate(player, rival); separate(dummy, rival);
+    if (player.pendingShot) { player.pendingShot = false; projectiles.fire(player, rival.alive && rivalAgent.enabled ? rival : dummy); }
+    if (rival.pendingShot) { rival.pendingShot = false; projectiles.fire(rival, player); }
+    projectiles.update(dt, [player, dummy, rival]);
     resolver.meleePair(player, dummy);
     resolver.meleePair(dummy, player);
+    resolver.meleePair(player, rival);
+    resolver.meleePair(rival, player);
+    profiler.update(dt, loop.simTime);
   },
   render(alpha) {
     const now = performance.now();
@@ -79,21 +118,42 @@ const loop = new Loop({
 
     player.syncMesh(alpha);
     dummy.syncMesh(alpha);
-    rig.update(rdt, controller.orbitInput());
+    rival.syncMesh(alpha);
+    rig.update(rdt, playerDriver === controller ? controller.orbitInput() : { x: 0, y: 0 });
     hud.consume(resolver.events);
     hud.update(rdt);
     renderer.render(scene, camera);
     statsEl.textContent =
       `fps ${loop.fps.toFixed(0)} · ticks ${loop.ticks}` +
-      (rig.lockTarget ? ' · LOCK' : '');
+      (rig.lockTarget ? ' · LOCK' : '') +
+      (rivalAgent.enabled && rivalAgent.currentGoal ? ` · ${rivalAgent.currentGoal.name}` : '');
   },
 });
 resolver = new Resolver({ loop, rig });
 input.simTime = () => loop.simTime;
+
+// ---------- the rival's mind ----------
+const profile = new PlayerProfile();
+const sync = new SyncEngine();
+const projectiles = new Projectiles({ scene, resolver, zone });
+const rivalAgent = new RivalAgent({ fighter: rival, target: player, profile, sync, resolver });
+const profiler = new Profiler({ profile, player, rival, resolver });
+
 loop.start();
+
+// deterministic manual stepping for tests (see p2 spec for rationale)
+function step(n) {
+  for (let i = 0; i < n; i++) {
+    loop.updateFn(loop.step);
+    loop.simTime += loop.step;
+    loop.ticks++;
+  }
+}
 
 // ---------- test / debug surface ----------
 window.__game = {
   loop, scene, camera, renderer, store, THREE,
-  zone, player, dummy, dummyBrain, input, rig, controller, resolver, hud,
+  zone, player, dummy, rival, dummyBrain, input, rig, controller,
+  resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
+  setPlayerDriver, step,
 };
