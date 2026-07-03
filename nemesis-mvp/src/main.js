@@ -14,6 +14,8 @@ import { PlayerProfile, Profiler } from './ai/playerProfile.js';
 import { SyncEngine } from './ai/syncEngine.js';
 import { RivalAgent } from './ai/rivalAgent.js';
 import { PlayerBot } from './ai/bots.js';
+import { RivalManager } from './rivalry/rivalManager.js';
+import { DebugPanel } from './ui/debug.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -120,6 +122,8 @@ const loop = new Loop({
     dummy.syncMesh(alpha);
     rival.syncMesh(alpha);
     rig.update(rdt, playerDriver === controller ? controller.orbitInput() : { x: 0, y: 0 });
+    if (input.consume('debug', 0.1)) debugPanel.toggle();
+    debugPanel.update(rdt);
     hud.consume(resolver.events);
     hud.update(rdt);
     renderer.render(scene, camera);
@@ -132,12 +136,22 @@ const loop = new Loop({
 resolver = new Resolver({ loop, rig });
 input.simTime = () => loop.simTime;
 
-// ---------- the rival's mind ----------
+// ---------- the rival's mind & identity ----------
 const profile = new PlayerProfile();
 const sync = new SyncEngine();
 const projectiles = new Projectiles({ scene, resolver, zone });
 const rivalAgent = new RivalAgent({ fighter: rival, target: player, profile, sync, resolver });
 const profiler = new Profiler({ profile, player, rival, resolver });
+const manager = new RivalManager({ store, profile, sync });
+const bootMode = manager.loadOrCreate();      // 'created' | 'restored'
+manager.applyToFighter(rival);
+if (rival.maxHp !== rival.hp) rival.hp = rival.maxHp;
+hud.showFoe(manager.doc.name);
+
+const debugPanel = new DebugPanel({
+  manager, profile, sync, rivalAgent, player, rival, loop,
+  get macroAgent() { return window.__game?.macroAgent; },   // P6
+});
 
 loop.start();
 
@@ -155,5 +169,6 @@ window.__game = {
   loop, scene, camera, renderer, store, THREE,
   zone, player, dummy, rival, dummyBrain, input, rig, controller,
   resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
+  manager, bootMode, debugPanel,
   setPlayerDriver, step,
 };

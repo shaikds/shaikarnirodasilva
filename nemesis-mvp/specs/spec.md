@@ -442,9 +442,9 @@ leads, code follows.
 | FR-1.1 Tutorial primer | P5 | not started |
 | FR-1.2 First Blood fight | P5 | not started |
 | FR-1.3 Forced escape | P5 | not started |
-| FR-2.1 Persistent rival profile | P4 | not started |
-| FR-2.2 Interaction ledger | P4 | not started |
-| FR-2.3 Progression algorithm | P4 | not started |
+| FR-2.1 Persistent rival profile | P4 | **done** (p4_persistence) |
+| FR-2.2 Interaction ledger | P4 | **done** (p4: cap + genesis protection) |
+| FR-2.3 Progression algorithm | P4 | **done** (p4: XP/level/style-relative growth; S-3 band at P3/P8) |
 | FR-3.1 Taunt engine | P6 | not started |
 | FR-3.2 Macro GOAP (Hunt/Train/Ambush) | P6 | not started |
 | FR-3.3 Adaptive style mirroring | P3 | **done** (p3: learning + mirroring split; AC-3.3.2 verified as two checks) |
@@ -456,7 +456,7 @@ leads, code follows.
 | FR-4.5 Combo & damage rules | P2 | **done** (p2_combat) |
 | FR-4.6 Game feel | P2/P7 | P2 part done (buffering/cancels/hitstop/reactions); fps+polish at P7 |
 | FR-5.1 The zone | P5 | not started |
-| FR-6.1 Persistence | P4 | not started |
-| FR-6.2 Debug panel | P4 | not started |
+| FR-6.1 Persistence | P4 | **done** (p4: reload restore) |
+| FR-6.2 Debug panel | P4 | **done** (p4: live state + forcing buttons) |
 | NFR-1..5 | P0/P7 | P0 foundations done (NFR-1 amended, NFR-2 met, NFR-3 harness live) |
 | S-1..S-4 success criteria | P8 | not started |

@@ -84,7 +84,7 @@ vs. `aggressiveBot`, neither side > 70% wins).
 **Verification:** `tests/p3_rival.spec.mjs` — the three checks above,
 automated; duel video captured for feel review.
 
-## `[ ]` P4 — Rivalry Manager: memory that persists
+## `[x]` P4 — Rivalry Manager: memory that persists
 **Closes:** FR-2.1, FR-2.2, FR-2.3, FR-6.1, FR-6.2 · **Modules:** `rivalry/rivalManager.js`, `ledger.js`, `ui/debug.js`
 
 - Rival profile lifecycle (create/generate name/persist/restore); ledger with
