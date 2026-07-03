@@ -6,6 +6,9 @@ import { Zone } from './world/zone.js';
 import { CameraRig } from './world/camera.js';
 import { Fighter } from './combat/fighter.js';
 import { PlayerController } from './combat/controller.js';
+import { Resolver } from './combat/resolver.js';
+import { DummyBrain } from './combat/dummy.js';
+import { Hud } from './ui/hud.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -26,8 +29,10 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-scene.add(new THREE.AmbientLight(0x8888aa, 0.7));
-const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+// lighting pass (P1 carry-over): hemisphere fill so blockout reads clearly
+scene.add(new THREE.HemisphereLight(0x9aa2ff, 0x1a1a2e, 0.85));
+scene.add(new THREE.AmbientLight(0x8888aa, 0.55));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
 sun.position.set(10, 20, 8);
 scene.add(sun);
 
@@ -49,16 +54,23 @@ const input = new Input(canvas);
 const rig = new CameraRig(camera, player, zone);
 const controller = new PlayerController(player, input, rig);
 controller.candidates = [dummy];
+const dummyBrain = new DummyBrain(dummy, player);
+const hud = new Hud({ camera });
+hud.track(player, dummy);
 
 // ---------- loop ----------
 const statsEl = document.getElementById('stats');
 let lastRender = performance.now();
+let resolver;   // needs loop; created after
 
 const loop = new Loop({
   update(dt) {
     controller.update(dt);
-    player.update(dt, zone);
-    dummy.update(dt, zone);
+    dummyBrain.update(dt);
+    player.update(dt, zone, loop.simTime);
+    dummy.update(dt, zone, loop.simTime);
+    resolver.meleePair(player, dummy);
+    resolver.meleePair(dummy, player);
   },
   render(alpha) {
     const now = performance.now();
@@ -68,17 +80,20 @@ const loop = new Loop({
     player.syncMesh(alpha);
     dummy.syncMesh(alpha);
     rig.update(rdt, controller.orbitInput());
+    hud.consume(resolver.events);
+    hud.update(rdt);
     renderer.render(scene, camera);
     statsEl.textContent =
       `fps ${loop.fps.toFixed(0)} · ticks ${loop.ticks}` +
       (rig.lockTarget ? ' · LOCK' : '');
   },
 });
+resolver = new Resolver({ loop, rig });
 input.simTime = () => loop.simTime;
 loop.start();
 
 // ---------- test / debug surface ----------
 window.__game = {
   loop, scene, camera, renderer, store, THREE,
-  zone, player, dummy, input, rig, controller,
+  zone, player, dummy, dummyBrain, input, rig, controller, resolver, hud,
 };

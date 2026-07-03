@@ -26,11 +26,21 @@ export class PlayerController {
     // facing: locked fighters square up to the target (AC-4.1.2)
     f.intent.face = rig.lockTarget ? f.yawTo(rig.lockTarget) : null;
 
-    // buffered discrete actions (AC-4.6.1): consumed when actionable
-    if (!f.busy) {
-      if (inp.consume('jump')) f.intent.jump = true;
-      if (inp.consume('dodge')) f.intent.dodge = true;
+    // buffered discrete actions (AC-4.6.1): a press is consumed on the first
+    // tick the fighter can legally act on it — zero idle frames by design
+    for (const a of ['light', 'heavy', 'special']) {
+      if (f.canStart(a) && inp.consume(a)) { f.startAttack(a); break; }
     }
+    if (f.canStart('dodge') && inp.consume('dodge')) {
+      f.startDodge(f.intent.move.x, f.intent.move.z);
+    }
+    // block is hold-based; releasing early is a parry attempt (AC-4.3.2)
+    if (inp.down.block) {
+      if (!f.blocking && f.canStart('block')) f.startBlock();
+    } else if (f.blocking) {
+      f.stopBlock();
+    }
+    if (!f.busy && inp.consume('jump')) f.intent.jump = true;
     if (inp.consume('lock', 0.05)) this.rig.toggleLock(this.candidates || []);
 
     // camera orbit input: pointer-lock mouse or arrow keys

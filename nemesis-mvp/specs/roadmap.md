@@ -52,7 +52,7 @@ errors, `window.__game.ticks` advances, screenshot captured.
 position deltas, dodge i-frame window, lock-on state transitions; video
 capture for manual feel review.
 
-## `[ ]` P2 — Combat core vs. training dummy
+## `[x]` P2 — Combat core vs. training dummy
 **Closes:** FR-4.2, FR-4.3, FR-4.5, FR-4.6 (all ACs except AC-4.6.6 final check) · **Modules:** `combat/fighter.js`, `attacks.js`, `resolver.js`, `ui/hud.js` (bars, damage numbers, combo counter)
 
 - Fighter state machine consuming intents; attack table with light string,
