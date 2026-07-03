@@ -53,6 +53,20 @@ grouping is skipped and only `region_*.png` crops are produced.
 Pages whose alignment quality is poor are marked `"low_confidence": true` in
 `regions.json` with the reasons — review those instead of trusting them blindly.
 
+## Sending the answers to an LLM
+
+The `Q*.png` crops are the right unit to feed a vision LLM: each one is a
+self-contained image with the printed (sub)question and the student's whole
+handwritten answer. `examples/send_to_llm.py` walks `regions.json`, sends each
+question crop to Claude, and writes `answers.json` mapping `Q6A → transcribed
+answer` (structured output, works for any language / marks / drawings):
+
+```bash
+pip install anthropic
+export ANTHROPIC_API_KEY=...
+python examples/send_to_llm.py out/
+```
+
 ## Test
 
 ```bash
