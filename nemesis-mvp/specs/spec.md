@@ -409,7 +409,11 @@ Order is a suggestion; nothing here blocks MVP acceptance.
 ## 10. Non-functional requirements
 
 - **NFR-1** No runtime network dependency: Three.js vendored into the repo;
-  the game runs from `file://`, GitHub Pages, and sandboxed iframes.
+  the game runs from any static file server (`python3 -m http.server`),
+  GitHub Pages, and sandboxed iframes. Plain `file://` additionally works in
+  browsers that permit module loading from disk (Chromium needs
+  `--allow-file-access-from-files`; the test harness uses it). *(Amended at
+  P0 close — browsers block ES modules over bare `file://`.)*
 - **NFR-2** No build step: ES modules + import map; `index.html` opens as-is.
 - **NFR-3** Headless-testable: every "automated test" AC runs via a
   Playwright script under `nemesis-mvp/tests/` against exposed game state
@@ -454,5 +458,5 @@ leads, code follows.
 | FR-5.1 The zone | P5 | not started |
 | FR-6.1 Persistence | P4 | not started |
 | FR-6.2 Debug panel | P4 | not started |
-| NFR-1..5 | P0/P7 | not started |
+| NFR-1..5 | P0/P7 | P0 foundations done (NFR-1 amended, NFR-2 met, NFR-3 harness live) |
 | S-1..S-4 success criteria | P8 | not started |

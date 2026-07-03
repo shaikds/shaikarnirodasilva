@@ -23,7 +23,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` closed.
 
 ---
 
-## `[ ]` P0 — Scaffold & first light
+## `[x]` P0 — Scaffold & first light
 **Closes:** NFR-1, NFR-2 (foundations) · **Modules:** `index.html`, `core/loop.js`, `core/store.js`, `vendor/three/`
 
 - Repo layout per `plan.md` §2; vendor a pinned Three.js build.

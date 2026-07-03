@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEMESIS</title>
+<style>
+  :root {
+    --player: #4db8ff;
+    --rival: #ff4d6a;
+    --gold: #ffd24d;
+    --dim: #8a8aa5;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #07070d; }
+  body { font-family: 'Courier New', monospace; color: #d8d8e8; }
+  #game { display: block; width: 100%; height: 100%; }
+
+  /* layers */
+  .layer { position: fixed; inset: 0; pointer-events: none; }
+
+  #stats {
+    position: fixed; right: 10px; bottom: 8px;
+    font-size: 11px; color: var(--dim); text-align: right;
+    pointer-events: none;
+  }
+  #hud { pointer-events: none; }
+  #subtitles {
+    position: fixed; left: 0; right: 0; bottom: 12vh;
+    text-align: center; pointer-events: none;
+  }
+  #prompts {
+    position: fixed; left: 0; right: 0; top: 18vh;
+    text-align: center; pointer-events: none;
+  }
+  #debug {
+    position: fixed; left: 10px; top: 10px; max-height: 90vh; width: 400px;
+    overflow: auto; background: rgba(8,8,16,0.92);
+    border: 1px solid #2a2a45; border-radius: 6px; padding: 10px;
+    font-size: 11px; line-height: 1.5; display: none; pointer-events: auto;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud" class="layer"></div>
+<div id="prompts"></div>
+<div id="subtitles"></div>
+<div id="debug"></div>
+<div id="stats"></div>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
