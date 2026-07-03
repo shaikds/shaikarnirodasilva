@@ -449,7 +449,7 @@ leads, code follows.
 | FR-3.2 Macro GOAP (Hunt/Train/Ambush) | P6 | not started |
 | FR-3.3 Adaptive style mirroring | P3 | not started |
 | FR-3.4 Micro GOAP (combat tactics) | P3 | not started |
-| FR-4.1 Movement & camera | P1 | not started |
+| FR-4.1 Movement & camera | P1 | **done** (p1_movement 14/14) |
 | FR-4.2 Attacks | P2 | not started |
 | FR-4.3 Defense (block/parry) | P2 | not started |
 | FR-4.4 Special attack | P3 | not started |

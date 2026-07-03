@@ -37,7 +37,7 @@ network requests; loop stats (fps, sim ticks) visible in a corner readout.
 **Verification:** `tests/p0_boot.spec.mjs` — page loads headless, no console
 errors, `window.__game.ticks` advances, screenshot captured.
 
-## `[ ]` P1 — Move, camera, lock-on
+## `[x]` P1 — Move, camera, lock-on
 **Closes:** FR-4.1 (AC-4.1.1–4.1.5) · **Modules:** `combat/controller.js`, `world/camera.js`, `world/zone.js` (arena slice), `core/input.js` (base)
 
 - Capsule character controller (WASD camera-relative, jump, gravity,

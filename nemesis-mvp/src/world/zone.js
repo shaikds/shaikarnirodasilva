@@ -1,0 +1,132 @@
+// The zone: named locations + static colliders, blockout geometry generated
+// from data (FR-5.1). P1 ships the arena slice; P5 completes the zone.
+
+import * as THREE from 'three';
+
+// Axis-aligned wall/prop boxes: [cx, cy, cz, sx, sy, sz, colorHex?]
+// The arena is a 24x24 court with 3m walls and one (future) gate gap north.
+const ARENA = { x: 0, z: 0, size: 24, wallH: 3, wallT: 1 };
+
+function arenaBoxes() {
+  const { x, z, size, wallH, wallT } = ARENA;
+  const h = size / 2, w = wallH / 2;
+  return [
+    // south wall (solid)
+    [x, w, z + h + wallT / 2, size + wallT * 2, wallH, wallT],
+    // north wall split by a 4m gate gap (escape route, gated until FR-1.3)
+    [x - (size / 4 + 1), w, z - h - wallT / 2, size / 2 - 2, wallH, wallT],
+    [x + (size / 4 + 1), w, z - h - wallT / 2, size / 2 - 2, wallH, wallT],
+    // east / west walls
+    [x + h + wallT / 2, w, z, wallT, wallH, size + wallT * 2],
+    [x - h - wallT / 2, w, z, wallT, wallH, size + wallT * 2],
+    // corner pillars for camera-probe interest
+    [x + h - 1.5, 1.25, z + h - 1.5, 1.2, 2.5, 1.2],
+    [x - h + 1.5, 1.25, z + h - 1.5, 1.2, 2.5, 1.2],
+  ];
+}
+
+export class Zone {
+  constructor(scene) {
+    this.scene = scene;
+    this.colliders = [];         // {min:Vector3, max:Vector3}
+    this.locations = {
+      arena: new THREE.Vector3(ARENA.x, 0, ARENA.z),
+      arenaGate: new THREE.Vector3(ARENA.x, 0, ARENA.z - ARENA.size / 2),
+    };
+    this.gate = null;            // FR-1.3 gate blocker, openable
+    this._build();
+  }
+
+  _addBox([cx, cy, cz, sx, sy, sz, color = 0x1c1c33], { emissive = 0x000000, visible = true } = {}) {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(sx, sy, sz),
+      new THREE.MeshLambertMaterial({ color, emissive })
+    );
+    mesh.position.set(cx, cy, cz);
+    mesh.visible = visible;
+    this.scene.add(mesh);
+    const collider = {
+      min: new THREE.Vector3(cx - sx / 2, cy - sy / 2, cz - sz / 2),
+      max: new THREE.Vector3(cx + sx / 2, cy + sy / 2, cz + sz / 2),
+      mesh,
+    };
+    this.colliders.push(collider);
+    return collider;
+  }
+
+  _build() {
+    // ground
+    const ground = new THREE.Mesh(
+      new THREE.BoxGeometry(120, 1, 120),
+      new THREE.MeshLambertMaterial({ color: 0x101020 })
+    );
+    ground.position.y = -0.5;
+    this.scene.add(ground);
+    const grid = new THREE.GridHelper(120, 60, 0x2a2a55, 0x161628);
+    grid.position.y = 0.01;
+    this.scene.add(grid);
+
+    for (const b of arenaBoxes()) this._addBox(b);
+
+    // gate blocker across the north gap — closed during First Blood
+    this.gate = this._addBox(
+      [ARENA.x, ARENA.wallH / 2, ARENA.z - ARENA.size / 2 - 0.5, 4.2, ARENA.wallH, 1, 0x552233],
+      { emissive: 0x330a14 }
+    );
+  }
+
+  setGateOpen(open) {
+    this.gate.mesh.visible = !open;
+    this.gate.disabled = open;
+  }
+
+  // resolve a capsule (cylinder) of radius r at pos (feet) against colliders.
+  // Mutates pos. Returns true if any contact happened.
+  collide(pos, r, height) {
+    let touched = false;
+    for (const c of this.colliders) {
+      if (c.disabled) continue;
+      if (pos.y + height < c.min.y || pos.y > c.max.y) continue;
+      // closest point on AABB footprint to center
+      const cx = Math.max(c.min.x, Math.min(pos.x, c.max.x));
+      const cz = Math.max(c.min.z, Math.min(pos.z, c.max.z));
+      const dx = pos.x - cx, dz = pos.z - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= r * r) continue;
+      touched = true;
+      if (d2 > 1e-9) {
+        const d = Math.sqrt(d2), push = (r - d) / d;
+        pos.x += dx * push; pos.z += dz * push;
+      } else {
+        // center inside the box: push out along smallest penetration axis
+        const px = Math.min(pos.x - c.min.x + r, c.max.x - pos.x + r);
+        const pz = Math.min(pos.z - c.min.z + r, c.max.z - pos.z + r);
+        if (px < pz) pos.x += (pos.x - (c.min.x + c.max.x) / 2 > 0 ? px : -px);
+        else pos.z += (pos.z - (c.min.z + c.max.z) / 2 > 0 ? pz : -pz);
+      }
+    }
+    return touched;
+  }
+
+  // camera obstruction probe: march from `from` toward `to`, return first
+  // safe point before entering a collider (with margin)
+  cameraProbe(from, to, margin = 0.25) {
+    const steps = 24;
+    const p = from.clone();
+    const d = to.clone().sub(from).divideScalar(steps);
+    let last = from.clone();
+    for (let i = 1; i <= steps; i++) {
+      p.add(d);
+      for (const c of this.colliders) {
+        if (c.disabled) continue;
+        if (p.x > c.min.x - margin && p.x < c.max.x + margin &&
+            p.y > c.min.y - margin && p.y < c.max.y + margin &&
+            p.z > c.min.z - margin && p.z < c.max.z + margin) {
+          return last;
+        }
+      }
+      last.copy(p);
+    }
+    return to.clone();
+  }
+}
