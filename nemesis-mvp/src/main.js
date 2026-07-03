@@ -153,6 +153,11 @@ const debugPanel = new DebugPanel({
   get macroAgent() { return window.__game?.macroAgent; },   // P6
 });
 
+// P0-P4 playable slice: the rival fights for real (P5 will gate this
+// behind the Genesis Flow's FIRST_BLOOD/ENCOUNTER states instead of
+// always-on)
+rivalAgent.enabled = true;
+
 loop.start();
 
 // deterministic manual stepping for tests (see p2 spec for rationale)

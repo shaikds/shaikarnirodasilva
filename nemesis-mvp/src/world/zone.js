@@ -25,13 +25,36 @@ function arenaBoxes() {
   ];
 }
 
+// full zone (FR-5.1): six connected locations around the arena.
+// bounds: x ∈ [-50, 50], z ∈ [-52, 20]
+const WALLS = [
+  // outer boundary
+  [0, 1.5, 20.5, 102, 3, 1], [0, 1.5, -52.5, 102, 3, 1],
+  [-50.5, 1.5, -16, 1, 3, 74], [50.5, 1.5, -16, 1, 3, 74],
+  // tutorial pocket room at (-38,-2), door on the east side (z -4..0)
+  [-38, 1.5, -9, 14, 3, 1], [-38, 1.5, 5, 14, 3, 1],
+  [-45.5, 1.5, -2, 1, 3, 15],
+  [-31, 1.5, -6.75, 1, 3, 5.5], [-31, 1.5, 2.75, 1, 3, 5.5],
+  // chokepoint corridor (west route), gap ~4m
+  [-30.5, 1.5, -29, 1, 3, 18], [-25.5, 1.5, -29, 1, 3, 18],
+  // open-ground pillars
+  [-8, 1.25, -28, 1.5, 2.5, 1.5], [8, 1.25, -34, 1.5, 2.5, 1.5],
+  // rival base pillars
+  [27, 1.5, -45, 1.2, 3, 1.2], [33, 1.5, -45, 1.2, 3, 1.2], [30, 1.5, -39, 1.2, 3, 1.2],
+];
+
 export class Zone {
   constructor(scene) {
     this.scene = scene;
     this.colliders = [];         // {min:Vector3, max:Vector3}
     this.locations = {
       arena: new THREE.Vector3(ARENA.x, 0, ARENA.z),
-      arenaGate: new THREE.Vector3(ARENA.x, 0, ARENA.z - ARENA.size / 2),
+      arenaGate: new THREE.Vector3(ARENA.x, 0, ARENA.z - ARENA.size / 2 - 1),
+      tutorialPocket: new THREE.Vector3(-38, 0, -2),
+      openGround: new THREE.Vector3(0, 0, -30),
+      chokepoint: new THREE.Vector3(-28, 0, -29),
+      rivalBase: new THREE.Vector3(30, 0, -42),
+      escapeRoute: new THREE.Vector3(0, 0, -21),
     };
     this.gate = null;            // FR-1.3 gate blocker, openable
     this._build();
@@ -67,12 +90,28 @@ export class Zone {
     this.scene.add(grid);
 
     for (const b of arenaBoxes()) this._addBox(b);
+    for (const b of WALLS) this._addBox(b);
 
     // gate blocker across the north gap — closed during First Blood
     this.gate = this._addBox(
       [ARENA.x, ARENA.wallH / 2, ARENA.z - ARENA.size / 2 - 0.5, 4.2, ARENA.wallH, 1, 0x552233],
       { emissive: 0x330a14 }
     );
+
+    // escape-route strip + rival base pad (visual markers, no collision)
+    const strip = new THREE.Mesh(
+      new THREE.BoxGeometry(3, 0.04, 14),
+      new THREE.MeshBasicMaterial({ color: 0x552233 })
+    );
+    strip.position.set(0, 0.02, -21);
+    this.scene.add(strip);
+    this.escapeStrip = strip;
+    const pad = new THREE.Mesh(
+      new THREE.BoxGeometry(7, 0.06, 7),
+      new THREE.MeshBasicMaterial({ color: 0x38101a })
+    );
+    pad.position.set(30, 0.03, -42);
+    this.scene.add(pad);
   }
 
   setGateOpen(open) {

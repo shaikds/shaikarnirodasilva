@@ -4,6 +4,15 @@ import { boot, check, finish, hold } from './helpers.js';
 const { browser, page, errors } = await boot();
 const evalG = (fn) => page.evaluate(fn);
 
+// This suite tests player movement/camera/lock-on in isolation. The rival
+// is a real, always-on fighter in the scene (P3+) — neutralize it so it
+// can't wander into the player mid-test and pollute state assertions.
+await evalG(() => {
+  const g = window.__game;
+  g.rivalAgent.enabled = false;
+  g.rival.pos.set(200, 0, 200); g.rival.prevPos.copy(g.rival.pos);
+});
+
 // -- AC-4.1.1: WASD camera-relative movement --
 const p0 = await evalG(() => ({ ...window.__game.player.pos }));
 await hold(page, 'w', 500);
