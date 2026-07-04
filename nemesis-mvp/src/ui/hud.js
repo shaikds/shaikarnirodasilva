@@ -59,6 +59,14 @@ const CSS = `
   position: fixed; inset: 0; pointer-events: none; opacity: 0;
   background: radial-gradient(ellipse at center, rgba(255,20,40,0) 45%, rgba(255,20,40,0.35) 100%);
 }
+#subtitles .who {
+  font: bold 12px 'Courier New', monospace; color: var(--rival);
+  letter-spacing: 3px; text-shadow: 0 0 8px rgba(255,77,106,0.8);
+}
+#subtitles .line {
+  font: 16px 'Courier New', monospace; color: #eee; margin-top: 3px;
+  text-shadow: 0 0 8px rgba(0,0,0,0.9); padding: 0 18vw;
+}
 `;
 
 export class Hud {
@@ -126,6 +134,14 @@ export class Hud {
     this.el.announce.textContent = text;
     this.el.announce.style.opacity = 1;
     this._announceT = ms / 1000;
+  }
+
+  // rival speech (AC-3.1.5): timed subtitle with the speaker's name
+  subtitle(who, text, ms = 4000) {
+    const root = document.getElementById('subtitles');
+    root.innerHTML = `<div class="who">${who}</div><div class="line">${text}</div>`;
+    root.style.opacity = 1;
+    this._subtitleT = ms / 1000;
   }
 
   consume(events) {
@@ -231,6 +247,12 @@ export class Hud {
     if (this._flashT > 0) {
       this._flashT = Math.max(0, this._flashT - dt * 1.6);
       this.el.flash.style.opacity = Math.min(1, this._flashT * 2.2);
+    }
+
+    // subtitle timeout
+    if (this._subtitleT > 0) {
+      this._subtitleT -= dt;
+      if (this._subtitleT <= 0) document.getElementById('subtitles').style.opacity = 0;
     }
   }
 }

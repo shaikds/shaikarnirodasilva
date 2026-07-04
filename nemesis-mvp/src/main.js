@@ -22,6 +22,8 @@ import { Landmarks } from './world/landmarks.js';
 import { Navigation } from './world/navigation.js';
 import { Prompts } from './ui/prompts.js';
 import { GameFlow } from './core/states.js';
+import { MacroAgent } from './ai/macroAgent.js';
+import { TauntEngine } from './rivalry/taunts.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -216,9 +218,12 @@ const debugPanel = new DebugPanel({
 // ---------- the Genesis Flow owns who fights when (M1) ----------
 const nav = new Navigation();
 const prompts = new Prompts();
+const taunts = new TauntEngine({ manager });
+const macroAgent = new MacroAgent({ rival, player, manager, nav, zone });
 const flow = new GameFlow({
   player, dummy, rival, dummyBrain, rivalAgent, manager,
   hud, prompts, zone, nav, resolver, rig, loop, bootMode,
+  macroAgent, taunts,
 });
 flow.boot();
 
@@ -239,6 +244,6 @@ window.__game = {
   zone, player, dummy, rival, dummyBrain, input, rig, controller,
   resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
   manager, bootMode, debugPanel, vfx, landmarks, sun,
-  nav, prompts, flow,
+  nav, prompts, flow, macroAgent, taunts,
   setPlayerDriver, step,
 };

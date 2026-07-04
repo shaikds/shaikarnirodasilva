@@ -43,15 +43,19 @@ async function reset() {
 }
 
 // ---- AC-4.2.1 + AC-4.6.1: 3-hit light string via buffered presses ----
+// Deterministic stepping: presses land mid-recovery (light1 recovery spans
+// roughly ticks 28-52 at 120Hz), so the buffer must chain with zero idle.
 await reset();
-const string = await page.evaluate(async () => {
+const string = await page.evaluate(() => {
   const g = window.__game, f = g.player;
-  // mash light three times: presses land during recovery -> buffer must chain
-  for (let i = 0; i < 3; i++) {
-    g.input.pressT.light = g.loop.simTime;
-    await new Promise(r => setTimeout(r, 320));
-  }
-  await new Promise(r => setTimeout(r, 700));
+  g.loop.stop();
+  g.input.pressT.light = g.loop.simTime;    // light1
+  g.step(34);                               // into light1 recovery
+  g.input.pressT.light = g.loop.simTime;    // buffered -> light2
+  g.step(31);                               // into light2 recovery
+  g.input.pressT.light = g.loop.simTime;    // buffered -> light3
+  g.step(140);                              // settle
+  g.loop.start();
   return { trace: f.trace.slice(), hits: g.__hits.slice() };
 });
 const seq = string.trace.filter(e => e.state === 'attack' && e.phase === 'windup').map(e => e.type);

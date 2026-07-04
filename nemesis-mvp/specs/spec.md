@@ -470,8 +470,8 @@ leads, code follows.
 | FR-2.1 Persistent rival profile | P4 | **done** (p4_persistence) |
 | FR-2.2 Interaction ledger | P4 | **done** (p4: cap + genesis protection) |
 | FR-2.3 Progression algorithm | P4 | **done** (p4: XP/level/style-relative growth; S-3 band at P3/P8) |
-| FR-3.1 Taunt engine | P6 | not started |
-| FR-3.2 Macro GOAP (Hunt/Train/Ambush) | P6 | not started |
+| FR-3.1 Taunt engine | P6 | **done** (p6: canonical callback, variety, hate bands, subtitles) |
+| FR-3.2 Macro GOAP (Hunt/Train/Ambush) | P6 | **done** (p6: bias probes, Train XP, Hunt chase, Ambush spring+first-strike) |
 | FR-3.3 Adaptive style mirroring | P3 | **done** (p3: learning + mirroring split; AC-3.3.2 verified as two checks) |
 | FR-3.4 Micro GOAP (combat tactics) | P3 | **done** (p3: BreakGuard 70%+, goal exposure) |
 | FR-4.1 Movement & camera | P1 | **done** (p1_movement 14/14) |

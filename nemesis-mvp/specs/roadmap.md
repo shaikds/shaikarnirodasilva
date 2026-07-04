@@ -113,7 +113,7 @@ is reachable with debug HP forcing.
 **Verification:** `tests/p5_genesis.spec.mjs` — full scripted playthrough of
 both branches; zone-bounds soak (AC-5.1.3); tutorial-skip on second boot.
 
-## `[ ]` P6 — The nemesis lives: macro-GOAP + taunts
+## `[x]` P6 — The nemesis lives: macro-GOAP + taunts
 **Closes:** FR-3.1, FR-3.2 · **Modules:** `ai/macroActions.js`, `world/navigation.js` (full), `rivalry/taunts.js`, `tauntFragments.js`, subtitle UI
 
 - Macro goals Hunt/Train/Ambush over the waypoint graph; encounter start/end

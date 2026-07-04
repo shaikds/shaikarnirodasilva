@@ -121,16 +121,19 @@ export class GameFlow {
         c.prompts.hide();
         c.hud.hideFoe();
         this._freeRoamT = 0;
-        // the rival returns to its ground (P6 replaces this with macro-GOAP)
-        if (c.rival.alive) this.walker.setDestination('rivalBase');
+        this.walker.stop();
+        c.macroAgent?.replan();          // the rival decides how to spend this time
         break;
       }
       case 'encounter': {
         c.manager.applyToFighter(c.rival);
         c.rivalAgent.enabled = true;
         this.walker.stop();
+        c.macroAgent?.walker.stop();
         c.hud.showFoe(c.manager.doc.name);
         c.hud.announce(`${c.manager.doc.name} — LVL ${c.manager.doc.level}`, 2000);
+        this._saidLowHp = { player: false, rival: false };
+        this._taunt('encounter_start');
         break;
       }
       case 'aftermath': {
@@ -230,7 +233,8 @@ export class GameFlow {
       }
       case 'freeRoam': {
         this._freeRoamT += dt;
-        this.walker.update();
+        const macroEvt = c.macroAgent?.update(dt, c.loop.simTime);
+        if (macroEvt === 'spring') { this._springAmbush(); break; }
         if (this._freeRoamT > 2 && c.player.alive && c.rival.alive &&
             c.player.distanceTo(c.rival) < 8) {
           this.enter('encounter');
@@ -238,9 +242,17 @@ export class GameFlow {
         break;
       }
       case 'encounter': {
-        if (!c.player.alive) this._endEncounter('rivalWin');
-        else if (!c.rival.alive) this._endEncounter('playerWin');
-        else if (c.player.distanceTo(c.rival) > 25) this._endEncounter('escape');
+        if (!c.player.alive) { this._endEncounter('rivalWin'); break; }
+        if (!c.rival.alive) { this._endEncounter('playerWin'); break; }
+        if (c.player.distanceTo(c.rival) > 25) { this._endEncounter('escape'); break; }
+        if (!this._saidLowHp.player && c.player.hp <= 30) {
+          this._saidLowHp.player = true;
+          this._taunt('player_low_hp');
+        }
+        if (!this._saidLowHp.rival && c.rival.hp <= c.rival.maxHp * 0.3) {
+          this._saidLowHp.rival = true;
+          this._taunt('rival_low_hp');
+        }
         break;
       }
       case 'aftermath': {
@@ -259,6 +271,23 @@ export class GameFlow {
         break;
       }
     }
+  }
+
+  async _taunt(trigger) {
+    const c = this.ctx;
+    if (!c.taunts) return;
+    const line = await c.taunts.generateTaunt({ trigger });
+    if (line) c.hud.subtitle(c.manager.doc.name, line);
+  }
+
+  _springAmbush() {
+    const c = this.ctx;
+    c.manager.record('ambush_sprung', 'Ambush sprung: caught the player on a predictable route.');
+    c.rival.energy = 100;                   // first-strike bonus (AC-3.2.1)
+    c.player.stagger(0.4);                  // jumped!
+    this._taunt('ambush_sprung');
+    this.log('ambush_sprung');
+    this.enter('encounter');
   }
 
   _resolveGenesis(branch) {
@@ -293,15 +322,17 @@ export class GameFlow {
     if (outcome === 'rivalWin') {
       m.onDuelEnd({ playerHp: 0, rivalHp: Math.max(0, c.rival.hp) });
       c.hud.announce('YOU DIED', 2200);
+      this._taunt('duel_end_win');
     } else if (outcome === 'playerWin') {
       m.onDuelEnd({ playerHp: Math.max(0, c.player.hp), rivalHp: 0 });
       c.hud.announce('NEMESIS DEFEATED — IT WILL REMEMBER', 2200);
+      this._taunt('duel_end_loss');
     } else {
       m.record('player_escaped_duel', 'Player broke away from the duel.');
       m.doc.record.escapes++;
       m.save();
       c.hud.announce('YOU FLED', 1600);
-      this.walker.setDestination('rivalBase');
+      // freeRoam's macroAgent.replan() decides what the rival does about it
     }
     this.log('encounter:' + outcome);
     this.enter(outcome === 'escape' ? 'freeRoam' : 'aftermath');
