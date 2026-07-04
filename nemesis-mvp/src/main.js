@@ -19,6 +19,9 @@ import { DebugPanel } from './ui/debug.js';
 import { VFX } from './fx/vfx.js';
 import { makeSkyTexture } from './fx/textures.js';
 import { Landmarks } from './world/landmarks.js';
+import { Navigation } from './world/navigation.js';
+import { Prompts } from './ui/prompts.js';
+import { GameFlow } from './core/states.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -132,6 +135,8 @@ function trackMovementFx(f) {
 
 const loop = new Loop({
   update(dt) {
+    flow.update(dt);
+    const combat = flow.combatEnabled;
     playerDriver.update(dt);
     dummyBrain.update(dt);
     rivalAgent.update(dt, loop.simTime);
@@ -140,13 +145,19 @@ const loop = new Loop({
     rival.update(dt, zone, loop.simTime);
     trackMovementFx(player); trackMovementFx(rival); trackMovementFx(dummy);
     separate(player, dummy); separate(player, rival); separate(dummy, rival);
-    if (player.pendingShot) { player.pendingShot = false; projectiles.fire(player, rival.alive && rivalAgent.enabled ? rival : dummy); }
-    if (rival.pendingShot) { rival.pendingShot = false; projectiles.fire(rival, player); }
-    projectiles.update(dt, [player, dummy, rival]);
-    resolver.meleePair(player, dummy);
-    resolver.meleePair(dummy, player);
-    resolver.meleePair(player, rival);
-    resolver.meleePair(rival, player);
+    if (combat) {
+      if (player.pendingShot) { player.pendingShot = false; projectiles.fire(player, rival.alive && rivalAgent.enabled ? rival : dummy); }
+      if (rival.pendingShot) { rival.pendingShot = false; projectiles.fire(rival, player); }
+      projectiles.update(dt, [player, dummy, rival]);
+      resolver.meleePair(player, dummy);
+      resolver.meleePair(dummy, player);
+      resolver.meleePair(player, rival);
+      resolver.meleePair(rival, player);
+    } else {
+      // combat frozen (forced escape / free roam): no new shots, no hits
+      player.pendingShot = false; rival.pendingShot = false;
+      projectiles.update(dt, []);
+    }
     profiler.update(dt, loop.simTime);
     // charge-up sparkle while winding up a special
     for (const f of [player, rival]) {
@@ -176,6 +187,7 @@ const loop = new Loop({
     renderer.render(scene, camera);
     statsEl.textContent =
       `fps ${loop.fps.toFixed(0)} · ticks ${loop.ticks}` +
+      (flow.enabled ? ` · ${flow.state}` : '') +
       (rig.lockTarget ? ' · LOCK' : '') +
       (rivalAgent.enabled && rivalAgent.currentGoal ? ` · ${rivalAgent.currentGoal.name}` : '');
   },
@@ -194,17 +206,21 @@ const manager = new RivalManager({ store, profile, sync });
 const bootMode = manager.loadOrCreate();      // 'created' | 'restored'
 manager.applyToFighter(rival);
 if (rival.maxHp !== rival.hp) rival.hp = rival.maxHp;
-hud.showFoe(manager.doc.name);
+// (the foe HUD panel is shown/hidden by the GameFlow per state)
 
 const debugPanel = new DebugPanel({
   manager, profile, sync, rivalAgent, player, rival, loop,
   get macroAgent() { return window.__game?.macroAgent; },   // P6
 });
 
-// P0-P4 playable slice: the rival fights for real (P5 will gate this
-// behind the Genesis Flow's FIRST_BLOOD/ENCOUNTER states instead of
-// always-on)
-rivalAgent.enabled = true;
+// ---------- the Genesis Flow owns who fights when (M1) ----------
+const nav = new Navigation();
+const prompts = new Prompts();
+const flow = new GameFlow({
+  player, dummy, rival, dummyBrain, rivalAgent, manager,
+  hud, prompts, zone, nav, resolver, rig, loop, bootMode,
+});
+flow.boot();
 
 loop.start();
 
@@ -223,5 +239,6 @@ window.__game = {
   zone, player, dummy, rival, dummyBrain, input, rig, controller,
   resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
   manager, bootMode, debugPanel, vfx, landmarks, sun,
+  nav, prompts, flow,
   setPlayerDriver, step,
 };

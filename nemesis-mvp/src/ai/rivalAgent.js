@@ -45,10 +45,13 @@ export class RivalAgent {
     });
   }
 
-  // effective skill with in-round rubber band: winning big -> eases off
+  // effective skill with in-round rubber band: winning big -> eases off.
+  // skillFloor overrides the floor during First Blood (AC-1.2.1) — the
+  // newborn rival is meant to be overwhelming regardless of rating.
   get skill() {
     const hpDiff = (this.f.hp - this.target.hp) / 100;
-    return clamp(this.sync.skill - hpDiff * AI.rubberBand, 0.05, 1);
+    const s = clamp(this.sync.skill - hpDiff * AI.rubberBand, 0.05, 1);
+    return Math.max(s, this.skillFloor ?? 0);
   }
 
   buildState(nowS) {

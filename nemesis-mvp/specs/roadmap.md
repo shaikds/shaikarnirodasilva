@@ -98,7 +98,7 @@ appears on rival body after a player win (AC-2.1.3).
 **Verification:** `tests/p4_persistence.spec.mjs` — duel → reload → assert
 restored state deep-equals; debug-panel toggles asserted via DOM.
 
-## `[ ]` P5 — Genesis Flow in the zone
+## `[x]` P5 — Genesis Flow in the zone
 **Closes:** FR-1.1, FR-1.2, FR-1.3, FR-5.1 · **Modules:** `core/states.js`, `ui/prompts.js`, `world/zone.js` (full), `world/navigation.js` (base)
 
 - Full zone blockout (all six named locations, connected); collision soak.

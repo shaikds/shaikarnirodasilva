@@ -20,9 +20,11 @@ async function reset() {
     wipe(g.dummy);
     g.loop.hitstopMs = 0; g.loop.slowmoMs = 0;
     g.dummyBrain.mode = 'idle';
-    // this suite tests player-vs-dummy combat in isolation; the rival is a
-    // real always-on fighter (P3+) — keep it quiescent and off-site so it
-    // can't wander in and hit the player mid-test
+    // this suite tests player-vs-dummy combat in isolation; disable the
+    // Genesis Flow (P5) and keep the rival quiescent and off-site so
+    // neither can interfere mid-assertion
+    g.flow.enabled = false;
+    g.prompts.hide();
     g.rivalAgent.enabled = false;
     g.rival.pos.set(200, 0, 200); g.rival.prevPos.copy(g.rival.pos);
     g.rival.hp = g.rival.maxHp;

@@ -9,6 +9,8 @@ const { browser, page, errors } = await boot();
 await page.evaluate(() => {
   const g = window.__game;
   g.loop.stop();
+  g.flow.enabled = false;     // this suite drives duels directly (P5 flow off)
+  g.prompts.hide();
   g.__resetDuel = (playerPos = [0, 0, 4], rivalPos = [0, 0, -4]) => {
     for (const [f, pos] of [[g.player, playerPos], [g.rival, rivalPos]]) {
       f.pos.set(...pos); f.prevPos.copy(f.pos);

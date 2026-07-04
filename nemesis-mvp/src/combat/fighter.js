@@ -210,6 +210,21 @@ export class Fighter {
   }
   gainEnergy(n) { this.energy = Math.min(ENERGY.max, this.energy + n); }
 
+  // back on their feet: used by the Genesis Flow for respawns/rematches
+  revive(pos = null) {
+    this.hp = this.maxHp;
+    this.energy = 30;
+    this.state = 'idle'; this.stateT = 0;
+    this.attackType = null; this.phase = null;
+    this.combo = 0; this.comboT = 0;
+    this.kb.set(0, 0); this.iframeT = 0; this.dodgeCd = 0;
+    this.deadT = 0; this.vy = 0; this.grounded = true;
+    if (pos) { this.pos.set(pos.x, 0, pos.z); this.prevPos.copy(this.pos); }
+    this.mesh.rotation.z = 0;
+    this.mesh.position.y = 0;
+    this._trace({ state: 'revive' });
+  }
+
   // ---- per-tick simulation ----
   update(dt, zone, now = 0) {
     this._now = now;

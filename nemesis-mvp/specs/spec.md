@@ -464,9 +464,9 @@ leads, code follows.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| FR-1.1 Tutorial primer | P5 | not started |
-| FR-1.2 First Blood fight | P5 | not started |
-| FR-1.3 Forced escape | P5 | not started |
+| FR-1.1 Tutorial primer | P5 | **done** (p5: six gated steps, whiff-gating, <90s, returning-skip) |
+| FR-1.2 First Blood fight | P5 | **done** (p5: x3/x2 overrides, sealed arena, name card, skill floor) |
+| FR-1.3 Forced escape | P5 | **done** (p5: both branches, hp clamp, frozen combat, genesis ledger) |
 | FR-2.1 Persistent rival profile | P4 | **done** (p4_persistence) |
 | FR-2.2 Interaction ledger | P4 | **done** (p4: cap + genesis protection) |
 | FR-2.3 Progression algorithm | P4 | **done** (p4: XP/level/style-relative growth; S-3 band at P3/P8) |
@@ -481,7 +481,7 @@ leads, code follows.
 | FR-4.5 Combo & damage rules | P2 | **done** (p2_combat) |
 | FR-4.6 Game feel | P2/P7 | P2 part done (buffering/cancels/hitstop/reactions); fps+polish at P7 |
 | FR-4.7 Presentation & feedback (enhancement) | post-P4 | **done** (particles/blood/reticle/nameplate/dust/flash/shadows+lighting; regression-verified no combat-number drift) |
-| FR-5.1 The zone | P5 | not started |
+| FR-5.1 The zone | P5 | **done** (p5: bounds soak, nav connectivity, anywhere-encounters) |
 | FR-6.1 Persistence | P4 | **done** (p4: reload restore) |
 | FR-6.2 Debug panel | P4 | **done** (p4: live state + forcing buttons) |
 | NFR-1..5 | P0/P7 | P0 foundations done (NFR-1 amended, NFR-2 met, NFR-3 harness live) |
