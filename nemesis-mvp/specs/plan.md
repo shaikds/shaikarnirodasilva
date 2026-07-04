@@ -193,6 +193,7 @@ line = opener(hateBand) + memory(ledgerEvent) + closer(trigger)
 | `world/zone.js` | FR-5.1 |
 | `core/store.js` | FR-6.1 |
 | `ui/debug.js` | FR-6.2 |
+| `fx/vfx.js`, `fx/textures.js`, `world/landmarks.js`, `ui/hud.js` (reticle/plate/flash) | FR-4.7 (enhancement) |
 
 Reverse direction: `roadmap.md` names, per phase, the FR/ACs it closes.
 
@@ -217,6 +218,8 @@ From `nemesis-arena/game.js`:
 | Sync engine fails in 3D (fights runaway) | S-3 automated 10-duel band test runs from P3 onward, not just at the end |
 | Perf on integrated GPU paths | NFR-5 degraded mode; particle budgets in tuning.js |
 | Scope creep toward the 2D game's features (climbing etc.) | Spec §2.2 is contractual; roadmap has no climbing phase |
+| Fixed-timestep loop silently loses time under slow rendering (found via FR-4.7's shadow pass making headless software rendering run ~180ms/frame) | `core/loop.js`'s per-frame clamp raised 100ms→300ms with a matching catch-up guard, so a genuinely slow renderer still advances game time correctly instead of discarding it — protects real users on weak hardware, not just this test environment |
+| Wall-clock-timed tests are fragile once frame times are large/variable | Standing convention (started in P2, now applied project-wide): anything asserting a sub-~300ms window drives `loop._frame`/`loop.updateFn` with synthetic step counts instead of real `setTimeout` waits |
 
 ## 12. Document governance & work logs
 

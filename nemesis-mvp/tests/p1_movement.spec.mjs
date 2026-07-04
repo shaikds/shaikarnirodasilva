@@ -36,19 +36,25 @@ const jumpY = await evalG(async () => {
 check('jump reaches ~1.5m apex', jumpY > 1.2 && jumpY < 2.2, `peak ${jumpY.toFixed(2)}m`);
 
 // -- AC-4.1.4: dodge distance, i-frames, cooldown --
-const dodge = await evalG(async () => {
+// Deterministic manual stepping (loop stopped, ticks advanced directly):
+// wall-clock waits can't reliably hit ~100-200ms windows once real frame
+// times get long (many lights/shadows under headless software rendering),
+// same lesson already applied to the P2/P3 combat specs.
+const dodge = await evalG(() => {
   const g = window.__game, f = g.player;
+  g.loop.stop();
   const start = { x: f.pos.x, z: f.pos.z };
-  g.input.pressT.dodge = g.loop.simTime;
-  await new Promise(r => setTimeout(r, 50));
+  f.startDodge(f.intent.move.x, f.intent.move.z);
+  g.step(6);                                  // ~50ms: mid-dodge
   const iframesEarly = f.iframeT > 0 && f.state === 'dodge';
-  await new Promise(r => setTimeout(r, 210));
-  const iframesLate = f.iframeT;             // ~0 after 200ms + margin
-  const duringCd = f.startDodge(1, 0);       // must be refused on cooldown
-  await new Promise(r => setTimeout(r, 150));
+  g.step(25);                                 // ~260ms total: past 200ms iframe window
+  const iframesLate = f.iframeT;
+  const duringCd = f.startDodge(1, 0);        // must be refused on cooldown
+  g.step(18);                                 // ~410ms total: dodge (300ms) finished
   const dist = Math.hypot(f.pos.x - start.x, f.pos.z - start.z);
-  await new Promise(r => setTimeout(r, 300));
-  const afterCd = f.startDodge(1, 0);        // allowed after 500ms cooldown
+  g.step(48);                                 // past the 500ms cooldown
+  const afterCd = f.startDodge(1, 0);         // allowed after cooldown
+  g.loop.start();
   return { iframesEarly, iframesLate, duringCd, afterCd, dist };
 });
 check('dodge grants early i-frames', dodge.iframesEarly);

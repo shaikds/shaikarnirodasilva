@@ -16,15 +16,21 @@ import { RivalAgent } from './ai/rivalAgent.js';
 import { PlayerBot } from './ai/bots.js';
 import { RivalManager } from './rivalry/rivalManager.js';
 import { DebugPanel } from './ui/debug.js';
+import { VFX } from './fx/vfx.js';
+import { makeSkyTexture } from './fx/textures.js';
+import { Landmarks } from './world/landmarks.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x07070d);
-scene.fog = new THREE.Fog(0x07070d, 50, 110);
+scene.background = makeSkyTexture();
+scene.fog = new THREE.Fog(0x07070d, 45, 105);
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 300);
 
@@ -36,15 +42,24 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-// lighting pass (P1 carry-over): hemisphere fill so blockout reads clearly
-scene.add(new THREE.HemisphereLight(0x9aa2ff, 0x1a1a2e, 0.85));
-scene.add(new THREE.AmbientLight(0x8888aa, 0.55));
-const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-sun.position.set(10, 20, 8);
+// lighting pass: hemisphere fill + a shadow-casting sun sized to the zone
+scene.add(new THREE.HemisphereLight(0x9aa2ff, 0x1a1a2e, 0.8));
+scene.add(new THREE.AmbientLight(0x8888aa, 0.4));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+sun.position.set(14, 26, 12);
+sun.castShadow = true;
+sun.shadow.mapSize.set(512, 512);
+// tight frustum around the arena/tutorial area (where fights actually
+// happen) rather than the whole zone, for sharper shadows at lower cost
+Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 22, bottom: -22, near: 1, far: 70 });
+sun.shadow.bias = -0.002;
 scene.add(sun);
+scene.add(sun.target);
 
 // ---------- world & fighters ----------
 const zone = new Zone(scene);
+const vfx = new VFX(scene);
+const landmarks = new Landmarks(scene);
 
 const player = new Fighter({
   scene, name: 'player',
@@ -69,6 +84,8 @@ controller.candidates = [dummy, rival];
 const dummyBrain = new DummyBrain(dummy, player);
 const hud = new Hud({ camera });
 hud.track(player, rival);
+hud.trackRig(rig);
+vfx.spawnAmbient();
 
 // ---------- loop ----------
 const statsEl = document.getElementById('stats');
@@ -95,6 +112,24 @@ function setPlayerDriver(spec) {
   return playerDriver;
 }
 
+// movement-feedback dust: watch grounded/dodge transitions, pure presentation
+const feet = new WeakMap();
+function trackMovementFx(f) {
+  const prev = feet.get(f) || { grounded: f.grounded, state: f.state };
+  if (!prev.grounded && f.grounded) {
+    vfx.spawnLandingDust({ x: f.pos.x, y: 0.05, z: f.pos.z });
+  }
+  if (prev.state !== 'dodge' && f.state === 'dodge') {
+    vfx.spawnDodgeDust({ x: f.pos.x, y: 0.05, z: f.pos.z });
+  }
+  if (f.grounded && f.state === 'idle' && (Math.abs(f.intent.move.x) > 0.1 || Math.abs(f.intent.move.z) > 0.1)) {
+    if (Math.floor(f.anim / 180) !== Math.floor((prev.anim ?? f.anim) / 180)) {
+      vfx.spawnFootDust({ x: f.pos.x, y: 0.05, z: f.pos.z });
+    }
+  }
+  feet.set(f, { grounded: f.grounded, state: f.state, anim: f.anim });
+}
+
 const loop = new Loop({
   update(dt) {
     playerDriver.update(dt);
@@ -103,6 +138,7 @@ const loop = new Loop({
     player.update(dt, zone, loop.simTime);
     dummy.update(dt, zone, loop.simTime);
     rival.update(dt, zone, loop.simTime);
+    trackMovementFx(player); trackMovementFx(rival); trackMovementFx(dummy);
     separate(player, dummy); separate(player, rival); separate(dummy, rival);
     if (player.pendingShot) { player.pendingShot = false; projectiles.fire(player, rival.alive && rivalAgent.enabled ? rival : dummy); }
     if (rival.pendingShot) { rival.pendingShot = false; projectiles.fire(rival, player); }
@@ -112,6 +148,15 @@ const loop = new Loop({
     resolver.meleePair(player, rival);
     resolver.meleePair(rival, player);
     profiler.update(dt, loop.simTime);
+    // charge-up sparkle while winding up a special
+    for (const f of [player, rival]) {
+      if (f.state === 'attack' && f.attackType === 'special' && f.phase === 'windup') {
+        vfx.spawnChargeSparkle(
+          { x: f.pos.x + Math.sin(f.yaw) * 0.6, y: f.pos.y + 1.25, z: f.pos.z + Math.cos(f.yaw) * 0.6 },
+          f.baseColor.getHex()
+        );
+      }
+    }
   },
   render(alpha) {
     const now = performance.now();
@@ -126,6 +171,8 @@ const loop = new Loop({
     debugPanel.update(rdt);
     hud.consume(resolver.events);
     hud.update(rdt);
+    vfx.update(rdt, loop.simTime);
+    landmarks.update(loop.simTime);
     renderer.render(scene, camera);
     statsEl.textContent =
       `fps ${loop.fps.toFixed(0)} · ticks ${loop.ticks}` +
@@ -134,6 +181,7 @@ const loop = new Loop({
   },
 });
 resolver = new Resolver({ loop, rig });
+resolver.on(e => vfx.onResolverEvent(e));
 input.simTime = () => loop.simTime;
 
 // ---------- the rival's mind & identity ----------
@@ -174,6 +222,6 @@ window.__game = {
   loop, scene, camera, renderer, store, THREE,
   zone, player, dummy, rival, dummyBrain, input, rig, controller,
   resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
-  manager, bootMode, debugPanel,
+  manager, bootMode, debugPanel, vfx, landmarks, sun,
   setPlayerDriver, step,
 };

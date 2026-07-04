@@ -2,6 +2,7 @@
 // from data (FR-5.1). P1 ships the arena slice; P5 completes the zone.
 
 import * as THREE from 'three';
+import { makeFloorTexture } from '../fx/textures.js';
 
 // Axis-aligned wall/prop boxes: [cx, cy, cz, sx, sy, sz, colorHex?]
 // The arena is a 24x24 court with 3m walls and one (future) gate gap north.
@@ -63,10 +64,12 @@ export class Zone {
   _addBox([cx, cy, cz, sx, sy, sz, color = 0x1c1c33], { emissive = 0x000000, visible = true } = {}) {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(sx, sy, sz),
-      new THREE.MeshLambertMaterial({ color, emissive })
+      new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.85, metalness: 0.05 })
     );
     mesh.position.set(cx, cy, cz);
     mesh.visible = visible;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     this.scene.add(mesh);
     const collider = {
       min: new THREE.Vector3(cx - sx / 2, cy - sy / 2, cz - sz / 2),
@@ -78,16 +81,16 @@ export class Zone {
   }
 
   _build() {
-    // ground
+    // ground — textured (procedural checker+grid) so distance/spacing reads
+    // at a glance, and shadow-catching so fighters + walls ground visually
     const ground = new THREE.Mesh(
       new THREE.BoxGeometry(120, 1, 120),
-      new THREE.MeshLambertMaterial({ color: 0x101020 })
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: makeFloorTexture(), roughness: 0.95 })
     );
     ground.position.y = -0.5;
+    ground.receiveShadow = true;
     this.scene.add(ground);
-    const grid = new THREE.GridHelper(120, 60, 0x2a2a55, 0x161628);
-    grid.position.y = 0.01;
-    this.scene.add(grid);
+    this.ground = ground;
 
     for (const b of arenaBoxes()) this._addBox(b);
     for (const b of WALLS) this._addBox(b);

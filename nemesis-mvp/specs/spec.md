@@ -355,6 +355,31 @@ requirements, not effects.
 - **AC-4.6.6** 60 fps sustained during a duel with all systems on (M2 Pro,
   Chrome). Frame budget checked in the P8 playtest.
 
+### FR-4.7 Presentation & feedback (enhancement, added post-P4)
+Visual/feel pass requested by the developer ("too basic, hard to validate
+things") — makes state changes readable at a glance without opening the
+debug panel. Pure presentation: none of these ACs may alter a combat number
+(damage/timing/range) already locked in by FR-4.2–4.5's tests.
+- **AC-4.7.1** Hit/block/parry/dodge each spawn visually distinct particle
+  bursts (color + count + spread differ by outcome).
+  - **AC-4.7.2** Clean hits spawn blood that arcs and, where droplets land,
+  leaves a persistent ground decal colored by which fighter was hit (player
+  bleeds red, rival bleeds dark ichor) — same identity as `nemesis-arena`'s
+  2D blood system.
+- **AC-4.7.3** A lock-on reticle tracks the locked target in screen space;
+  visible only while locked.
+- **AC-4.7.4** The rival has an in-world floating nameplate + health bar
+  above its head, in addition to the corner HUD panel.
+- **AC-4.7.5** Movement produces dust: landing, dodging, and footsteps while
+  moving each spawn a small burst.
+- **AC-4.7.6** Taking damage produces a brief red screen-edge flash scaled
+  to the hit's damage.
+- **AC-4.7.7** The zone has: a shadow-casting sun + shadow-receiving ground
+  and walls, a textured (not flat-color) floor, a gradient sky, and a
+  flickering brazier light + flame sprite at each named location.
+- **AC-4.7.8** None of AC-4.7.1–4.7.7 changes the outcome of any FR-4.2–4.5
+  acceptance test (regression-checked, not just asserted).
+
 ---
 
 ## 8. M5 — World & M6 — Persistence
@@ -455,6 +480,7 @@ leads, code follows.
 | FR-4.4 Special attack | P3 | **done** (p3: clean 18 / blocked 9 / cost) |
 | FR-4.5 Combo & damage rules | P2 | **done** (p2_combat) |
 | FR-4.6 Game feel | P2/P7 | P2 part done (buffering/cancels/hitstop/reactions); fps+polish at P7 |
+| FR-4.7 Presentation & feedback (enhancement) | post-P4 | **done** (particles/blood/reticle/nameplate/dust/flash/shadows+lighting; regression-verified no combat-number drift) |
 | FR-5.1 The zone | P5 | not started |
 | FR-6.1 Persistence | P4 | **done** (p4: reload restore) |
 | FR-6.2 Debug panel | P4 | **done** (p4: live state + forcing buttons) |

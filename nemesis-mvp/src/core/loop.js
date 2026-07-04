@@ -40,7 +40,13 @@ export class Loop {
 
   _frame(now) {
     if (!this.running) return;
-    let realMs = Math.min(now - this._last, 100);   // clamp tab-switch spikes
+    // Clamp bounds how much wall-clock time a single slow frame can convert
+    // to sim time — high enough that a genuinely slow renderer (weak GPU,
+    // software rendering, a background dev-tools repaint) still advances
+    // gameplay at real speed instead of silently losing time, but bounded
+    // so a multi-second tab-switch away doesn't spiral into a huge catch-up.
+    const CLAMP_MS = 300;
+    let realMs = Math.min(now - this._last, CLAMP_MS);
     this._last = now;
     if (realMs > 0) this.fps += ((1000 / realMs) - this.fps) * 0.05;
 
@@ -53,7 +59,7 @@ export class Loop {
         this.slowmoMs -= realMs;
       }
       this._acc += (realMs / 1000) * scale;
-      let guard = 10;                                // never spiral
+      let guard = Math.ceil(CLAMP_MS / (this.step * 1000)) + 2;  // covers the clamp window
       while (this._acc >= this.step && guard-- > 0) {
         this.updateFn(this.step);
         this._acc -= this.step;

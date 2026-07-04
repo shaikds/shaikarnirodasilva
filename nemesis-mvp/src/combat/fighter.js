@@ -42,27 +42,47 @@ export class Fighter {
     this.trace = [];       // state-transition log for tests/debug (capped)
     this.deadT = 0;
 
-    // blockout body
+    // body — readable blockout silhouette with a bit of armor shape
     this.mesh = new THREE.Group();
-    const mat = new THREE.MeshLambertMaterial({ color, emissive });
+    const mat = new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.55, metalness: 0.15 });
     this.baseColor = new THREE.Color(color);
     this.mat = mat;
     this.body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.9, 6, 12), mat);
     this.body.position.y = 0.95;
-    this.head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), mat.clone());
+    this.body.castShadow = true;
+    this.head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), mat.clone());
     this.head.position.y = 1.72;
+    this.head.castShadow = true;
     const nose = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 0.08, 0.3),
       new THREE.MeshBasicMaterial({ color: 0xffffff })
     );
     nose.position.set(0, 1.72, 0.3);
-    // weapon arm: a bar that swings on attacks — blockout-readable telegraphs
-    this.arm = new THREE.Mesh(
-      new THREE.BoxGeometry(0.14, 0.14, 1.1),
-      new THREE.MeshLambertMaterial({ color: 0xd8d8e8, emissive: 0x222233 })
+    // shoulder pads: break up the pure-capsule silhouette
+    const padMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.4, metalness: 0.4 });
+    const padGeo = new THREE.SphereGeometry(0.14, 8, 8);
+    const padL = new THREE.Mesh(padGeo, padMat); padL.position.set(-0.38, 1.42, 0);
+    const padR = new THREE.Mesh(padGeo, padMat); padR.position.set(0.38, 1.42, 0);
+    padL.castShadow = padR.castShadow = true;
+    // weapon: hilt + blade, swings on attacks — reads as an actual weapon now
+    this.arm = new THREE.Group();
+    const hilt = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.06, 0.28, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2a2a1a, roughness: 0.7 })
     );
+    hilt.rotation.z = Math.PI / 2; hilt.position.z = -0.1;
+    const blade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.09, 0.03, 1.0),
+      new THREE.MeshStandardMaterial({ color: 0xd8d8e8, emissive: 0x333344, roughness: 0.25, metalness: 0.75 })
+    );
+    blade.position.z = 0.45;
+    this.arm.add(hilt, blade);
+    this.arm.castShadow = true;
     this.arm.position.set(0.45, 1.15, 0.3);
-    this.mesh.add(this.body, this.head, nose, this.arm);
+    // team-color rim light: makes the silhouette pop against a dark arena
+    this.rim = new THREE.PointLight(color, 1.1, 3.5, 2);
+    this.rim.position.set(0, 1.3, -0.3);
+    this.mesh.add(this.body, this.head, nose, padL, padR, this.arm, this.rim);
     scene.add(this.mesh);
     this.flashT = 0;
     this.syncMesh(1);
