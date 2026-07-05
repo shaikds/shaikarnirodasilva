@@ -420,6 +420,53 @@ debug panel. Pure presentation: none of these ACs may alter a combat number
 
 ---
 
+## 8.5 M7 — Saiyan Combat (post-acceptance expansion, developer-requested)
+
+Arena-fighter aerial combat in the spirit of Dragon Ball Sparking Zero: the
+player and rival fly, rush each other with ki dashes, trade ki blasts, and
+grow visibly more powerful during and across fights. Original characters
+retained (the rival-prince dynamic, not the trademarked cast).
+
+### FR-7.1 Flight
+- **AC-7.1.1** `F` toggles flight. Flying: no gravity, full 3D movement —
+  WASD planar, `Space` rise, `C` descend — at flight speed > ground speed,
+  altitude clamped to the zone ceiling (14 m) and zone bounds.
+- **AC-7.1.2** Flight is LOCKED until the genesis resolves — the player's
+  first defeat awakens it (announced). This also preserves AC-1.2.3's
+  sealed arena. The rival can always fly. Restored saves with
+  `rivalryStarted` boot with flight unlocked.
+- **AC-7.1.3** Aerial melee: attacks connect only within 1.8 m vertical
+  reach — two flyers duel at altitude; a flyer cannot melee a grounded
+  target from 10 m up.
+- **AC-7.1.4** Death cancels flight (the body falls).
+
+### FR-7.2 Ki dash (the rush)
+- **AC-7.2.1** Holding `Q` rockets the fighter toward its lock-on target in
+  full 3D (closes altitude too) at dash speed, draining energy per second;
+  ends when energy empties or within melee range. Without a target it
+  dashes along facing.
+- **AC-7.2.2** The rival uses dashes to close distance (a micro-GOAP
+  action), preferring them at long range when it has energy.
+
+### FR-7.3 Ki blasts
+- **AC-7.3.1** `I` fires a rapid small projectile: low damage (~4), cheap
+  (8 energy), short cooldown (~0.18 s) — spammable pressure, resolved
+  through the same rulebook (blockable at 70% reduction, dodgeable).
+- **AC-7.3.2** The rival fires ki barrages at mid range (micro-GOAP action).
+
+### FR-7.4 Saiyan growth
+- **AC-7.4.1** A surge meter fills from combat (dealing and taking damage).
+  At full, the fighter TRANSFORMS automatically: golden aura + light,
+  +25% damage, +15% speed, for the rest of the life. Announced.
+- **AC-7.4.2** The rival transforms too, and pride accelerates it: while
+  the player is transformed and it is not, its meter fills faster.
+- **AC-7.4.3** Zenkai: every duel end permanently raises the player's power
+  (more from defeat than victory), persisted with the rivalry; power maps
+  to a damage multiplier (gentle, capped) and shows on the HUD as a power
+  level. The rival's power continues to grow via its existing XP/levels.
+- **AC-7.4.4** All tuning values in data modules (NFR-4); the sync engine
+  still owns fairness — growth makes both stronger, skill keeps it 50/50.
+
 ## 9. Post-MVP (explicitly deferred, kept from PRD)
 
 Order is a suggestion; nothing here blocks MVP acceptance.
@@ -488,5 +535,9 @@ leads, code follows.
 | FR-5.1 The zone | P5 | **done** (p5: bounds soak, nav connectivity, anywhere-encounters) |
 | FR-6.1 Persistence | P4 | **done** (p4: reload restore) |
 | FR-6.2 Debug panel | P4 | **done** (p4: live state + forcing buttons) |
+| FR-7.1 Flight | P9 | **done** (p9: lock/unlock, rise/clamp/land, 3D melee reach, falls on death) |
+| FR-7.2 Ki dash | P9 | **done** (p9: 3D rush, drain, stop range; rival dragonDash) |
+| FR-7.3 Ki blasts | P9 | **done** (p9: cost/cooldown/dmg via rulebook; rival barrage) |
+| FR-7.4 Saiyan growth | P9 | **done** (p9: surge x1.25 + aura + pride; zenkai +60/+40 persisted) |
 | NFR-1..5 | P0/P7 | **done** (NFR-5 degraded mode at P7; NFR-1 amended at P0) |
 | S-1..S-4 success criteria | P8 | **done** — S-1 journey scripted + on video; S-2 canonical taunt live on video; S-3 20-duel band (amended, 1 resample); S-4 systems verified, 60fps pending developer hardware |

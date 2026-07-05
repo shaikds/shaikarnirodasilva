@@ -87,6 +87,7 @@ export class Hud {
         <div class="name">YOU</div>
         <div class="hp"><div></div></div>
         <div class="en"><div></div></div>
+        <div class="powerlvl" style="font-size:10px;letter-spacing:2px;color:var(--gold);margin-top:3px"></div>
       </div>
       <div class="bars foe">
         <div class="name">???</div>
@@ -109,6 +110,7 @@ export class Hud {
       announce: root.querySelector('.announce'),
       reticle: root.querySelector('.reticle'),
       goalhint: root.querySelector('.goalhint'),
+      powerlvl: root.querySelector('.powerlvl'),
       plate: root.querySelector('.plate'),
       plateName: root.querySelector('.plate .pname'),
       plateBar: root.querySelector('.plate .phbar > div'),
@@ -122,6 +124,15 @@ export class Hud {
 
   track(me, foe) { this.me = me; this.foe = foe; }
   trackRig(rig) { this.rig = rig; }
+  // power level readout (AC-7.4.3): growth made visible
+  setPower(power, surged, meterPct) {
+    const display = Math.round((100 + power) * (surged ? 1.5 : 1));
+    this.el.powerlvl.textContent =
+      `POWER ${display.toLocaleString()}` +
+      (surged ? '  ⚡SURGING' : meterPct >= 60 ? '  ·  surge rising…' : '');
+    this.el.powerlvl.style.color = surged ? '#ffd24d' : '';
+  }
+
   goalHintEnabled = true;                      // AC-3.4.5, on by default
   setGoalHint(text) {
     if (!this.goalHintEnabled) text = null;

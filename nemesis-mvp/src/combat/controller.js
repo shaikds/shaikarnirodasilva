@@ -43,6 +43,15 @@ export class PlayerController {
     if (!f.busy && inp.consume('jump')) f.intent.jump = true;
     if (inp.consume('lock', 0.05)) this.rig.toggleLock(this.candidates || []);
 
+    // M7 Saiyan controls (FR-7.x)
+    if (inp.consume('flight', 0.05)) f.toggleFlight();
+    if (inp.down.ki) f.fireKi();                    // hold to barrage
+    f.intent.dash = !!inp.down.dash;
+    f.dashTarget = rig.lockTarget;
+    f.intent.rise = f.flying
+      ? (inp.down.jump ? 1 : 0) + (inp.down.descend ? -1 : 0)
+      : 0;
+
     // camera orbit input: pointer-lock mouse or arrow keys
     const md = inp.takeMouseDelta();
     const orbit = {

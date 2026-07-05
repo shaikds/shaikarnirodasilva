@@ -2,7 +2,7 @@
 // hitstop, camera feedback. One rulebook for every fighter pair.
 // Emits events consumed by the HUD (and the profiler in P3).
 
-import { ATTACKS, DEFENSE, COMBO, ENERGY, FEEL } from './attacks.js';
+import { ATTACKS, DEFENSE, COMBO, ENERGY, FEEL, SAIYAN } from './attacks.js';
 
 export class Resolver {
   constructor({ loop, rig }) {
@@ -25,10 +25,12 @@ export class Resolver {
     if (!a || a.kind === 'special') return;    // specials resolve via projectiles
     if (!def.alive) return;
 
-    // frontal arc test (AC-4.2.5)
+    // frontal arc test (AC-4.2.5) + vertical reach (AC-7.1.3: flyers can't
+    // melee targets far above/below them)
     const dx = def.pos.x - att.pos.x, dz = def.pos.z - att.pos.z;
     const dist = Math.hypot(dx, dz);
     if (dist > a.range + def.radius) return;
+    if (Math.abs(def.pos.y - att.pos.y) > SAIYAN.flight.meleeReachY) return;
     const toDef = Math.atan2(dx, dz);
     let dyaw = toDef - att.yaw;
     while (dyaw > Math.PI) dyaw -= 2 * Math.PI;
@@ -60,9 +62,10 @@ export class Resolver {
       return 'parried';
     }
 
-    // combo-scaled damage (AC-4.5.1) and rival stat hook (FR-2.3)
+    // combo-scaled damage (AC-4.5.1), rival stat hook (FR-2.3),
+    // surge transformation multiplier (AC-7.4.1)
     const scale = 1 + Math.min(att.combo * COMBO.dmgPerStep, COMBO.dmgCap);
-    let dmg = a.dmg * scale * (att.stats?.attack ?? 1);
+    let dmg = a.dmg * scale * (att.stats?.attack ?? 1) * (att.surgeMult ?? 1);
 
     // 3) block
     if (def.blocking) {
@@ -81,6 +84,9 @@ export class Resolver {
     def.applyDamage(dmg);
     def.gainEnergy(ENERGY.onHitTaken);
     att.gainEnergy(a.energyGain ?? ENERGY.onHitLanded);
+    // Saiyans feed on battle (AC-7.4.1): both meters climb
+    att.gainSurge?.(dmg * SAIYAN.surge.gainDealt);
+    def.gainSurge?.(dmg * SAIYAN.surge.gainTaken);
     def.combo = 0;                                   // their chain breaks
     att.combo++; att.comboT = COMBO.window;
     if (def.alive) {

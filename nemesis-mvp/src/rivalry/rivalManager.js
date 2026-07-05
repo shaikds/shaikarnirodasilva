@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { Ledger } from './ledger.js';
+import { SAIYAN } from '../combat/attacks.js';
 
 const KEY = 'nemesis-rival-v1';
 const NAMES = ['VEXAR', 'MORDRETH', 'SERAK', 'NYXIM', 'DRAVUS', 'KHARGOTH'];
@@ -123,6 +124,10 @@ export class RivalManager {
     else this.hate(HATE.duel_won_by_rival);
     this.ledger.add('observation', this.styleObservation());
 
+    // Zenkai (AC-7.4.3): the player grows every duel — MORE from defeat
+    this.doc.playerPower = Math.min(SAIYAN.zenkai.powerCap,
+      (this.doc.playerPower ?? 0) + (playerWon ? SAIYAN.zenkai.win : SAIYAN.zenkai.loss));
+
     // XP + level-ups (AC-2.3.2): the rival grows win or lose
     this.doc.xp += playerWon ? 40 : 25;
     while (this.doc.xp >= 100 * this.doc.level) {
@@ -154,6 +159,13 @@ export class RivalManager {
         this.doc.appearanceTags.push(r.tag);
       }
     }
+  }
+
+  // zenkai power -> the player Fighter (AC-7.4.3): gentle, capped
+  applyPlayerGrowth(f) {
+    const p = this.doc.playerPower ?? 0;
+    f.power = p;
+    f.stats.attack = 1 + Math.min(p, SAIYAN.zenkai.powerCap) * SAIYAN.zenkai.dmgPerPower;
   }
 
   // stats + tags -> the actual Fighter (called on spawn/duel start)

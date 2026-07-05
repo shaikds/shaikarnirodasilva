@@ -131,6 +131,11 @@ export class GameFlow {
       }
       case 'encounter': {
         c.manager.applyToFighter(c.rival);
+        c.manager.applyPlayerGrowth?.(c.player);   // zenkai power (AC-7.4.3)
+        // fresh escalation arc each duel: transformations are earned in-fight
+        for (const f of [c.player, c.rival]) {
+          f.surge = false; f.surgeMeter = 0; f._setAura?.(f.flying ? 'white' : null);
+        }
         c.rivalAgent.enabled = true;
         this.walker.stop();
         c.macroAgent?.walker.stop();
@@ -319,6 +324,11 @@ export class GameFlow {
     this.ctx.player.hp = this.ctx.player.maxHp;
     this.ctx.player.hpFloor = 0;
     this.ctx.rival.hpFloor = 0;
+    // the first defeat awakens flight (AC-7.1.2)
+    if (!this.ctx.player.canFly) {
+      this.ctx.player.canFly = true;
+      c.hud.subtitle('AWAKENING', 'Something burns in you now — press F to FLY. Hold Q to rush. I to fire ki.');
+    }
     // restore the rival to its real stats
     if (this._fbSaved) {
       c.rival.stats.attack = this._fbSaved.attack;

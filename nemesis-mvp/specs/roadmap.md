@@ -157,6 +157,18 @@ three specs and the status table describe the shipped reality.
 **Verification:** `tests/p8_acceptance.spec.mjs` — the full-journey script;
 gameplay video recorded and attached to the closing log entry.
 
+## `[x]` P9 — Saiyan combat (M7, post-acceptance expansion)
+**Closes:** FR-7.1..7.4 · **Modules:** `combat/fighter.js` (flight/dash/ki/surge/aura), `combat/attacks.js` (ki def + SAIYAN tuning), `combat/resolver.js` (3D reach, surge mult, surge gains), `ai/rivalAgent.js` + `microActions.js` (aerial pursuit, dragonDash, kiBarrage, pride), `rivalry/rivalManager.js` (zenkai), `core/states.js` (flight awakening, per-duel escalation reset), `ui/hud.js` (power level)
+
+- Flight (F) with 3D movement, ceiling + bounds clamps, awakened at genesis;
+  ki dash (hold Q) rushes the lock-on in 3D; ki blasts (I) through the shared
+  rulebook; surge transformation (auto at full meter: gold aura, x1.25 dmg,
+  x1.15 speed) with the rival's pride acceleration; zenkai power persistence.
+
+**Exit criteria:** all FR-7 ACs pass; earlier suites keep passing.
+**Verification:** `tests/p9_saiyan.spec.mjs` 13/13 ×2; full p0–p9 regression
+green; aerial-battle video captured.
+
 ---
 
 ## After MVP

@@ -24,6 +24,7 @@ import { Prompts } from './ui/prompts.js';
 import { GameFlow } from './core/states.js';
 import { MacroAgent } from './ai/macroAgent.js';
 import { TauntEngine } from './rivalry/taunts.js';
+import { ATTACKS } from './combat/attacks.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -148,8 +149,13 @@ const loop = new Loop({
     trackMovementFx(player); trackMovementFx(rival); trackMovementFx(dummy);
     separate(player, dummy); separate(player, rival); separate(dummy, rival);
     if (combat) {
-      if (player.pendingShot) { player.pendingShot = false; projectiles.fire(player, rival.alive && rivalAgent.enabled ? rival : dummy); }
+      // your shots go where you're LOOKING: lock-on first, else the live foe
+      const playerTarget = (rig.lockTarget?.alive && rig.lockTarget) ||
+        (rival.alive && rivalAgent.enabled ? rival : dummy);
+      if (player.pendingShot) { player.pendingShot = false; projectiles.fire(player, playerTarget); }
       if (rival.pendingShot) { rival.pendingShot = false; projectiles.fire(rival, player); }
+      if (player.pendingKi) { player.pendingKi = false; projectiles.fire(player, playerTarget, ATTACKS.ki); }
+      if (rival.pendingKi) { rival.pendingKi = false; projectiles.fire(rival, player, ATTACKS.ki); }
       projectiles.update(dt, [player, dummy, rival]);
       resolver.meleePair(player, dummy);
       resolver.meleePair(dummy, player);
@@ -158,7 +164,19 @@ const loop = new Loop({
     } else {
       // combat frozen (forced escape / free roam): no new shots, no hits
       player.pendingShot = false; rival.pendingShot = false;
+      player.pendingKi = false; rival.pendingKi = false;
       projectiles.update(dt, []);
+    }
+    // transformation moments (AC-7.4.1): announce + burst + slow beat
+    for (const f of [player, rival]) {
+      if (f.justTransformed) {
+        f.justTransformed = false;
+        hud.announce(f === player ? 'SURGE — YOUR POWER ERUPTS' : `${manager.doc.name} TRANSFORMS`, 2200);
+        vfx._spawn({ x: f.pos.x, y: f.pos.y + 1.2, z: f.pos.z },
+          { color: 0xffd24d, count: 30, speed: [3, 8], size: [0.1, 0.3], life: [0.4, 0.9], upBias: 1.4 });
+        loop.slowmo(300, 0.3);
+        rig.shake(0.2);
+      }
     }
     profiler.update(dt, loop.simTime);
     // charge-up sparkle while winding up a special
@@ -186,6 +204,7 @@ const loop = new Loop({
     hud.setGoalHint(
       rivalAgent.enabled && rivalAgent.currentGoal ? rivalAgent.currentGoal.hud : null
     );
+    hud.setPower(player.power, player.surge, player.surgeMeter);
     hud.update(rdt);
     vfx.update(rdt, loop.simTime);
     landmarks.update(loop.simTime);
@@ -241,6 +260,9 @@ const manager = new RivalManager({ store, profile, sync });
 const bootMode = manager.loadOrCreate();      // 'created' | 'restored'
 manager.applyToFighter(rival);
 if (rival.maxHp !== rival.hp) rival.hp = rival.maxHp;
+manager.applyPlayerGrowth(player);            // zenkai carries across sessions
+player.canFly = !!manager.doc.rivalryStarted; // flight awakened at genesis (AC-7.1.2)
+rival.canFly = true;                          // it was always more than you
 // (the foe HUD panel is shown/hidden by the GameFlow per state)
 
 const debugPanel = new DebugPanel({

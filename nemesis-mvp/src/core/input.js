@@ -9,6 +9,7 @@ const KEYMAP = {
   KeyW: 'fwd', KeyS: 'back', KeyA: 'left', KeyD: 'right',
   Space: 'jump', ShiftLeft: 'dodge', ShiftRight: 'dodge',
   KeyJ: 'light', KeyK: 'heavy', KeyL: 'special',
+  KeyI: 'ki', KeyF: 'flight', KeyQ: 'dash', KeyC: 'descend',
   KeyB: 'block',                    // hold (keyboard alias for RMB)
   Tab: 'lock', KeyE: 'interact',
   Backquote: 'debug',

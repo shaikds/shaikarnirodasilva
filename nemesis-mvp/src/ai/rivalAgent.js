@@ -6,7 +6,7 @@
 import { plan } from './goap.js';
 import { MICRO_ACTIONS, MICRO_GOALS } from './microActions.js';
 import { AI } from '../core/tuning.js';
-import { ENERGY } from '../combat/attacks.js';
+import { ENERGY, SAIYAN } from '../combat/attacks.js';
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -75,6 +75,7 @@ export class RivalAgent {
       playerRetreating: retreating,
       playerLowHp: t.hp <= 30,
       myLowHp: f.hp <= 30,
+      canDash: f.energy > 30,
       damaged: false, guardBroken: false, avoided: false, spaced: false,
     };
   }
@@ -97,6 +98,20 @@ export class RivalAgent {
     // always face the player (lock-on equivalent)
     f.intent.face = f.yawTo(t);
     f.intent.move.x = 0; f.intent.move.z = 0;
+    f.intent.dash = false;
+    f.dashTarget = t;
+
+    // ---- M7 aerial pursuit (FR-7.1): match the player's altitude game ----
+    const dy = t.pos.y - f.pos.y;
+    if (!f.flying && (t.flying || dy > 2.5) && !f.busy) f.toggleFlight();
+    if (f.flying) {
+      f.intent.rise = Math.abs(dy) > 0.6 ? Math.sign(dy) : 0;
+      if (!t.flying && t.grounded && f.pos.y < 1.2) f.toggleFlight();   // land with them
+    } else {
+      f.intent.rise = 0;
+    }
+    // pride (AC-7.4.2): being outshone by a transformed player burns
+    if (t.surge && !f.surge) f.gainSurge(SAIYAN.surge.prideGainPerS * dt);
 
     // --- reactive defense: mirrors the player's own defense rate/reaction ---
     const threat = t.state === 'attack' && t.phase === 'windup' &&
@@ -203,6 +218,19 @@ export class RivalAgent {
         if (f.canStart('special')) f.startAttack('special');
         done();
         break;
+      case 'dragonDash':
+        // rush the player in 3D until melee range or energy dries (FR-7.2)
+        if (dist <= SAIYAN.dash.stopRange * 1.2 || f.energy <= SAIYAN.dash.minEnergy) { done(); break; }
+        f.intent.dash = true;
+        if (this.actionT <= -0.6) done();
+        break;
+      case 'kiBarrage': {
+        // a few quick blasts, then move on (FR-7.3)
+        this._kiShots = (this._kiShots ?? 3);
+        if (f.fireKi()) this._kiShots--;
+        if (this._kiShots <= 0 || f.energy < 10) { this._kiShots = null; done(); }
+        break;
+      }
       case 'dodge': {
         const away = Math.random() < 0.5 ? 1 : -1;
         f.startDodge(-dirZ * away, dirX * away);

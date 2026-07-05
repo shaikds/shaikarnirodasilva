@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { MOVE } from '../core/tuning.js';
-import { ATTACKS, DEFENSE, ENERGY } from './attacks.js';
+import { ATTACKS, DEFENSE, ENERGY, SAIYAN } from './attacks.js';
 
 export class Fighter {
   constructor({ scene, color = 0x4db8ff, emissive = 0x0a2438, pos = [0, 0, 0], name = 'fighter' }) {
@@ -38,9 +38,18 @@ export class Fighter {
     this.combo = 0; this.comboT = 0;
     this.radius = MOVE.radius;
     this.height = MOVE.height;
-    this.intent = { move: { x: 0, z: 0 }, face: null, jump: false, dodge: false };
+    this.intent = { move: { x: 0, z: 0 }, face: null, jump: false, dodge: false, rise: 0, dash: false };
     this.trace = [];       // state-transition log for tests/debug (capped)
     this.deadT = 0;
+    // M7 Saiyan combat (FR-7.x)
+    this.canFly = false;   // unlocked by the Genesis Flow (AC-7.1.2)
+    this.flying = false;
+    this.dashTarget = null;      // Fighter | null: dash homes on this in 3D
+    this.kiCd = 0;
+    this.pendingKi = false;
+    this.surge = false;
+    this.surgeMeter = 0;
+    this.power = 0;              // zenkai power level (persisted for the player)
 
     // body — readable blockout silhouette with a bit of armor shape
     this.mesh = new THREE.Group();
@@ -195,6 +204,8 @@ export class Fighter {
     if (this.hp <= 0 && this.alive) {
       this.attackType = null; this.phase = null;
       this.deadT = 0;
+      this.flying = false;                 // AC-7.1.4: the body falls
+      this._setAura?.(null);
       this._setState('dead');
     }
   }
@@ -215,6 +226,81 @@ export class Fighter {
   }
   gainEnergy(n) { this.energy = Math.min(ENERGY.max, this.energy + n); }
 
+  // ---- M7: flight / dash / ki / surge (FR-7.x) ----
+  toggleFlight() {
+    if (!this.canFly || !this.alive) return false;
+    if (this.flying) {
+      this.flying = false;                 // gravity takes over
+      this._setAura(this.surge ? 'gold' : null);
+    } else {
+      this.flying = true;
+      this.grounded = false;
+      this.vy = 0;
+      if (this.pos.y < 0.6) this.pos.y = 0.6;
+      this._setAura(this.surge ? 'gold' : 'white');
+      this._trace({ state: 'fly' });
+    }
+    return true;
+  }
+
+  fireKi() {
+    if (!this.alive || this.busy || this.kiCd > 0) return false;
+    if (this.energy < ATTACKS.ki.cost) return false;
+    this.energy -= ATTACKS.ki.cost;
+    this.kiCd = ATTACKS.ki.cooldown;
+    this.pendingKi = true;                 // main loop spawns the projectile
+    this.onAction?.('special');            // profiled as ranged pressure
+    return true;
+  }
+
+  gainSurge(n) {
+    if (this.surge) return;
+    this.surgeMeter = Math.min(SAIYAN.surge.max, this.surgeMeter + n);
+  }
+
+  transform() {
+    if (this.surge || !this.alive) return false;
+    this.surge = true;
+    this._setAura('gold');
+    this._trace({ state: 'surge' });
+    this.justTransformed = true;           // main loop announces + bursts
+    return true;
+  }
+  get surgeMult() { return this.surge ? SAIYAN.surge.dmgMult : 1; }
+  get speedMult() { return this.stats.speed * (this.surge ? SAIYAN.surge.speedMult : 1); }
+
+  _setAura(kind) {
+    if (!this._aura) {
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.22,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      sprite.scale.set(1.7, 2.3, 1);
+      sprite.position.y = 1.0;
+      const light = new THREE.PointLight(0xffffff, 0, 3.5, 2);
+      light.position.y = 1.2;
+      this.mesh.add(sprite, light);
+      this._aura = { sprite, light };
+    }
+    const a = this._aura;
+    if (kind === 'gold') {
+      a.sprite.visible = true;
+      a.sprite.material.color.setHex(0xffd24d);
+      a.sprite.material.opacity = 0.35;
+      a.light.color.setHex(0xffd24d);
+      a.light.intensity = 1.6;
+    } else if (kind === 'white') {
+      a.sprite.visible = true;
+      a.sprite.material.color.setHex(0xbfd8ff);
+      a.sprite.material.opacity = 0.18;
+      a.light.color.setHex(0xbfd8ff);
+      a.light.intensity = 0.7;
+    } else {
+      a.sprite.visible = false;
+      a.light.intensity = 0;
+    }
+  }
+
   // back on their feet: used by the Genesis Flow for respawns/rematches
   revive(pos = null) {
     this.hp = this.maxHp;
@@ -224,6 +310,9 @@ export class Fighter {
     this.combo = 0; this.comboT = 0;
     this.kb.set(0, 0); this.iframeT = 0; this.dodgeCd = 0;
     this.deadT = 0; this.vy = 0; this.grounded = true;
+    this.flying = false;
+    this.surge = false; this.surgeMeter = 0; this.kiCd = 0;
+    this._setAura(null);
     if (pos) { this.pos.set(pos.x, 0, pos.z); this.prevPos.copy(this.pos); }
     this.mesh.rotation.z = 0;
     this.mesh.position.y = 0;
@@ -303,10 +392,38 @@ export class Fighter {
       }
       case 'idle': {
         if (it.dodge) { it.dodge = false; this.startDodge(it.move.x, it.move.z); break; }
-        const ctl = (this.grounded ? 1 : MOVE.airCtl) * this.stats.speed;
-        this.pos.x += it.move.x * MOVE.speed * ctl * dt;
-        this.pos.z += it.move.z * MOVE.speed * ctl * dt;
-        if (it.jump && this.grounded) { this.vy = MOVE.jumpV; this.grounded = false; }
+
+        // ki dash (FR-7.2): full-3D rush toward the dash target
+        if (it.dash && this.energy > SAIYAN.dash.minEnergy) {
+          const t = this.dashTarget;
+          let dir;
+          if (t?.alive) {
+            dir = new THREE.Vector3(
+              t.pos.x - this.pos.x, (t.pos.y - this.pos.y) * (this.flying ? 1 : 0),
+              t.pos.z - this.pos.z);
+            if (dir.length() < SAIYAN.dash.stopRange) { it.dash = false; break; }
+          } else {
+            dir = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+          }
+          dir.normalize();
+          this.pos.addScaledVector(dir, SAIYAN.dash.speed * dt);
+          this.energy = Math.max(0, this.energy - SAIYAN.dash.energyPerS * dt);
+          if (it.face != null) this._turnToward(it.face, dt);
+          break;
+        }
+
+        if (this.flying) {
+          // free flight (FR-7.1): planar + vertical, no gravity
+          const spd = SAIYAN.flight.speed * this.speedMult;
+          this.pos.x += it.move.x * spd * dt;
+          this.pos.z += it.move.z * spd * dt;
+          this.pos.y += (it.rise ?? 0) * SAIYAN.flight.rise * dt;
+        } else {
+          const ctl = (this.grounded ? 1 : MOVE.airCtl) * this.speedMult;
+          this.pos.x += it.move.x * MOVE.speed * ctl * dt;
+          this.pos.z += it.move.z * MOVE.speed * ctl * dt;
+          if (it.jump && this.grounded) { this.vy = MOVE.jumpV; this.grounded = false; }
+        }
         it.jump = false;
         let targetYaw = null;
         if (it.face != null) targetYaw = it.face;
@@ -325,14 +442,23 @@ export class Fighter {
       this.kb.multiplyScalar(Math.exp(-7 * dt));
     }
 
-    // vertical physics
-    if (!this.grounded) {
+    // vertical physics (suspended while flying)
+    if (this.flying) {
+      this.pos.y = Math.max(0.4, Math.min(SAIYAN.flight.maxAlt, this.pos.y));
+    } else if (!this.grounded) {
       this.vy -= MOVE.gravity * dt;
       this.pos.y += this.vy * dt;
       if (this.pos.y <= 0) { this.pos.y = 0; this.vy = 0; this.grounded = true; }
     }
 
+    // ki cooldown + auto-transform at full surge (AC-7.4.1)
+    this.kiCd = Math.max(0, this.kiCd - dt);
+    if (!this.surge && this.surgeMeter >= SAIYAN.surge.max && this.alive) this.transform();
+
     zone.collide(this.pos, this.radius, this.height);
+    // flyers must respect the zone bounds too (walls are only 3m tall)
+    this.pos.x = Math.max(-49.4, Math.min(49.4, this.pos.x));
+    this.pos.z = Math.max(-51.4, Math.min(19.4, this.pos.z));
   }
 
   _turnToward(targetYaw, dt, smooth = false) {

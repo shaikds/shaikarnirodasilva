@@ -63,6 +63,19 @@ export const MICRO_ACTIONS = [
     effect: s => { s.energyFull = true; s.inRange = false; s.midRange = true; },
     cost: (s, p) => 1.4 - (p ? (1 - p.aggression) * 0.5 : 0.2),
   },
+  // M7 (FR-7.2/7.3): the rush and the barrage
+  {
+    name: 'dragonDash',
+    pre: s => !s.inRange && s.canDash,
+    effect: s => { s.inRange = true; s.midRange = false; },
+    cost: (s, p) => 0.55 + (p ? (1 - p.aggression) * 0.4 : 0.2),   // faster than walking
+  },
+  {
+    name: 'kiBarrage',
+    pre: s => !s.inRange,
+    effect: s => { s.damaged = true; },
+    cost: (s, p) => 1 / (0.35 + (p ? p.specialPref * 2 : 0.2)),
+  },
 ];
 
 // Goal selection: highest priority wins; ties go to the earlier entry.

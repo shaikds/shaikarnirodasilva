@@ -15,8 +15,7 @@ export class Projectiles {
     this.list = [];
   }
 
-  fire(owner, target) {
-    const def = ATTACKS.special;
+  fire(owner, target, def = ATTACKS.special) {
     const from = new THREE.Vector3(
       owner.pos.x + Math.sin(owner.yaw) * 0.7,
       owner.pos.y + 1.3,
@@ -25,7 +24,10 @@ export class Projectiles {
     const at = new THREE.Vector3(target.pos.x, target.pos.y + 1.1, target.pos.z);
     const vel = at.sub(from).normalize().multiplyScalar(def.projectile.speed);
 
-    const color = owner.baseColor?.getHex() ?? 0xffffff;
+    // ki blasts read hotter than the fighter's own hue (FR-7.3)
+    const color = def.kind === 'ki'
+      ? (owner.name === 'player' ? 0x9fd8ff : 0xffb26a)
+      : (owner.baseColor?.getHex() ?? 0xffffff);
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(def.projectile.radius, 10, 10),
       new THREE.MeshBasicMaterial({ color })
@@ -63,7 +65,7 @@ export class Projectiles {
       if (!p.dead) {
         const probe = pos.clone();
         if (this.zone.collide(probe, p.def.projectile.radius, 0.1) ||
-            p.t > LIFETIME || pos.y < 0 || pos.y > 12) {
+            p.t > LIFETIME || pos.y < 0 || pos.y > 16) {
           p.dead = true;
         }
       }
