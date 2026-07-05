@@ -20,6 +20,7 @@ function spriteMat(tex, color, opacity = 1) {
 export class VFX {
   constructor(scene) {
     this.scene = scene;
+    this.density = 1;      // NFR-5 degraded mode halves this
     this.particles = [];   // {sprite, vel:Vector3, life, max, grav, fadeSize}
     this.decals = [];      // {mesh}
     this.decalGroup = new THREE.Group();
@@ -28,6 +29,7 @@ export class VFX {
 
   _spawn(pos, { color = 0xffffff, count = 10, speed = [1, 4], size = [0.08, 0.22],
                 life = [0.3, 0.7], grav = GRAVITY, spread = 1, upBias = 0.5, tex = softDot } = {}) {
+    count = Math.max(1, Math.round(count * this.density));
     for (let i = 0; i < count; i++) {
       const mat = spriteMat(tex, color, 1);
       const spr = new THREE.Sprite(mat);

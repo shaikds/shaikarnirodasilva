@@ -96,6 +96,10 @@ export class GameFlow {
         c.rival.hp = c.rival.maxHp;
         c.rivalAgent.skillFloor = FIRST_BLOOD.skillFloor;
         c.rivalAgent.enabled = true;
+        // AC-1.3.5 at the source: death is impossible until the escape
+        // resolves — the floor lives in applyDamage, race-free
+        c.player.hpFloor = FIRST_BLOOD.clampHp;
+        c.rival.hpFloor = FIRST_BLOOD.clampHp;
         c.zone.setGateOpen(false);               // AC-1.2.3: inescapable
         c.prompts.hide();
         c.hud.showFoe(c.manager.doc.name);
@@ -133,6 +137,7 @@ export class GameFlow {
         c.hud.showFoe(c.manager.doc.name);
         c.hud.announce(`${c.manager.doc.name} — LVL ${c.manager.doc.level}`, 2000);
         this._saidLowHp = { player: false, rival: false };
+        this._encounterT = 0;
         this._taunt('encounter_start');
         break;
       }
@@ -245,13 +250,18 @@ export class GameFlow {
         if (!c.player.alive) { this._endEncounter('rivalWin'); break; }
         if (!c.rival.alive) { this._endEncounter('playerWin'); break; }
         if (c.player.distanceTo(c.rival) > 25) { this._endEncounter('escape'); break; }
-        if (!this._saidLowHp.player && c.player.hp <= 30) {
-          this._saidLowHp.player = true;
-          this._taunt('player_low_hp');
-        }
-        if (!this._saidLowHp.rival && c.rival.hp <= c.rival.maxHp * 0.3) {
-          this._saidLowHp.rival = true;
-          this._taunt('rival_low_hp');
+        // low-hp taunts wait out a grace period so the encounter-opening
+        // line (the canonical genesis callback especially) gets its moment
+        this._encounterT += dt;
+        if (this._encounterT > 4) {
+          if (!this._saidLowHp.player && c.player.hp <= 30) {
+            this._saidLowHp.player = true;
+            this._taunt('player_low_hp');
+          }
+          if (!this._saidLowHp.rival && c.rival.hp <= c.rival.maxHp * 0.3) {
+            this._saidLowHp.rival = true;
+            this._taunt('rival_low_hp');
+          }
         }
         break;
       }
@@ -304,6 +314,11 @@ export class GameFlow {
       c.hud.announce('IT WILL REMEMBER THIS', 2500);
     }
     m.doc.rivalryStarted = true;
+    // whoever fled got away — both catch their breath before the rivalry
+    // proper begins (design call logged 2026-07-04); death floors come off
+    this.ctx.player.hp = this.ctx.player.maxHp;
+    this.ctx.player.hpFloor = 0;
+    this.ctx.rival.hpFloor = 0;
     // restore the rival to its real stats
     if (this._fbSaved) {
       c.rival.stats.attack = this._fbSaved.attack;

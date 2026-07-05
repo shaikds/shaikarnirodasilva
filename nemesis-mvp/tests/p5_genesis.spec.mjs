@@ -106,9 +106,14 @@ check('name card shown (AC-1.2.2)', fb.nameCard.includes(fb.name), fb.nameCard);
 // ---- forced escape, player branch (FR-1.3) ----
 const esc = await page.evaluate(() => {
   const g = window.__game;
-  g.player.hp = 5;                       // below both clamp and trigger
+  // a genuinely lethal blow through the REAL damage path — regression for
+  // the death-vs-clamp race found by the P8 video capture: applyDamage used
+  // to mark 'dead' before the flow's next-tick clamp could save the fighter
+  g.player.applyDamage(500);
+  const survivedKillingBlow = g.player.alive && g.player.hp === 12;
   g.step(2);
   return {
+    survivedKillingBlow,
     state: g.flow.state,
     hpClamped: g.player.hp >= 12,        // AC-1.3.5: death impossible
     frozen: !g.flow.combatEnabled,       // AC-1.3.1
@@ -116,6 +121,8 @@ const esc = await page.evaluate(() => {
     prompt: g.prompts.current,
   };
 });
+check('a killing blow cannot kill during First Blood (hpFloor, AC-1.3.5)',
+  esc.survivedKillingBlow, JSON.stringify(esc));
 check('player at 15% triggers the frozen escape (AC-1.3.1, AC-1.3.5)',
   esc.state === 'forcedEscape' && esc.hpClamped && esc.frozen && esc.gateOpen,
   JSON.stringify(esc));

@@ -154,19 +154,29 @@ check('mirroring: forced heavy profile shifts rival ≥20pts vs light profile',
   mirror.heavyStyle - mirror.lightStyle >= 0.2,
   `light-profile share ${mirror.lightStyle} -> heavy-profile share ${mirror.heavyStyle}`);
 
-// ---- S-3 band: 10 duels vs aggressive bot — neither side >70% ----
-const band = await page.evaluate(() => {
-  const g = window.__game;
-  const fresh = new g.profile.constructor();
-  Object.assign(g.profile, fresh.toJSON());
-  g.sync.rating = 1000; g.sync.wins = 0; g.sync.losses = 0;
-  const results = [];
-  for (let i = 0; i < 10; i++) results.push(g.__duel('aggressive'));
-  return { wins: g.sync.wins, losses: g.sync.losses, results };
-});
+// ---- S-3 band (smoke): 10 duels vs aggressive bot — neither side >70% ----
+// Stochastic criterion: one re-sample permitted per spec §1.1 S-3 (the
+// rigorous 20-duel evaluation lives in p8_acceptance).
+async function runBand() {
+  return page.evaluate(() => {
+    const g = window.__game;
+    const fresh = new g.profile.constructor();
+    Object.assign(g.profile, fresh.toJSON());
+    g.sync.rating = 1000; g.sync.wins = 0; g.sync.losses = 0;
+    const results = [];
+    for (let i = 0; i < 10; i++) results.push(g.__duel('aggressive'));
+    return { wins: g.sync.wins, losses: g.sync.losses, results };
+  });
+}
+let band = await runBand();
 console.log('  band detail:', JSON.stringify(band.results.map(r => `${r.playerWon ? 'P' : 'R'} ${r.pHp}:${r.rHp} @${r.rating}`)));
-check('S-3 band: player wins between 3 and 7 of 10',
-  band.wins >= 3 && band.wins <= 7, `player ${band.wins} : rival ${band.losses}`);
+let bandNote = `player ${band.wins} : rival ${band.losses}`;
+if (band.wins < 3 || band.wins > 7) {
+  band = await runBand();
+  bandNote += ` · resample: ${band.wins} : ${band.losses}`;
+}
+check('S-3 band: player wins between 3 and 7 of 10 (1 resample allowed)',
+  band.wins >= 3 && band.wins <= 7, bandNote);
 
 // ---- goal exposure for HUD/debug (AC-3.4.5) ----
 const goalExposed = await page.evaluate(() => {

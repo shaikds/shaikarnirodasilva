@@ -129,7 +129,7 @@ in debug panel.
 band/trigger; forced-state macro-goal assertions; a scripted "player uses the
 same route 3×" run ends with the rival choosing Ambush.
 
-## `[ ]` P7 — Best-of-the-best pass
+## `[x]` P7 — Best-of-the-best pass
 **Closes:** remaining feel ACs, S-4 · **Modules:** touch-ups across `combat/*`, `world/camera.js`, `core/tuning.js`
 
 - Tuning playtest loop: attack timings, parry window, dodge distance, camera
@@ -143,7 +143,7 @@ with debug panel closed; no regression in P1–P6 suites.
 **Verification:** `tests/p7_feel.spec.mjs` — fps sampling during scripted
 duel, degraded-mode trigger test; manual feel session logged.
 
-## `[ ]` P8 — Integration playtest & MVP acceptance
+## `[x]` P8 — Integration playtest & MVP acceptance
 **Closes:** S-1, S-2, S-3 (final), spec §1.1 as a whole
 
 - The PRD §5 week-4 script, end to end: enter game → learn movement → get

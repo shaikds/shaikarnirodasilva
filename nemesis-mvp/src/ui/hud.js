@@ -67,6 +67,12 @@ const CSS = `
   font: 16px 'Courier New', monospace; color: #eee; margin-top: 3px;
   text-shadow: 0 0 8px rgba(0,0,0,0.9); padding: 0 18vw;
 }
+#hud .goalhint {
+  position: fixed; left: 0; right: 0; top: 60px; text-align: center;
+  font: bold 12px 'Courier New', monospace; color: var(--rival);
+  letter-spacing: 4px; opacity: 0; transition: opacity 0.3s;
+  text-shadow: 0 0 10px rgba(255,77,106,0.7);
+}
 `;
 
 export class Hud {
@@ -90,6 +96,7 @@ export class Hud {
       <div class="combo"></div>
       <div class="announce"></div>
       <div class="reticle"></div>
+      <div class="goalhint"></div>
       <div class="plate"><div class="pname"></div><div class="phbar"><div></div></div></div>`;
     document.body.insertAdjacentHTML('beforeend', '<div class="flash"></div>');
     this.me = null; this.foe = null;
@@ -101,6 +108,7 @@ export class Hud {
       combo: root.querySelector('.combo'),
       announce: root.querySelector('.announce'),
       reticle: root.querySelector('.reticle'),
+      goalhint: root.querySelector('.goalhint'),
       plate: root.querySelector('.plate'),
       plateName: root.querySelector('.plate .pname'),
       plateBar: root.querySelector('.plate .phbar > div'),
@@ -114,6 +122,12 @@ export class Hud {
 
   track(me, foe) { this.me = me; this.foe = foe; }
   trackRig(rig) { this.rig = rig; }
+  goalHintEnabled = true;                      // AC-3.4.5, on by default
+  setGoalHint(text) {
+    if (!this.goalHintEnabled) text = null;
+    this.el.goalhint.textContent = text ? `NEMESIS: ${text}` : '';
+    this.el.goalhint.style.opacity = text ? 1 : 0;
+  }
   flashDamage(amount) {
     this._flashT = Math.min(0.5, this._flashT + amount / 40);
   }

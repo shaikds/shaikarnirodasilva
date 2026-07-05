@@ -183,9 +183,13 @@ const loop = new Loop({
     if (input.consume('debug', 0.1)) debugPanel.toggle();
     debugPanel.update(rdt);
     hud.consume(resolver.events);
+    hud.setGoalHint(
+      rivalAgent.enabled && rivalAgent.currentGoal ? rivalAgent.currentGoal.hud : null
+    );
     hud.update(rdt);
     vfx.update(rdt, loop.simTime);
     landmarks.update(loop.simTime);
+    degrade.check();
     renderer.render(scene, camera);
     statsEl.textContent =
       `fps ${loop.fps.toFixed(0)} · ticks ${loop.ticks}` +
@@ -197,6 +201,35 @@ const loop = new Loop({
 resolver = new Resolver({ loop, rig });
 resolver.on(e => vfx.onResolverEvent(e));
 input.simTime = () => loop.simTime;
+
+// NFR-5 degraded mode: sustained low fps sheds render cost automatically —
+// shadows off, pixel ratio 1, particle density halved. One-way (no thrash).
+const degrade = {
+  auto: true,            // capture/test scripts may pin this off
+  engaged: false,
+  _lowT: 0,
+  _last: null,
+  check() {
+    if (!this.auto || this.engaged) return;
+    // own unclamped wall clock: the render loop's rdt is clamped to 0.1s,
+    // which under-counts exactly when frames are slow — the case we detect
+    const now = performance.now();
+    const dt = this._last == null ? 0 : Math.min((now - this._last) / 1000, 0.5);
+    this._last = now;
+    if (loop.fps < 30) {
+      this._lowT += dt;
+      if (this._lowT > 3) this.engage();
+    } else {
+      this._lowT = 0;
+    }
+  },
+  engage() {
+    this.engaged = true;
+    renderer.shadowMap.enabled = false;
+    renderer.setPixelRatio(1);
+    vfx.density = 0.5;
+  },
+};
 
 // ---------- the rival's mind & identity ----------
 const profile = new PlayerProfile();
@@ -244,6 +277,6 @@ window.__game = {
   zone, player, dummy, rival, dummyBrain, input, rig, controller,
   resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
   manager, bootMode, debugPanel, vfx, landmarks, sun,
-  nav, prompts, flow, macroAgent, taunts,
+  nav, prompts, flow, macroAgent, taunts, degrade,
   setPlayerDriver, step,
 };

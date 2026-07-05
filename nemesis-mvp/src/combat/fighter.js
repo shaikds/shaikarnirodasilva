@@ -184,8 +184,13 @@ export class Fighter {
   }
 
   // ---- incoming hit reactions (resolver calls these) ----
+  // hpFloor > 0 makes death impossible (AC-1.3.5, First Blood): the clamp
+  // must live HERE, where damage lands — clamping a tick later in the flow
+  // races a killing blow, which marks the fighter dead before the clamp
+  // and nothing un-dies a state machine.
+  hpFloor = 0;
   applyDamage(amount) {
-    this.hp = Math.max(0, this.hp - amount);
+    this.hp = Math.max(this.hpFloor, this.hp - amount);
     this.flashT = 0.12;
     if (this.hp <= 0 && this.alive) {
       this.attackType = null; this.phase = null;
