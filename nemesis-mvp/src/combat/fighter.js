@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { MOVE } from '../core/tuning.js';
 import { ATTACKS, DEFENSE, ENERGY, SAIYAN } from './attacks.js';
+import { softDot } from '../fx/textures.js';
 
 export class Fighter {
   constructor({ scene, color = 0x4db8ff, emissive = 0x0a2438, pos = [0, 0, 0], name = 'fighter' }) {
@@ -272,7 +273,7 @@ export class Fighter {
   _setAura(kind) {
     if (!this._aura) {
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-        color: 0xffffff, transparent: true, opacity: 0.22,
+        map: softDot, color: 0xffffff, transparent: true, opacity: 0.22,
         depthWrite: false, blending: THREE.AdditiveBlending,
       }));
       sprite.scale.set(1.7, 2.3, 1);
