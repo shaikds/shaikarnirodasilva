@@ -3,7 +3,7 @@
 // different number, it changes here — never inline in logic.
 
 export const MOVE = {
-  speed: 6.0,            // m/s ground
+  speed: 7.0,            // m/s ground (raised 2026-07-06: free-roam tempo)
   airCtl: 0.85,          // air control multiplier
   gravity: 22,
   jumpV: 8.5,            // ~1.6 m apex

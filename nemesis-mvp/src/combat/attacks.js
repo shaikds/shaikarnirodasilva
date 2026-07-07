@@ -75,8 +75,11 @@ export const SAIYAN = {
   dash: { speed: 22, energyPerS: 22, minEnergy: 8, stopRange: 1.6 },
   surge: {
     max: 100,
-    gainDealt: 0.5,           // meter per point of damage dealt
-    gainTaken: 0.35,          // ...and taken (Saiyans feed on battle)
+    // tuned 2026-07-06: a contested duel (~130 total damage traded) should
+    // reliably contain a transformation arc — the evolving-power fantasy
+    // must happen in play, not only in tests
+    gainDealt: 0.8,           // meter per point of damage dealt
+    gainTaken: 0.6,           // ...and taken (Saiyans feed on battle)
     dmgMult: 1.25,            // AC-7.4.1
     speedMult: 1.15,
     prideGainPerS: 22,        // AC-7.4.2: rival meter while outshone

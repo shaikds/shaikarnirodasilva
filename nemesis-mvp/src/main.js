@@ -17,7 +17,7 @@ import { PlayerBot } from './ai/bots.js';
 import { RivalManager } from './rivalry/rivalManager.js';
 import { DebugPanel } from './ui/debug.js';
 import { VFX } from './fx/vfx.js';
-import { makeSkyTexture } from './fx/textures.js';
+import { makeSkyTexture, softDot } from './fx/textures.js';
 import { Landmarks } from './world/landmarks.js';
 import { Navigation } from './world/navigation.js';
 import { Prompts } from './ui/prompts.js';
@@ -33,6 +33,9 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+// final grade: filmic curve pulls the neons together (minimal-beautiful pass)
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 
 const scene = new THREE.Scene();
 scene.background = makeSkyTexture();
@@ -66,6 +69,17 @@ scene.add(sun.target);
 const zone = new Zone(scene);
 const vfx = new VFX(scene);
 const landmarks = new Landmarks(scene);
+
+// a low blood-moon over the horizon: one sprite, most of the mood
+{
+  const moon = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: softDot, color: 0xff8a7a, transparent: true, opacity: 0.85,
+    fog: false, depthWrite: false,
+  }));
+  moon.scale.set(26, 26, 1);
+  moon.position.set(55, 18, -95);
+  scene.add(moon);
+}
 
 const player = new Fighter({
   scene, name: 'player',
@@ -132,6 +146,13 @@ function trackMovementFx(f) {
     if (Math.floor(f.anim / 180) !== Math.floor((prev.anim ?? f.anim) / 180)) {
       vfx.spawnFootDust({ x: f.pos.x, y: 0.05, z: f.pos.z });
     }
+  }
+  // ki-dash motion trail (FR-7.2 readability: the rush should be seen)
+  if (f.intent.dash && f.state === 'idle' && Math.random() < 0.6) {
+    vfx.spawnChargeSparkle(
+      { x: f.pos.x, y: f.pos.y + 1.0, z: f.pos.z },
+      f.name === 'player' ? 0x9fd8ff : 0xffb26a
+    );
   }
   feet.set(f, { grounded: f.grounded, state: f.state, anim: f.anim });
 }

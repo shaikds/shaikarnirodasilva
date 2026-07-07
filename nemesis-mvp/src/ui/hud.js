@@ -73,6 +73,16 @@ const CSS = `
   letter-spacing: 4px; opacity: 0; transition: opacity 0.3s;
   text-shadow: 0 0 10px rgba(255,77,106,0.7);
 }
+#hud .sg { height: 3px; background: #16162a; border: 1px solid #33334f; margin-top: 2px; }
+#hud .sg > div { height: 100%; background: var(--gold); transition: width 0.2s; }
+#hud .sg.full > div { box-shadow: 0 0 8px var(--gold); }
+#hud .nemdir {
+  position: fixed; width: 0; height: 0; opacity: 0;
+  border-left: 9px solid transparent; border-right: 9px solid transparent;
+  border-bottom: 16px solid var(--rival);
+  filter: drop-shadow(0 0 7px rgba(255,77,106,0.9));
+  transition: opacity 0.25s;
+}
 `;
 
 export class Hud {
@@ -87,6 +97,7 @@ export class Hud {
         <div class="name">YOU</div>
         <div class="hp"><div></div></div>
         <div class="en"><div></div></div>
+        <div class="sg"><div></div></div>
         <div class="powerlvl" style="font-size:10px;letter-spacing:2px;color:var(--gold);margin-top:3px"></div>
       </div>
       <div class="bars foe">
@@ -98,6 +109,7 @@ export class Hud {
       <div class="announce"></div>
       <div class="reticle"></div>
       <div class="goalhint"></div>
+      <div class="nemdir"></div>
       <div class="plate"><div class="pname"></div><div class="phbar"><div></div></div></div>`;
     document.body.insertAdjacentHTML('beforeend', '<div class="flash"></div>');
     this.me = null; this.foe = null;
@@ -111,6 +123,8 @@ export class Hud {
       reticle: root.querySelector('.reticle'),
       goalhint: root.querySelector('.goalhint'),
       powerlvl: root.querySelector('.powerlvl'),
+      sg: root.querySelector('.sg'),
+      nemdir: root.querySelector('.nemdir'),
       plate: root.querySelector('.plate'),
       plateName: root.querySelector('.plate .pname'),
       plateBar: root.querySelector('.plate .phbar > div'),
@@ -219,6 +233,42 @@ export class Hud {
     };
     if (this.me) bar(this.el.me, this.me);
     if (this.foe && this.el.foe.style.display !== 'none') bar(this.el.foe, this.foe);
+
+    // surge meter (AC-7.4.1 made legible): the in-fight evolution arc
+    if (this.me) {
+      const full = this.me.surge;
+      this.el.sg.classList.toggle('full', full);
+      this.el.sg.firstElementChild.style.width =
+        (full ? 100 : (this.me.surgeMeter ?? 0)) + '%';
+    }
+
+    // nemesis direction chevron: never lose your rival (fun > realism)
+    if (this.foe?.alive && this.me && this.me.alive) {
+      const dist = Math.hypot(this.foe.pos.x - this.me.pos.x, this.foe.pos.z - this.me.pos.z);
+      const p = new THREE.Vector3(this.foe.pos.x, this.foe.pos.y + 1.5, this.foe.pos.z)
+        .project(this.camera);
+      const behind = p.z > 1;
+      const sx = (p.x * 0.5 + 0.5) * innerWidth, sy = (-p.y * 0.5 + 0.5) * innerHeight;
+      const onScreen = !behind && sx > 0 && sx < innerWidth && sy > 0 && sy < innerHeight;
+      if (dist > 12 || !onScreen) {
+        // point from screen center toward the (possibly behind-us) target
+        let dx = sx - innerWidth / 2, dy = sy - innerHeight / 2;
+        if (behind) { dx = -dx; dy = -dy; }
+        const len = Math.hypot(dx, dy) || 1;
+        const m = 46;   // edge margin
+        const ex = innerWidth / 2 + dx / len * (innerWidth / 2 - m);
+        const ey = innerHeight / 2 + dy / len * (innerHeight / 2 - m);
+        this.el.nemdir.style.left = Math.max(m, Math.min(innerWidth - m, ex)) + 'px';
+        this.el.nemdir.style.top = Math.max(m, Math.min(innerHeight - m, ey)) + 'px';
+        this.el.nemdir.style.transform =
+          `translate(-50%,-50%) rotate(${Math.atan2(dy, dx) * 180 / Math.PI + 90}deg)`;
+        this.el.nemdir.style.opacity = 0.85;
+      } else {
+        this.el.nemdir.style.opacity = 0;
+      }
+    } else {
+      this.el.nemdir.style.opacity = 0;
+    }
 
     // floating numbers: project world -> screen
     for (const n of this.numbers) {

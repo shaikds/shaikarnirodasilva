@@ -139,7 +139,9 @@ export class GameFlow {
         c.rivalAgent.enabled = true;
         this.walker.stop();
         c.macroAgent?.walker.stop();
-        c.hud.showFoe(c.manager.doc.name);
+        c.prompts.hide();
+        this._awakenT = 0;
+        c.hud.showFoe(`${c.manager.doc.name} · LV${c.manager.doc.level}`);
         c.hud.announce(`${c.manager.doc.name} — LVL ${c.manager.doc.level}`, 2000);
         this._saidLowHp = { player: false, rival: false };
         this._encounterT = 0;
@@ -243,6 +245,17 @@ export class GameFlow {
       }
       case 'freeRoam': {
         this._freeRoamT += dt;
+        // one-time new-powers prompt after the awakening (goal: ready to play)
+        if (this._awaken) {
+          this._awaken = false;
+          this._awakenT = 8;
+          c.prompts.show('POWER AWAKENED',
+            'F fly · Space/C rise & dive · hold Q to RUSH · I ki blast', true);
+        }
+        if (this._awakenT > 0) {
+          this._awakenT -= dt;
+          if (this._awakenT <= 0) c.prompts.hide();
+        }
         const macroEvt = c.macroAgent?.update(dt, c.loop.simTime);
         if (macroEvt === 'spring') { this._springAmbush(); break; }
         if (this._freeRoamT > 2 && c.player.alive && c.rival.alive &&
@@ -327,7 +340,8 @@ export class GameFlow {
     // the first defeat awakens flight (AC-7.1.2)
     if (!this.ctx.player.canFly) {
       this.ctx.player.canFly = true;
-      c.hud.subtitle('AWAKENING', 'Something burns in you now — press F to FLY. Hold Q to rush. I to fire ki.');
+      c.hud.subtitle('AWAKENING', 'Something burns in you now.');
+      this._awaken = true;   // freeRoam shows the new-powers prompt
     }
     // restore the rival to its real stats
     if (this._fbSaved) {
