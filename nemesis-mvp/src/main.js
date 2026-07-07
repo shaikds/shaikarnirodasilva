@@ -25,6 +25,7 @@ import { GameFlow } from './core/states.js';
 import { MacroAgent } from './ai/macroAgent.js';
 import { TauntEngine } from './rivalry/taunts.js';
 import { ATTACKS } from './combat/attacks.js';
+import { SFX } from './fx/sfx.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -147,14 +148,16 @@ function trackMovementFx(f) {
       vfx.spawnFootDust({ x: f.pos.x, y: 0.05, z: f.pos.z });
     }
   }
-  // ki-dash motion trail (FR-7.2 readability: the rush should be seen)
+  // ki-dash motion trail (FR-7.2 readability: the rush should be seen+heard)
   if (f.intent.dash && f.state === 'idle' && Math.random() < 0.6) {
     vfx.spawnChargeSparkle(
       { x: f.pos.x, y: f.pos.y + 1.0, z: f.pos.z },
       f.name === 'player' ? 0x9fd8ff : 0xffb26a
     );
   }
-  feet.set(f, { grounded: f.grounded, state: f.state, anim: f.anim });
+  if (!prev.dash && f.intent.dash && f.state === 'idle') sfx.dash();
+  if (!prev.flying && f.flying) sfx.fly();
+  feet.set(f, { grounded: f.grounded, state: f.state, anim: f.anim, dash: f.intent.dash, flying: f.flying });
 }
 
 const loop = new Loop({
@@ -173,10 +176,10 @@ const loop = new Loop({
       // your shots go where you're LOOKING: lock-on first, else the live foe
       const playerTarget = (rig.lockTarget?.alive && rig.lockTarget) ||
         (rival.alive && rivalAgent.enabled ? rival : dummy);
-      if (player.pendingShot) { player.pendingShot = false; projectiles.fire(player, playerTarget); }
-      if (rival.pendingShot) { rival.pendingShot = false; projectiles.fire(rival, player); }
-      if (player.pendingKi) { player.pendingKi = false; projectiles.fire(player, playerTarget, ATTACKS.ki); }
-      if (rival.pendingKi) { rival.pendingKi = false; projectiles.fire(rival, player, ATTACKS.ki); }
+      if (player.pendingShot) { player.pendingShot = false; player.pendingSpecialSfx = true; projectiles.fire(player, playerTarget); }
+      if (rival.pendingShot) { rival.pendingShot = false; rival.pendingSpecialSfx = true; projectiles.fire(rival, player); }
+      if (player.pendingKi) { player.pendingKi = false; player.pendingKiSfx = true; projectiles.fire(player, playerTarget, ATTACKS.ki); }
+      if (rival.pendingKi) { rival.pendingKi = false; rival.pendingKiSfx = true; projectiles.fire(rival, player, ATTACKS.ki); }
       projectiles.update(dt, [player, dummy, rival]);
       resolver.meleePair(player, dummy);
       resolver.meleePair(dummy, player);
@@ -197,7 +200,10 @@ const loop = new Loop({
           { color: 0xffd24d, count: 30, speed: [3, 8], size: [0.1, 0.3], life: [0.4, 0.9], upBias: 1.4 });
         loop.slowmo(300, 0.3);
         rig.shake(0.2);
+        sfx.transform();
       }
+      if (f.pendingKiSfx) { f.pendingKiSfx = false; sfx.ki(); }
+      if (f.pendingSpecialSfx) { f.pendingSpecialSfx = false; sfx.special(); }
     }
     profiler.update(dt, loop.simTime);
     // charge-up sparkle while winding up a special
@@ -240,6 +246,13 @@ const loop = new Loop({
 });
 resolver = new Resolver({ loop, rig });
 resolver.on(e => vfx.onResolverEvent(e));
+// procedural audio: every combat beat has a voice (zero assets)
+const sfx = new SFX();
+resolver.on(e => {
+  if (e.type === 'hit') { sfx.hit(e.kind); if (e.killed) sfx.death(); }
+  else if (e.type === 'blocked') sfx.blocked();
+  else if (e.type === 'parried') sfx.parried();
+});
 input.simTime = () => loop.simTime;
 
 // NFR-5 degraded mode: sustained low fps sheds render cost automatically —
@@ -301,7 +314,12 @@ const flow = new GameFlow({
   hud, prompts, zone, nav, resolver, rig, loop, bootMode,
   macroAgent, taunts,
 });
+// rival speech gets a voice blip
+const _subtitle = hud.subtitle.bind(hud);
+hud.subtitle = (who, text, ms) => { sfx.taunt(); _subtitle(who, text, ms); };
 flow.boot();
+// title beat: a first-boot moment before the training prompt takes over
+if (bootMode === 'created') hud.announce('N E M E S I S', 2600);
 
 loop.start();
 
@@ -320,6 +338,6 @@ window.__game = {
   zone, player, dummy, rival, dummyBrain, input, rig, controller,
   resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
   manager, bootMode, debugPanel, vfx, landmarks, sun,
-  nav, prompts, flow, macroAgent, taunts, degrade,
+  nav, prompts, flow, macroAgent, taunts, degrade, sfx,
   setPlayerDriver, step,
 };

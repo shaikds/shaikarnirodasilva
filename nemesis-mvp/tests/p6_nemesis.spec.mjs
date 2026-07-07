@@ -143,9 +143,15 @@ const ambush = await page.evaluate(() => {
   // it lies in wait at the corridor MOUTH (the chokeN waypoint), not mid-corridor
   const [nx, nz] = g.nav.nodes.chokeN;
   const rivalStill = { x: g.rival.pos.x, z: g.rival.pos.z };
-  // the player wanders into the trap
+  // the player wanders into the trap; sample energy AT the spring tick —
+  // the rival can now spend the bonus within milliseconds (ki, dash)
   g.player.pos.set(g.rival.pos.x + 3, 0, g.rival.pos.z + 3);
   g.player.prevPos.copy(g.player.pos);
+  let energyAtSpring = null;
+  for (let i = 0; i < 240 && energyAtSpring == null; i++) {
+    g.step(1);
+    if (g.flow.state === 'encounter') energyAtSpring = g.rival.energy;
+  }
   g.step(10);
   g.macroAgent.forced = null;
   return {
@@ -153,10 +159,9 @@ const ambush = await page.evaluate(() => {
     nearChoke: Math.hypot(rivalStill.x - nx, rivalStill.z - nz) < 4,
     state: g.flow.state,
     sprung: g.manager.ledger.has('ambush_sprung'),
-    // the bonus either sits charged OR was already spent on an opening
-    // special — both prove it was granted
-    firstStrike: g.rival.energy >= 99 ||
-                 g.rival.trace.some(e => e.type === 'special'),
+    // >=90 at the spring tick: the grant fired (baseline after the walk +
+    // wait sits far lower); allows one same-tick ki blast
+    firstStrike: energyAtSpring != null && energyAtSpring >= 90,
     playerJumped: g.player.trace.some(e => e.state === 'stagger'),
   };
 });

@@ -93,6 +93,11 @@ export class Resolver {
       if (kind === 'light') def.flinch();
       else def.stagger(DEFENSE.heavyStagger);        // AC-4.6.5
       def.knockback(dir.x, dir.z, a.knock);
+      if (a.launcher) {                              // heavy LAUNCHES: the
+        def.vy = Math.max(def.vy, 3.6);              // Sparking smash->pursuit loop
+        def.grounded = false;
+        def.flying = false;
+      }
     }
     this.loop.hitstop(FEEL.hitstopMs[kind]);
     this.rig?.shake(FEEL.shake[kind]);

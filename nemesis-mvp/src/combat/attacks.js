@@ -20,9 +20,13 @@ export const ATTACKS = {
   },
   heavy: {    // commit-only: no cancels during windup/active (AC-4.6.2)
     kind: 'heavy', dmg: 14, windup: 0.33, active: 0.11, recover: 0.34,
-    range: 2.2, arcDeg: 90, knock: 3.0, lunge: 1.0, track: 1.05,
+    // launcher: the FUN is the vertical pop (smash -> Q-dash pursuit).
+    // Horizontal knock stays moderate — 8.0 broke pacing AND balance
+    // (aggressive players chained launches into 17/20 win rates; duels
+    // stalled past the tick cap from constant separation). 2026-07-06.
+    range: 2.2, arcDeg: 90, knock: 4.5, lunge: 1.0, track: 1.05,
     energyGain: 18, chain: null, cancelRecover: ['block'],
-    blockBreak: true,
+    blockBreak: true, launcher: true,
   },
   special: {  // P3: fires a projectile at windup end (FR-4.4)
     kind: 'special', dmg: 18, windup: 0.48, active: 0.06, recover: 0.28,

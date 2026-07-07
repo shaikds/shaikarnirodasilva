@@ -473,6 +473,18 @@ export class Fighter {
   syncMesh(alpha) {
     this.mesh.position.lerpVectors(this.prevPos, this.pos, alpha);
     this.mesh.rotation.y = this.yaw;
+    // life: idle breathing on the ground, hover bob in the air
+    // (render-only clock — this.anim is sim state, not ours to touch)
+    this._breath = (this._breath ?? 0) + 0.016;
+    if (this.alive) {
+      if (this.flying) {
+        this.mesh.position.y += Math.sin(this._breath * 2.2) * 0.06;
+      } else if (this.state === 'idle') {
+        this.body.scale.y = 1 + Math.sin(this._breath * 1.7) * 0.012;
+      } else {
+        this.body.scale.y = 1;
+      }
+    }
     this.mat.emissive.setHex(this.flashT > 0 ? 0x664444 : this._baseEmissive ?? this.mat.emissive.getHex());
     if (this._baseEmissive == null) this._baseEmissive = this.mat.emissive.getHex();
 
