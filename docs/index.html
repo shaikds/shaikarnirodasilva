@@ -1,0 +1,565 @@
+<title>אייג'נט אוטו-ריסרץ' לשיווק ומודעות — מדריך מלא</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #F3F6F5;
+    --surface: #FFFFFF;
+    --ink: #1B2622;
+    --muted: #5B6D66;
+    --accent: #0E7A6C;
+    --accent-ink: #0A5A50;
+    --accent-soft: #E1EFEC;
+    --warn: #A85410;
+    --warn-soft: #F7ECE1;
+    --line: #D7E0DC;
+    --code-bg: #EDF2F0;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121917;
+      --surface: #1A2320;
+      --ink: #E5ECE9;
+      --muted: #97A8A1;
+      --accent: #4CC2B0;
+      --accent-ink: #7AD6C8;
+      --accent-soft: #1E3530;
+      --warn: #E2924E;
+      --warn-soft: #33271B;
+      --line: #2B3733;
+      --code-bg: #141C19;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F3F6F5; --surface: #FFFFFF; --ink: #1B2622; --muted: #5B6D66;
+    --accent: #0E7A6C; --accent-ink: #0A5A50; --accent-soft: #E1EFEC;
+    --warn: #A85410; --warn-soft: #F7ECE1; --line: #D7E0DC; --code-bg: #EDF2F0;
+  }
+  :root[data-theme="dark"] {
+    --bg: #121917; --surface: #1A2320; --ink: #E5ECE9; --muted: #97A8A1;
+    --accent: #4CC2B0; --accent-ink: #7AD6C8; --accent-soft: #1E3530;
+    --warn: #E2924E; --warn-soft: #33271B; --line: #2B3733; --code-bg: #141C19;
+  }
+
+  * { box-sizing: border-box; }
+  html { overflow-x: hidden; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.75;
+    font-size: 1.04rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 5rem;
+  }
+
+  /* ---------- header ---------- */
+  .eyebrow {
+    display: inline-block;
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    border-radius: 999px;
+    padding: .25rem .9rem;
+    margin-bottom: 1.1rem;
+  }
+  h1 {
+    font-size: clamp(1.7rem, 4.5vw, 2.5rem);
+    line-height: 1.25;
+    margin: 0 0 .8rem;
+    font-weight: 800;
+    text-wrap: balance;
+  }
+  .lede {
+    font-size: 1.13rem;
+    color: var(--muted);
+    max-width: 42rem;
+    margin: 0 0 1.4rem;
+    text-wrap: pretty;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; }
+  .chip {
+    font-size: .82rem; font-weight: 600;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: .18rem .8rem;
+    color: var(--muted);
+  }
+
+  /* ---------- TOC ---------- */
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.2rem 1.5rem;
+    margin: 2.2rem 0 0;
+  }
+  nav.toc strong { display: block; margin-bottom: .5rem; font-size: .95rem; }
+  nav.toc ol { margin: 0; padding-inline-start: 1.3rem; }
+  nav.toc li { margin: .3rem 0; }
+  nav.toc a { color: var(--accent-ink); text-decoration: none; font-weight: 600; }
+  nav.toc a:hover, nav.toc a:focus-visible { text-decoration: underline; }
+
+  /* ---------- sections ---------- */
+  section { margin-top: 3.2rem; }
+  h2 {
+    font-size: 1.45rem;
+    font-weight: 800;
+    margin: 0 0 1rem;
+    padding-top: .6rem;
+    border-top: 3px solid var(--accent);
+    display: flex;
+    gap: .6rem;
+    align-items: baseline;
+    text-wrap: balance;
+  }
+  h2 .num {
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    font-size: 1.1rem;
+  }
+  h3 { font-size: 1.12rem; font-weight: 700; margin: 1.8rem 0 .5rem; }
+  p { margin: .7rem 0; max-width: 44rem; }
+  ul, ol { padding-inline-start: 1.4rem; max-width: 44rem; }
+  li { margin: .35rem 0; }
+  strong { font-weight: 700; }
+  a { color: var(--accent-ink); }
+
+  .callout {
+    background: var(--accent-soft);
+    border-radius: 12px;
+    padding: 1rem 1.3rem;
+    margin: 1.2rem 0;
+    max-width: 44rem;
+  }
+  .callout.warn { background: var(--warn-soft); }
+  .callout p { margin: .3rem 0; }
+  .callout .t { font-weight: 800; font-size: .92rem; letter-spacing: .02em; }
+  .callout.warn .t { color: var(--warn); }
+  .callout:not(.warn) .t { color: var(--accent-ink); }
+
+  /* ---------- principle cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .9rem; margin: 1.3rem 0; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.1rem 1.25rem;
+  }
+  .card h4 { margin: 0 0 .4rem; font-size: 1rem; color: var(--accent-ink); }
+  .card p { margin: 0; font-size: .93rem; color: var(--muted); }
+
+  /* ---------- loop diagram ---------- */
+  .loop { display: flex; flex-wrap: wrap; gap: .55rem; align-items: stretch; margin: 1.4rem 0; }
+  .loop .step {
+    flex: 1 1 8.5rem;
+    min-width: 8.5rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: .8rem .9rem;
+  }
+  .loop .step b { display: block; font-size: .95rem; color: var(--accent-ink); margin-bottom: .15rem; }
+  .loop .step span { font-size: .85rem; color: var(--muted); display: block; line-height: 1.5; }
+  .loop .step .k { font-size: .72rem; font-weight: 700; letter-spacing: .06em; color: var(--muted); display: block; margin-bottom: .3rem; }
+  .loopback {
+    margin: 0 0 1.4rem;
+    font-size: .88rem;
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    border-radius: 10px;
+    padding: .55rem 1rem;
+    max-width: 44rem;
+  }
+
+  /* ---------- tables ---------- */
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin: 1.1rem 0; }
+  table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: .93rem; }
+  th, td { padding: .6rem .85rem; text-align: right; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    font-size: .8rem; letter-spacing: .04em; color: var(--muted);
+    background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+    position: sticky; top: 0;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, .mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-variant-numeric: tabular-nums; font-size: .88rem; white-space: nowrap; }
+  .flag { color: var(--warn); font-weight: 600; }
+
+  /* ---------- code / tree ---------- */
+  pre {
+    direction: ltr;
+    text-align: left;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: .84rem;
+    line-height: 1.6;
+    margin: 1.1rem 0;
+  }
+  code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: .88em; background: var(--code-bg); border-radius: 6px; padding: .1em .35em; direction: ltr; unicode-bidi: embed; }
+  pre code { background: none; padding: 0; }
+
+  /* ---------- platform blocks ---------- */
+  .platform { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 1.2rem 1.4rem; margin: 1rem 0; }
+  .platform h3 { margin-top: 0; display: flex; align-items: center; gap: .55rem; }
+  .platform .tag { font-size: .72rem; font-weight: 700; letter-spacing: .05em; background: var(--accent-soft); color: var(--accent-ink); border-radius: 6px; padding: .12rem .5rem; }
+  .platform p, .platform ul { font-size: .95rem; }
+
+  .steps { counter-reset: st; list-style: none; padding: 0; max-width: 44rem; }
+  .steps > li { counter-increment: st; position: relative; padding-inline-start: 2.6rem; margin: 1rem 0; }
+  .steps > li::before {
+    content: counter(st);
+    position: absolute; inset-inline-start: 0; top: .1rem;
+    width: 1.8rem; height: 1.8rem; border-radius: 50%;
+    background: var(--accent); color: var(--bg);
+    display: grid; place-items: center;
+    font-weight: 800; font-size: .95rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .steps b.st { display: block; margin-bottom: .1rem; }
+
+  footer { margin-top: 4rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+  footer p { max-width: none; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="page" dir="rtl" lang="he">
+
+  <header>
+    <span class="eyebrow">טמפלייט + מדריך הפעלה</span>
+    <h1>אייג'נט אוטו-ריסרץ' לשיווק ומודעות שמשתפר מעצמו — לכל עסק בנפרד</h1>
+    <p class="lede">
+      תבנית קבצים מוכנה שהופכת מודל שפה לאייג'נט שיווק ייעודי: עסק אחד = אייג'נט אחד עם זיכרון משלו,
+      וכל פלטפורמת פרסום מנוהלת כמודול נפרד עם המדדים והכללים שלה.
+    </p>
+    <div class="chips">
+      <span class="chip">Meta / Facebook</span>
+      <span class="chip">Instagram</span>
+      <span class="chip">Google Ads</span>
+      <span class="chip">TikTok</span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="תוכן העניינים">
+    <strong>תוכן העניינים</strong>
+    <ol>
+      <li><a href="#idea">הרעיון: שלוש הפרדות שעושות את כל ההבדל</a></li>
+      <li><a href="#structure">מבנה הקבצים ומה כל קובץ עושה</a></li>
+      <li><a href="#loop">לולאת השיפור העצמי — איך האייג'נט לומד</a></li>
+      <li><a href="#platforms">המודולים הפלטפורמיים ומה מייחד כל אחד</a></li>
+      <li><a href="#metrics">המדדים: מה מודדים, למה דווקא אותם, ורף ייחוס 2026</a></li>
+      <li><a href="#howto">מדריך הפעלה צעד-אחר-צעד</a></li>
+      <li><a href="#choices">הסבר הבחירות: מערכת, מטריקות ועיצוב המסמך</a></li>
+    </ol>
+  </nav>
+
+  <!-- ============ 1 ============ -->
+  <section id="idea">
+    <h2><span class="num">1</span>הרעיון: שלוש הפרדות שעושות את כל ההבדל</h2>
+    <p>
+      רוב הניסיונות להשתמש ב-AI לניהול מודעות נכשלים מסיבה אחת: שואלים מודל כללי שאלה כללית,
+      ומקבלים עצות גנריות שלא זוכרות מה קרה בעסק הזה בשבוע שעבר. התבנית פותרת את זה בשלוש הפרדות מבניות:
+    </p>
+    <div class="cards">
+      <div class="card">
+        <h4>עסק = תיקייה = אייג'נט</h4>
+        <p>לכל עסק עותק נפרד של התבנית. הזיכרון, הניסויים והמסקנות של מספרה בחיפה לא מתערבבים עם חנות איקומרס — כי מה שעובד לאחד הורס את השני.</p>
+      </div>
+      <div class="card">
+        <h4>פלטפורמה = מודול</h4>
+        <p>‎CTR של ‎4% בגוגל הוא בינוני; בטיקטוק הוא פנומנלי. לכל פלטפורמה קובץ נפרד עם מדדים, רף ייחוס ועץ אבחון משלה, כדי שהשוואות יהיו תמיד תפוחים-לתפוחים.</p>
+      </div>
+      <div class="card">
+        <h4>שיפור עצמי = זיכרון כתוב</h4>
+        <p>מודל שפה לא זוכר בין שיחות. לכן הלמידה חיה בקבצים: כל ניסוי מסתיים בשורת תובנה, וכל ריצה מתחילה בקריאת התובנות. הקבצים גדלים — האייג'נט משתפר.</p>
+      </div>
+    </div>
+    <div class="callout">
+      <p class="t">למה זיכרון בקבצים ולא "מודל שמתאמן"?</p>
+      <p>
+        אימון מחדש של מודל לכל עסק קטן הוא יקר, איטי ובלתי שקוף. זיכרון טקסטואלי הוא שקוף (רואים בדיוק מה האייג'נט "מאמין"),
+        ניתן לתיקון ידני, עובר בין מודלים (מחליפים מודל — הידע נשאר), וניתן לגיבוי בגיט. זו אותה גישה שבה עובדים קבצי
+        <code>CLAUDE.md</code> בפיתוח תוכנה, מיושמת על שיווק.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 2 ============ -->
+  <section id="structure">
+    <h2><span class="num">2</span>מבנה הקבצים ומה כל קובץ עושה</h2>
+    <p>התבנית יושבת בריפו תחת <code>marketing-agent-template/</code>. עסק חדש = עותק חדש שלה:</p>
+<pre><code>marketing-agent-template/
+├── AGENT.md                       # the agent's operating manual
+├── business-profile.md            # the only file you fill by hand
+├── platforms/
+│   ├── meta.md
+│   ├── instagram.md
+│   ├── google.md
+│   └── tiktok.md
+├── memory/
+│   ├── insights.md                # accumulated learnings (the "brain")
+│   ├── experiments-log.md         # one variable per experiment
+│   ├── weekly-report-template.md
+│   └── reports/                   # one report per week
+└── metrics/
+    └── kpi-definitions.md         # funnel-ordered KPIs + 2026 benchmarks</code></pre>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>קובץ</th><th>תפקיד</th><th>מי כותב בו</th></tr></thead>
+        <tbody>
+          <tr><td><code>AGENT.md</code></td><td>ה"חוקה" של האייג'נט: סדר קריאה מחייב, הלולאה השבועית, כללי בטיחות (שינוי אחד לניסוי, מגבלת הזזת תקציב, מינימום דאטה לפני החלטה)</td><td>קבוע — לא נוגעים</td></tr>
+          <tr><td><code>business-profile.md</code></td><td>מי העסק, קהל היעד, וכלכלת היחידה: AOV, שיעור סגירה, LTV, ו-CPA מקסימלי כלכלי</td><td>אתם, פעם אחת</td></tr>
+          <tr><td><code>platforms/*.md</code></td><td>מודול לכל פלטפורמה: מדדי ליבה, דגלים אדומים, עץ אבחון, ו-Backlog ניסויים התחלתי</td><td>האייג'נט מוסיף תובנות פלטפורמיות</td></tr>
+          <tr><td><code>memory/insights.md</code></td><td>מנגנון ההשתפרות — כללים שנלמדו, כל אחד עם ראיה ורמת ביטחון</td><td>האייג'נט, בכל סיום ניסוי</td></tr>
+          <tr><td><code>memory/experiments-log.md</code></td><td>יומן ניסויים: השערה ← שינוי יחיד ← מדד הצלחה ← דדליין ← תוצאה</td><td>האייג'נט</td></tr>
+          <tr><td><code>memory/reports/</code></td><td>דוח שבועי לכל פלטפורמה — נהיה עם הזמן העוגן החשוב ביותר להשוואה</td><td>האייג'נט</td></tr>
+          <tr><td><code>metrics/kpi-definitions.md</code></td><td>הגדרות המדדים מסודרות לפי שלבי המשפך, ורף ייחוס ענפי לנקודת פתיחה</td><td>קבוע — מתעדכן פעם בשנה</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout warn">
+      <p class="t">הקובץ היחיד שחובה למלא: business-profile.md</p>
+      <p>
+        ובתוכו, החלק הקריטי הוא <strong>כלכלת היחידה</strong>. בלי CPA מקסימלי כלכלי, "לשפר את הקמפיין" הוא משפט חסר משמעות —
+        אי אפשר לדעת אם ליד ב-90 ₪ הוא הצלחה או הפסד. זה הנתון שממנו נגזרות כל ההחלטות.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 3 ============ -->
+  <section id="loop">
+    <h2><span class="num">3</span>לולאת השיפור העצמי — איך האייג'נט לומד</h2>
+    <p>
+      האייג'נט רץ פעם בשבוע (תדירות שבועית — כי פחות מזה אין מספיק דאטה להחלטה, ויותר מזה מגיבים לרעש).
+      בכל ריצה, לכל פלטפורמה בנפרד, הוא מבצע חמישה שלבים:
+    </p>
+    <div class="loop">
+      <div class="step"><span class="k">שלב 1</span><b>איסוף</b><span>קליטת נתוני השבוע מהפלטפורמה ושמירת דוח מסודר</span></div>
+      <div class="step"><span class="k">שלב 2</span><b>השוואה</b><span>כל מדד מול שלושה עוגנים: העבר של העסק ← היעד שהוגדר ← הבנצ'מארק הענפי</span></div>
+      <div class="step"><span class="k">שלב 3</span><b>אבחון</b><span>עץ ההחלטה של הפלטפורמה מתרגם פער במדד לגורם שורש אחד</span></div>
+      <div class="step"><span class="k">שלב 4</span><b>ניסוי</b><span>ניסוי אחד ממוקד: השערה, שינוי יחיד, מדד הצלחה, דדליין</span></div>
+      <div class="step"><span class="k">שלב 5</span><b>למידה</b><span>התוצאה נכתבת כתובנה עם רמת ביטחון ב-insights.md</span></div>
+    </div>
+    <p class="loopback">↩ שלב 5 מזין את שלב 2 של השבוע הבא — זה מה שסוגר את הלולאה והופך את האייג'נט למשתפר, לא רק למגיב.</p>
+
+    <h3>שלושת העוגנים — ולמה בסדר הזה</h3>
+    <ol>
+      <li><strong>ביצועי העבר של העסק עצמו</strong> — העוגן החזק ביותר: אותו עסק, אותו קהל, אותה עונתיות. בשבועות הראשונים הוא לא קיים, ולכן:</li>
+      <li><strong>היעד מהפרופיל העסקי</strong> — מה שהעסק צריך כלכלית (CPA מקסימלי), גם אם הענף חולם על פחות.</li>
+      <li><strong>בנצ'מארק ענפי</strong> — העוגן החלש ביותר (ממוצע עולמי, בדולרים, חוצה ענפים) — משמש רק כרשת ביטחון עד שנצבר עבר.</li>
+    </ol>
+
+    <h3>מנגנון רמות הביטחון</h3>
+    <p>
+      תובנה חדשה נכנסת ברמת ביטחון <em>נמוכה</em>. אם ניסוי נוסף מאשש אותה — היא עולה ל<em>בינונית</em> ואז ל<em>גבוהה</em>,
+      ומרגע זה היא הופכת ל"הנחת בסיס" שהאייג'נט לא בודק מחדש כל שבוע. תובנה שהופרכה לא נמחקת אלא מסומנת כמופרכת —
+      כדי שהאייג'נט לא ינסה אותה שוב בעוד חצי שנה. זה ההבדל בין זיכרון לבין לוג.
+    </p>
+    <div class="callout">
+      <p class="t">כללי הבטיחות המובנים ב-AGENT.md</p>
+      <p>
+        משתנה אחד לניסוי (אחרת אי אפשר לייחס תוצאה לסיבה) · עד ‎20% הזזת תקציב בהחלטה אחת ללא אישור אנושי ·
+        אין כיבוי קמפיין עם פחות מ-7 ימי דאטה או 1,000 חשיפות · כל המלצה מצטטת את המספר והעוגן שעליהם היא נשענת.
+        הכללים האלה הם מה שמאפשר לתת לאייג'נט אוטונומיה בלי לסכן תקציב.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 4 ============ -->
+  <section id="platforms">
+    <h2><span class="num">4</span>המודולים הפלטפורמיים ומה מייחד כל אחד</h2>
+    <p>
+      כל מודול עונה על אותן שלוש שאלות — מה למדוד, מתי להידלק, ומה לבדוק קודם — אבל התשובות שונות מהותית,
+      וזו בדיוק הסיבה שהם קבצים נפרדים:
+    </p>
+
+    <div class="platform">
+      <h3>Meta (Facebook) <span class="tag">platforms/meta.md</span></h3>
+      <p>
+        פלטפורמת הביניים: קהל רחב, מחיר סביר, ומערכת למידה אוטומטית חזקה. המודול בנוי סביב עץ אבחון של ארבע תחנות —
+        CPM (קהל) ← CTR (קריאייטיב) ← CVR (דף נחיתה) ← ROAS (כלכלה) — ומדד ה-<strong>Frequency</strong> כגלאי שחיקת קהל:
+        מעל ‎3.5 חשיפות לאדם בשבוע, הבעיה כמעט תמיד רענון קריאייטיב ולא תקציב.
+      </p>
+    </div>
+
+    <div class="platform">
+      <h3>Instagram <span class="tag">platforms/instagram.md</span></h3>
+      <p>
+        רצה טכנית דרך Ads Manager של Meta, אבל הופרדה למודול משלה בכוונה: Reels שולט, הצפייה בלי סאונד, והקליק תמיד ממובייל.
+        לכן נוספו לה מדדי וידאו ייעודיים — <strong>Hook Rate</strong> (צפיות 3 שניות ÷ חשיפות) ו-<strong>Hold Rate</strong> —
+        שמאבחנים את הפתיח בנפרד מגוף הווידאו. בלעדיהם, "CTR נמוך" לא אומר לך אם הבעיה בפריים הראשון או ב-CTA.
+      </p>
+    </div>
+
+    <div class="platform">
+      <h3>Google Ads (חיפוש) <span class="tag">platforms/google.md</span></h3>
+      <p>
+        ההפך הגמור מהרשתות החברתיות: המשתמש כבר מחפש פתרון. לכן ה-CTR הנורמלי גבוה פי 2–4, ה-CPC יקר פי כמה,
+        והמנופים שונים — <strong>Quality Score</strong>, התאמת מודעה למילת מפתח, ודוח <strong>Search Terms</strong> שבועי
+        להוספת מילים שליליות. הכלל הראשון במודול: לוודא שמעקב ההמרות תקין לפני כל מסקנה — מדידה שבורה מייתרת את כל השאר.
+      </p>
+    </div>
+
+    <div class="platform">
+      <h3>TikTok <span class="tag">platforms/tiktok.md</span></h3>
+      <p>
+        כאן הקריאייטיב <em>הוא</em> הטירגוט — האלגוריתם מפיץ לפי מי שמגיב לווידאו. לכן המודול מודד קצב ייצור ושחיקת קריאייטיב
+        (וידאו "מת" תוך שבוע–שבועיים) במקום דיוק קהלים, ומגדיר ש-CTR של ‎0.6%–1.5% הוא נורמלי ולא כשל.
+        ניסוי חובה מובנה: <strong>Spark Ads</strong> — יקרות יותר לקליק אך ממירות משמעותית טוב יותר ברוב המקרים.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 5 ============ -->
+  <section id="metrics">
+    <h2><span class="num">5</span>המדדים: מה מודדים, למה דווקא אותם, ורף ייחוס 2026</h2>
+    <p>
+      המדדים נבחרו וסודרו לפי <strong>שלבי המשפך</strong>, מסיבה אבחונית: כל שלב מבודד מנוף אחר.
+      כשמדד חורג, מתקנים את המנוף של השלב שלו — לא מנחשים.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>שלב במשפך</th><th>מדד</th><th>נוסחה</th><th>איזה מנוף הוא מאבחן</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="2"><strong>חשיפה</strong><br>קונים עיניים?</td><td>CPM</td><td class="num">Cost ÷ (Impressions ÷ 1000)</td><td>מחיר תשומת הלב — מזנק כשהקהל שחוק או התחרות עלתה</td></tr>
+          <tr><td>Frequency</td><td class="num">Impressions ÷ Reach</td><td>שחיקת קהל — מעל ‎~3 בקהל קר שורפים כסף על אותם אנשים</td></tr>
+          <tr><td rowspan="3"><strong>עניין</strong><br>הקריאייטיב עובד?</td><td>CTR</td><td class="num">Clicks ÷ Impressions</td><td>המדד הישיר היחיד לאיכות מודעה מול קהל</td></tr>
+          <tr><td>Hook Rate</td><td class="num">3s Views ÷ Impressions</td><td>מבודד את הפתיח של הווידאו משאר הווידאו</td></tr>
+          <tr><td>CPC</td><td class="num">Cost ÷ Clicks</td><td>נגזרת של CTR ו-CPM — עוקבים, לא "מטפלים" בו ישירות</td></tr>
+          <tr><td rowspan="2"><strong>המרה</strong><br>מה שאחרי הקליק עובד?</td><td>CVR</td><td class="num">Conversions ÷ Clicks</td><td>מבודד את דף הנחיתה וההצעה מהמודעה עצמה</td></tr>
+          <tr><td>CPA</td><td class="num">Cost ÷ Conversions</td><td>המספר שמושווה ל-CPA המקסימלי הכלכלי מהפרופיל</td></tr>
+          <tr><td rowspan="3"><strong>כלכלה</strong><br>עסק או תחביב?</td><td>ROAS</td><td class="num">Revenue ÷ Ad Spend</td><td>רף הרווחיות נגזר מהמרג'ין של העסק, לא מ"מעל 1"</td></tr>
+          <tr><td>CAC</td><td class="num">Total Mktg Cost ÷ New Customers</td><td>רחב מ-CPA — כולל עלויות מעבר למדיה</td></tr>
+          <tr><td>LTV:CAC</td><td class="num">LTV ÷ CAC</td><td>מתחת ל-‎3:1 אין בדרך כלל הצדקה להגדיל תקציב</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>למה CPC ו-ROAS הם לא "מדדי פעולה"</h3>
+    <p>
+      שני מדדים שמפתה לרדוף אחריהם ישירות — ובכוונה הוגדרו כנגזרות בלבד: <strong>CPC</strong> הוא תוצאה של CTR ו-CPM,
+      ולכן "להוריד CPC" מתורגם תמיד לשיפור קריאייטיב או קהל. <strong>ROAS</strong> מאוחר מדי במשפך בשביל אבחון יומיומי —
+      הוא קובע <em>אם</em> להגדיל תקציב, לא <em>מה</em> לתקן. הפרדה זו מונעת את הטעות הנפוצה ביותר בניהול מודעות:
+      לצבוט הצעות מחיר כשהבעיה האמיתית היא הפתיח של הווידאו.
+    </p>
+
+    <h3>רף ייחוס חוצה-ענפים לשנת 2026</h3>
+    <p>
+      נקודת פתיחה בלבד, לשבועות הראשונים שבהם אין עדיין עבר עסקי. שימו לב כמה הטווחים שונים בין פלטפורמות —
+      זו ההצדקה המספרית להפרדה המודולרית:
+    </p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>פלטפורמה</th><th>CTR ממוצע</th><th>CPC ממוצע</th><th>CVR ממוצע</th><th>הערה</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Google חיפוש</strong></td><td class="num">3.5%–6%</td><td class="num">$3–$5.4</td><td class="num">~8%</td><td>Intent גבוה: יקר וממיר</td></tr>
+          <tr><td><strong>Meta (Facebook)</strong></td><td class="num">1.5%–2.2%</td><td class="num">$0.7–$1.7</td><td class="num">8%–9%</td><td>חציון ROAS ‎~1.9x</td></tr>
+          <tr><td><strong>Instagram</strong></td><td class="num">0.8%–1.6%</td><td class="num">מעט מעל FB</td><td class="num">8%–9%</td><td>נמדדת בנפרד בגלל Reels</td></tr>
+          <tr><td><strong>TikTok</strong></td><td class="num">0.6%–1.5%</td><td class="num">$0.2–$2</td><td class="num">~1.9%</td><td>CPM ‎$5–$13; שחיקת קריאייטיב מהירה</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout warn">
+      <p class="t">אזהרת בנצ'מארק</p>
+      <p>
+        הערכים הם ממוצעים עולמיים בדולר ארה"ב, חוצי-ענפים. בישראל, ובענף הספציפי שלכם, המספרים בפועל יהיו שונים.
+        לכן הבנצ'מארק הענפי הוא העוגן <em>השלישי</em> בחשיבותו — תוך 4–6 שבועות הדוחות של העסק עצמו מחליפים אותו.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 6 ============ -->
+  <section id="howto">
+    <h2><span class="num">6</span>מדריך הפעלה צעד-אחר-צעד</h2>
+    <ol class="steps">
+      <li>
+        <b class="st">משכפלים את התבנית לעסק</b>
+        עסק חדש = עותק חדש: <code>cp -r marketing-agent-template businesses/shem-haesek</code>.
+        לעולם לא עורכים את התבנית המקורית עבור עסק ספציפי.
+      </li>
+      <li>
+        <b class="st">ממלאים את business-profile.md — 10 דקות</b>
+        החלק שאסור לדלג עליו: כלכלת היחידה (AOV, שיעור סגירה, LTV, CPA מקסימלי). אם לא יודעים LTV — מעריכים: שווי רכישה ממוצע × מספר רכישות ממוצע ללקוח.
+      </li>
+      <li>
+        <b class="st">מסמנים אילו פלטפורמות פעילות</b>
+        עסק שרץ רק במטא ובגוגל פשוט מתעלם ממודול טיקטוק. אין צורך למחוק — האייג'נט עובד רק עם פלטפורמות שיש להן דאטה.
+      </li>
+      <li>
+        <b class="st">ריצה ראשונה — כיול</b>
+        פותחים סשן של Claude (או מודל אחר) על תיקיית העסק, מצרפים ייצוא נתונים (CSV מ-Ads Manager / Google Ads),
+        ומנחים: <strong>"פעל לפי AGENT.md — ריצה שבועית"</strong>. הריצה הראשונה מייצרת דוח בסיס ופותחת ניסוי ראשון לכל פלטפורמה.
+      </li>
+      <li>
+        <b class="st">קצב שבועי קבוע</b>
+        פעם בשבוע, באותו יום: מצרפים את נתוני השבוע ומריצים שוב. האייג'נט משווה לעבר, סוגר ניסויים שהבשילו,
+        כותב תובנות, ופותח ניסוי חדש. אתם מאשרים רק את מה שמסומן "דורש אישור אנושי".
+      </li>
+      <li>
+        <b class="st">אחרי 4–6 שבועות — האייג'נט "מכויל"</b>
+        מרגע שיש מספיק דוחות עבר, ההשוואות עוברות מהבנצ'מארק הענפי לעבר האמיתי של העסק,
+        וב-insights.md מצטברים כללים ברמת ביטחון עולה. זה הרגע שבו רואים את ההשתפרות: ההמלצות נהיות ספציפיות לעסק, לא גנריות.
+      </li>
+      <li>
+        <b class="st">עסק נוסף? חוזרים לצעד 1</b>
+        כל עסק חדש מקבל עותק נקי. הידע לא זולג בין עסקים — וזה פיצ'ר, לא באג: ההקשר הוא כל היתרון.
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ 7 ============ -->
+  <section id="choices">
+    <h2><span class="num">7</span>הסבר הבחירות: מערכת, מטריקות ועיצוב המסמך</h2>
+
+    <h3>בחירות ארכיטקטורה — ולמה</h3>
+    <ul>
+      <li><strong>קבצי Markdown ולא אפליקציה/דאטהבייס</strong> — כי הצרכן של הקבצים הוא מודל שפה: טקסט פשוט הוא הפורמט שהוא קורא הכי טוב, ניתן לגרסאות בגיט, ושקוף לבעל העסק.</li>
+      <li><strong>ריצה שבועית ולא יומית</strong> — מתחת לשבוע אין מובהקות סטטיסטית ברוב התקציבים הקטנים-בינוניים; תגובה יומית = תגובה לרעש, והיא הסיבה מספר 1 לקמפיינים שנהרסים בידיים.</li>
+      <li><strong>ניסוי אחד, משתנה אחד</strong> — הדרך היחידה לייחס תוצאה לסיבה. שני שינויים במקביל = אפס למידה, גם אם התוצאה השתפרה.</li>
+      <li><strong>אישור אנושי מעל ‎20% תקציב</strong> — נקודת האיזון בין אוטונומיה (שהאייג'נט יהיה שימושי) לבין סיכון (שטעות לא תשרוף חודש תקציב בלילה אחד).</li>
+      <li><strong>תובנות עם רמות ביטחון</strong> — בלי זה, מקרה חד-פעמי הופך ל"חוק" ומטה את כל ההחלטות הבאות. דרישת אישוש חוזר היא ההגנה מפני overfitting של הזיכרון.</li>
+    </ul>
+
+    <h3>בחירות המטריקות — ולמה</h3>
+    <ul>
+      <li><strong>סידור לפי משפך ולא רשימה שטוחה</strong> — כדי שהמדד החורג יצביע ישר על המנוף: חשיפה → קהל, עניין → קריאייטיב, המרה → דף נחיתה, כלכלה → הצעה ותקציב.</li>
+      <li><strong>שלושה עוגני השוואה מדורגים</strong> — עבר עסקי, יעד כלכלי, בנצ'מארק ענפי — כי מספר בלי הקשר הוא חסר משמעות, ובנצ'מארק עולמי לבדו מטעה.</li>
+      <li><strong>Hook Rate ו-Hold Rate בפלטפורמות וידאו</strong> — CTR לבדו לא מפריד בין פתיח כושל לגוף וידאו כושל; שני המדדים האלה חוסכים ניסויים מיותרים.</li>
+      <li><strong>CPA מקסימלי כלכלי כשדה חובה</strong> — הופך את השאלה "האם הקמפיין טוב?" משאלת טעם לשאלת חשבון.</li>
+      <li><strong>LTV:CAC כשער להגדלת תקציב</strong> — מונע את המלכודת של להגדיל השקעה במשהו שרווחי ברמת הקמפיין אבל הפסדי ברמת העסק.</li>
+    </ul>
+
+    <h3>בחירות עיצוב המסמך — ולמה</h3>
+    <ul>
+      <li><strong>RTL מלא עם איי LTR</strong> — המסמך מוכרז <code>dir="rtl" lang="he"</code>, אבל בלוקי קוד, נוסחאות ומספרים מוכרזים <code>ltr</code> נקודתית — כך נוסחה כמו <span class="mono">Cost ÷ Clicks</span> לא מתהפכת ולא נשברת.</li>
+      <li><strong>מניעת גלישה אופקית מובנית</strong> — כל טבלה ובלוק קוד עטופים במיכל עם גלילה פנימית (<code>overflow-x: auto</code>), כך שגם בטלפון צר התוכן הרחב נגלל בתוך עצמו והעמוד לעולם לא נשבר הצידה. תרשים הלולאה בנוי כ-flex עם שבירת שורות במקום רוחב קבוע.</li>
+      <li><strong>גופני מערכת ולא גופן רשת</strong> — טעינה מיידית, ללא תלות ברשת וללא הבהוב החלפת גופן; בעברית גופני המערכת (Segoe UI / SF) איכותיים וקריאים.</li>
+      <li><strong>רוחב שורה מוגבל (~44rem)</strong> — שורות ארוכות מדי מעייפות בקריאת עברית רציפה; הטבלאות מקבלות מיכל רחב יותר כי הן נסרקות, לא נקראות.</li>
+      <li><strong>ספרות טבלאיות (tabular-nums) בטבלאות מדדים</strong> — כדי שמספרים יתיישרו בעמודות ויהיו ברי-השוואה במבט.</li>
+      <li><strong>צבע אחד + צבע אזהרה</strong> — טורקיז-פטרול כצבע המערכת וענבר לדגלים אדומים ואזהרות בלבד. מסמך עבודה נסרק — ריבוי צבעים היה מוסיף רעש בדיוק במקום שבו מנסים לאבחן.</li>
+      <li><strong>שני מצבי תאורה</strong> — המסמך מוגדר בטוקנים של צבע ומכבד גם את העדפת מערכת ההפעלה וגם החלפה ידנית, כך שהוא קריא בכל סביבה.</li>
+      <li><strong>מספור מבני רק איפה שיש סדר אמיתי</strong> — צעדי ההפעלה והלולאה ממוספרים כי הסדר מחייב; המודולים הפלטפורמיים לא — כי אין ביניהם היררכיה.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>
+      נתוני הייחוס (2026): דוחות הבנצ'מארק של WordStream/LocaliQ, WebFX, Triple Whale, Lebesgue, DigitalApplied ו-The Ad Spend.
+      ממוצעים חוצי-ענפים בדולר ארה"ב — נקודת פתיחה בלבד; העוגן האמיתי נבנה מנתוני העסק עצמו.
+    </p>
+  </footer>
+
+</div>
