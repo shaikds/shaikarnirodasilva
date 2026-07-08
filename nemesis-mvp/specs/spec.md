@@ -467,6 +467,55 @@ retained (the rival-prince dynamic, not the trademarked cast).
 - **AC-7.4.4** All tuning values in data modules (NFR-4); the sync engine
   still owns fairness — growth makes both stronger, skill keeps it 50/50.
 
+## 8.6 M8 — Martial Arts & Blast Momentum (developer-requested)
+
+Fists, feet, and heads instead of a sword; speed you can SEE (vanish
+afterimages); power you can CHARGE (hold → blast that sends the victim
+flying across the arena until they pick themselves up); branching combos;
+and a key map shown at start.
+
+### FR-8.1 Martial-arts body & strikes
+- **AC-8.1.1** Fighters have articulated limbs (two arms with fists, two
+  legs with feet) replacing the blade; every attack poses the body: jab
+  (light1), cross (light2), roundhouse kick (light3), haymaker (heavy),
+  rising kick (uppercut), headbutt (dash attack).
+- **AC-8.1.2** Attacking during a ki dash converts the rush's momentum into
+  a HEADBUTT: near-instant, heavy knockback — momentum begets impact.
+
+### FR-8.2 Vanish (speed made visible)
+- **AC-8.2.1** During dodge i-frames the fighter's body disappears and
+  translucent afterimages linger where they were; ki dashes shed
+  afterimages continuously.
+
+### FR-8.3 Charged attacks & blast fly-away
+- **AC-8.3.1** HOLDING the heavy key charges (up to 0.9 s, visible cocked
+  pose + building sparkles). Release scales damage ~×1 (tap) to ~×2.2
+  (full). A tap has no blast.
+- **AC-8.3.2** Charge ≥ 50% makes the hit a BLAST: the clean-hit victim
+  enters FLYAWAY — launched away/up at high speed, tumbling, unable to
+  act; slamming into a wall costs extra damage with an impact burst;
+  landing leads to a GET-UP recovery (with brief rise i-frames) before
+  they can fight again.
+- **AC-8.3.3** Getting hit while charging cancels the charge (counterplay).
+- **AC-8.3.4** The rival charges its heavies too — but only when the hold
+  is SAFE (the target is stuck in a non-attack recovery); against a live
+  opponent it throws the instant heavy. Blasts send the PLAYER flying by
+  the same rules. Fairness band (S-3) must hold after this feature.
+  *(Amended at P10 close: an always-charge rival lost the band 18/20 —
+  charge cancels on hit, so holding into a free opponent is a self-nerf.
+  See the 2026-07-08 log.)*
+
+### FR-8.4 Combo routes
+- **AC-8.4.1** Chains branch: light→light→light stays the jab-cross-kick
+  string; pressing HEAVY during the second light's recovery instead routes
+  into an UPPERCUT — a rising kick that launches higher than a normal
+  heavy (pursuit synergy). Routes are data in the attack table.
+
+### FR-8.5 Key map at start
+- **AC-8.5.1** A keyboard-map overlay listing every control (including the
+  charge mechanic) shows on boot; dismissed by H/Enter/click; `H` reopens
+  it any time.
+
 ## 9. Post-MVP (explicitly deferred, kept from PRD)
 
 Order is a suggestion; nothing here blocks MVP acceptance.
@@ -539,5 +588,10 @@ leads, code follows.
 | FR-7.2 Ki dash | P9 | **done** (p9: 3D rush, drain, stop range; rival dragonDash) |
 | FR-7.3 Ki blasts | P9 | **done** (p9: cost/cooldown/dmg via rulebook; rival barrage) |
 | FR-7.4 Saiyan growth | P9 | **done** (p9: surge x1.25 + aura + pride; zenkai +60/+40 persisted) |
+| FR-8.1 Martial-arts body & strikes | P10 | **done** (p10: limb rig + per-pose animation; dash headbutt) |
+| FR-8.2 Vanish + afterimages | P10 | **done** (p10: dodge invisibility through i-frames, ghost trail) |
+| FR-8.3 Charged attacks & blast fly-away | P10 | **done** (p10: tap x1 / full x2.2, blast ≥50%, fly-away → slam → get-up i-frames, hit-cancel; AC-8.3.4 amended — rival charges only safe holds) |
+| FR-8.4 Combo routes | P10 | **done** (p10: light-light-HEAVY → uppercut launcher, positional) |
+| FR-8.5 Key map at start | P10 | **done** (p10: boot overlay explains charge; H toggles) |
 | NFR-1..5 | P0/P7 | **done** (NFR-5 degraded mode at P7; NFR-1 amended at P0) |
 | S-1..S-4 success criteria | P8 | **done** — S-1 journey scripted + on video; S-2 canonical taunt live on video; S-3 20-duel band (amended, 1 resample); S-4 systems verified, 60fps pending developer hardware |

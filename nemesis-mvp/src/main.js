@@ -24,8 +24,9 @@ import { Prompts } from './ui/prompts.js';
 import { GameFlow } from './core/states.js';
 import { MacroAgent } from './ai/macroAgent.js';
 import { TauntEngine } from './rivalry/taunts.js';
-import { ATTACKS } from './combat/attacks.js';
+import { ATTACKS, CHARGE } from './combat/attacks.js';
 import { SFX } from './fx/sfx.js';
+import { KeymapOverlay } from './ui/keymap.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -155,6 +156,20 @@ function trackMovementFx(f) {
       f.name === 'player' ? 0x9fd8ff : 0xffb26a
     );
   }
+  // FR-8.2 afterimages: ghosts trail vanishing dodges and full-speed dashes
+  if (f.state === 'dodge' && !f.mesh.visible && Math.random() < 0.12) {
+    vfx.spawnAfterimage(f.pos, f.yaw, f.baseColor.getHex());
+  }
+  if (f.intent.dash && f.state === 'idle' && Math.random() < 0.08) {
+    vfx.spawnAfterimage(f.pos, f.yaw, f.baseColor.getHex());
+  }
+  // FR-8.3.2: wall/ground slam mid-flyaway
+  if (f.justSlammed) {
+    f.justSlammed = false;
+    vfx.spawnSlam({ x: f.pos.x, y: f.pos.y + 0.8, z: f.pos.z });
+    sfx.slam();
+    rig.shake(0.12);
+  }
   if (!prev.dash && f.intent.dash && f.state === 'idle') sfx.dash();
   if (!prev.flying && f.flying) sfx.fly();
   feet.set(f, { grounded: f.grounded, state: f.state, anim: f.anim, dash: f.intent.dash, flying: f.flying });
@@ -206,13 +221,22 @@ const loop = new Loop({
       if (f.pendingSpecialSfx) { f.pendingSpecialSfx = false; sfx.special(); }
     }
     profiler.update(dt, loop.simTime);
-    // charge-up sparkle while winding up a special
+    // charge-up sparkle while winding up a special or holding a heavy (FR-8.3)
     for (const f of [player, rival]) {
       if (f.state === 'attack' && f.attackType === 'special' && f.phase === 'windup') {
         vfx.spawnChargeSparkle(
           { x: f.pos.x + Math.sin(f.yaw) * 0.6, y: f.pos.y + 1.25, z: f.pos.z + Math.cos(f.yaw) * 0.6 },
           f.baseColor.getHex()
         );
+      } else if (f.state === 'charge') {
+        // sparkle density tracks the charge; gold past the blast threshold
+        const c = Math.min((f.chargeT ?? 0) / CHARGE.maxS, 1);
+        if (Math.random() < 0.25 + c * 0.75) {
+          vfx.spawnChargeSparkle(
+            { x: f.pos.x, y: f.pos.y + 1.1, z: f.pos.z },
+            c >= CHARGE.blastAt ? 0xffd24d : f.baseColor.getHex()
+          );
+        }
       }
     }
   },
@@ -226,6 +250,7 @@ const loop = new Loop({
     rival.syncMesh(alpha);
     rig.update(rdt, playerDriver === controller ? controller.orbitInput() : { x: 0, y: 0 });
     if (input.consume('debug', 0.1)) debugPanel.toggle();
+    if (input.consume('help', 0.1)) keymap.toggle();      // FR-8.5
     debugPanel.update(rdt);
     hud.consume(resolver.events);
     hud.setGoalHint(
@@ -252,6 +277,10 @@ resolver.on(e => {
   if (e.type === 'hit') { sfx.hit(e.kind); if (e.killed) sfx.death(); }
   else if (e.type === 'blocked') sfx.blocked();
   else if (e.type === 'parried') sfx.parried();
+  else if (e.type === 'blast') {                 // FR-8.3.2: the big one
+    sfx.blast();
+    vfx.spawnBlast(e.pos);
+  }
 });
 input.simTime = () => loop.simTime;
 
@@ -320,6 +349,9 @@ hud.subtitle = (who, text, ms) => { sfx.taunt(); _subtitle(who, text, ms); };
 flow.boot();
 // title beat: a first-boot moment before the training prompt takes over
 if (bootMode === 'created') hud.announce('N E M E S I S', 2600);
+// FR-8.5: the key map greets every boot; H reopens it any time
+const keymap = new KeymapOverlay();
+keymap.show();
 
 loop.start();
 
@@ -338,6 +370,6 @@ window.__game = {
   zone, player, dummy, rival, dummyBrain, input, rig, controller,
   resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
   manager, bootMode, debugPanel, vfx, landmarks, sun,
-  nav, prompts, flow, macroAgent, taunts, degrade, sfx,
+  nav, prompts, flow, macroAgent, taunts, degrade, sfx, keymap,
   setPlayerDriver, step,
 };

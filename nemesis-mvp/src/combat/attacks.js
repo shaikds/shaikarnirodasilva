@@ -4,17 +4,18 @@
 
 export const ATTACKS = {
   light1: {
-    kind: 'light', dmg: 6, windup: 0.13, active: 0.09, recover: 0.20,
+    kind: 'light', pose: 'jab', dmg: 6, windup: 0.13, active: 0.09, recover: 0.20,
     range: 1.9, arcDeg: 90, knock: 1.2, lunge: 0.6, track: 1.05,   // rad/s ~60°/s
     energyGain: 14, chain: 'light2', cancelRecover: ['dodge', 'block'],
   },
   light2: {
-    kind: 'light', dmg: 7, windup: 0.11, active: 0.09, recover: 0.20,
+    kind: 'light', pose: 'cross', dmg: 7, windup: 0.11, active: 0.09, recover: 0.20,
     range: 1.9, arcDeg: 90, knock: 1.2, lunge: 0.6, track: 1.05,
-    energyGain: 14, chain: 'light3', cancelRecover: ['dodge', 'block'],
+    energyGain: 14, chain: 'light3', chainHeavy: 'uppercut',   // combo ROUTE (FR-8.4)
+    cancelRecover: ['dodge', 'block'],
   },
   light3: {   // string finisher: bigger hit, longer tail
-    kind: 'light', dmg: 10, windup: 0.14, active: 0.10, recover: 0.28,
+    kind: 'light', pose: 'roundhouse', dmg: 10, windup: 0.14, active: 0.10, recover: 0.28,
     range: 2.0, arcDeg: 90, knock: 2.4, lunge: 0.8, track: 1.05,
     energyGain: 16, chain: null, cancelRecover: ['dodge', 'block'],
   },
@@ -26,7 +27,7 @@ export const ATTACKS = {
     // stalled past the tick cap from constant separation). 2026-07-06.
     range: 2.2, arcDeg: 90, knock: 4.5, lunge: 1.0, track: 1.05,
     energyGain: 18, chain: null, cancelRecover: ['block'],
-    blockBreak: true, launcher: true,
+    blockBreak: true, launcher: true, chargeable: true, pose: 'haymaker',
   },
   special: {  // P3: fires a projectile at windup end (FR-4.4)
     kind: 'special', dmg: 18, windup: 0.48, active: 0.06, recover: 0.28,
@@ -41,6 +42,37 @@ export const ATTACKS = {
     projectile: { speed: 32, radius: 0.2 },
     cost: 8, cooldown: 0.18,
   },
+  uppercut: { // FR-8.4: light-light-HEAVY route — a rising kick that launches HIGH
+    kind: 'heavy', dmg: 10, windup: 0.16, active: 0.10, recover: 0.30,
+    range: 1.9, arcDeg: 90, knock: 3.0, lunge: 0.5, track: 1.05,
+    energyGain: 16, chain: null, cancelRecover: ['block'],
+    blockBreak: true, launcher: true, launchVy: 6.5, pose: 'risingKick',
+  },
+  headbutt: { // FR-8.1.2: attacking mid-dash converts momentum into impact
+    kind: 'heavy', dmg: 8, windup: 0.06, active: 0.10, recover: 0.26,
+    range: 1.7, arcDeg: 100, knock: 7.0, lunge: 1.4, track: 0.5,
+    energyGain: 14, chain: null, cancelRecover: [],
+    launcher: true, launchVy: 2.6, pose: 'headbutt',
+  },
+};
+
+// FR-8.3: hold-to-charge heavy
+export const CHARGE = {
+  maxS: 0.9,            // full charge
+  dmgMultAtFull: 2.2,   // tap x1 ... full x2.2
+  blastAt: 0.5,         // charge fraction that turns the hit into a BLAST
+};
+
+// FR-8.3.2: blast fly-away — DBZ "sent flying until they get up"
+export const FLYAWAY = {
+  speed: 16,            // launch speed (scaled a bit by charge)
+  up: 5.5,
+  gravity: 11,          // floaty tumble
+  slamSpeed: 6,         // hitting a wall above this = slam
+  slamDmg: 4,
+  maxS: 1.6,            // safety cap on flight time
+  getUpS: 0.9,
+  riseIframes: 0.35,
 };
 
 export const DEFENSE = {

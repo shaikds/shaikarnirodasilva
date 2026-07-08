@@ -2,7 +2,7 @@
 // hitstop, camera feedback. One rulebook for every fighter pair.
 // Emits events consumed by the HUD (and the profiler in P3).
 
-import { ATTACKS, DEFENSE, COMBO, ENERGY, FEEL, SAIYAN } from './attacks.js';
+import { ATTACKS, DEFENSE, COMBO, ENERGY, FEEL, SAIYAN, CHARGE } from './attacks.js';
 
 export class Resolver {
   constructor({ loop, rig }) {
@@ -38,11 +38,12 @@ export class Resolver {
     if (Math.abs(dyaw) > (a.arcDeg / 2) * Math.PI / 180) return;
 
     att.hitLanded = true;
-    this.strike(att, def, a, { x: dx / (dist || 1), z: dz / (dist || 1) });
+    this.strike(att, def, a, { x: dx / (dist || 1), z: dz / (dist || 1) },
+      att.attackCharge ?? 0);
   }
 
   // shared outcome logic (projectiles reuse this with their own attack def)
-  strike(att, def, a, dir) {
+  strike(att, def, a, dir, charge = 0) {
     const kind = a.kind;
     const hitPos = { x: def.pos.x, y: def.pos.y + 1.2, z: def.pos.z };
 
@@ -66,6 +67,8 @@ export class Resolver {
     // surge transformation multiplier (AC-7.4.1)
     const scale = 1 + Math.min(att.combo * COMBO.dmgPerStep, COMBO.dmgCap);
     let dmg = a.dmg * scale * (att.stats?.attack ?? 1) * (att.surgeMult ?? 1);
+    // FR-8.3: held power — tap x1 ... full x2.2 (linear in between)
+    if (charge > 0) dmg *= 1 + (CHARGE.dmgMultAtFull - 1) * charge;
 
     // 3) block
     if (def.blocking) {
@@ -89,20 +92,27 @@ export class Resolver {
     def.gainSurge?.(dmg * SAIYAN.surge.gainTaken);
     def.combo = 0;                                   // their chain breaks
     att.combo++; att.comboT = COMBO.window;
+    // FR-8.3.2: a charged BLAST sends them FLYING until they get up
+    const blast = a.chargeable && charge >= CHARGE.blastAt && def.alive;
     if (def.alive) {
-      if (kind === 'light') def.flinch();
-      else def.stagger(DEFENSE.heavyStagger);        // AC-4.6.5
-      def.knockback(dir.x, dir.z, a.knock);
-      if (a.launcher) {                              // heavy LAUNCHES: the
-        def.vy = Math.max(def.vy, 3.6);              // Sparking smash->pursuit loop
-        def.grounded = false;
-        def.flying = false;
+      if (blast) {
+        def.enterFlyaway(dir.x, dir.z, charge);
+      } else {
+        if (kind === 'light') def.flinch();
+        else def.stagger(DEFENSE.heavyStagger);      // AC-4.6.5
+        def.knockback(dir.x, dir.z, a.knock);
+        if (a.launcher) {                            // heavy LAUNCHES: the
+          def.vy = Math.max(def.vy, a.launchVy ?? 3.6);  // Sparking smash->pursuit loop
+          def.grounded = false;
+          def.flying = false;
+        }
       }
     }
-    this.loop.hitstop(FEEL.hitstopMs[kind]);
-    this.rig?.shake(FEEL.shake[kind]);
+    this.loop.hitstop(blast ? FEEL.hitstopMs.heavy * 1.6 : FEEL.hitstopMs[kind]);
+    this.rig?.shake(blast ? FEEL.shake.special * 1.5 : FEEL.shake[kind]);
     if (kind !== 'light') this.rig?.impulse(dir.x * FEEL.impulse, 0.05, dir.z * FEEL.impulse);
     if (att.combo >= COMBO.slowmoAt) this.loop.slowmo(COMBO.slowmoMs, COMBO.slowmoFactor);
+    if (blast) this._emit({ type: 'blast', att, def, pos: hitPos, charge });
     this._emit({
       type: 'hit', att, def, pos: hitPos, kind,
       amount: dmg, combo: att.combo, killed: !def.alive,

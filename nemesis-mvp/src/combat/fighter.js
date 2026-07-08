@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { MOVE } from '../core/tuning.js';
-import { ATTACKS, DEFENSE, ENERGY, SAIYAN } from './attacks.js';
+import { ATTACKS, DEFENSE, ENERGY, SAIYAN, CHARGE, FLYAWAY } from './attacks.js';
 import { softDot } from '../fx/textures.js';
 
 export class Fighter {
@@ -74,25 +74,29 @@ export class Fighter {
     const padL = new THREE.Mesh(padGeo, padMat); padL.position.set(-0.38, 1.42, 0);
     const padR = new THREE.Mesh(padGeo, padMat); padR.position.set(0.38, 1.42, 0);
     padL.castShadow = padR.castShadow = true;
-    // weapon: hilt + blade, swings on attacks — reads as an actual weapon now
-    this.arm = new THREE.Group();
-    const hilt = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.06, 0.28, 8),
-      new THREE.MeshStandardMaterial({ color: 0x2a2a1a, roughness: 0.7 })
-    );
-    hilt.rotation.z = Math.PI / 2; hilt.position.z = -0.1;
-    const blade = new THREE.Mesh(
-      new THREE.BoxGeometry(0.09, 0.03, 1.0),
-      new THREE.MeshStandardMaterial({ color: 0xd8d8e8, emissive: 0x333344, roughness: 0.25, metalness: 0.75 })
-    );
-    blade.position.z = 0.45;
-    this.arm.add(hilt, blade);
-    this.arm.castShadow = true;
-    this.arm.position.set(0.45, 1.15, 0.3);
+    // martial-arts limbs (FR-8.1): shoulder/hip-pivoted arm+leg groups with
+    // fist/foot tips — the sword is gone, this fighter uses its body
+    const limbMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.5, metalness: 0.3 });
+    const tipMat = mat.clone();
+    const mkLimb = (thick, len, tipR) => {
+      const g = new THREE.Group();
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(thick, thick, len), limbMat);
+      seg.position.z = len / 2;
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(tipR, 8, 8), tipMat);
+      tip.position.z = len;
+      seg.castShadow = tip.castShadow = true;
+      g.add(seg, tip);
+      return g;
+    };
+    this.armL = mkLimb(0.11, 0.55, 0.13); this.armL.position.set(-0.42, 1.38, 0.05);
+    this.armR = mkLimb(0.11, 0.55, 0.13); this.armR.position.set(0.42, 1.38, 0.05);
+    this.legL = mkLimb(0.13, 0.62, 0.14); this.legL.position.set(-0.18, 0.6, 0);
+    this.legR = mkLimb(0.13, 0.62, 0.14); this.legR.position.set(0.18, 0.6, 0);
     // team-color rim light: makes the silhouette pop against a dark arena
     this.rim = new THREE.PointLight(color, 1.1, 3.5, 2);
     this.rim.position.set(0, 1.3, -0.3);
-    this.mesh.add(this.body, this.head, nose, padL, padR, this.arm, this.rim);
+    this.mesh.add(this.body, this.head, nose, padL, padR,
+      this.armL, this.armR, this.legL, this.legR, this.rim);
     scene.add(this.mesh);
     this.flashT = 0;
     this.syncMesh(1);
@@ -110,7 +114,9 @@ export class Fighter {
   get busy() {
     return this.state === 'attack' || this.state === 'dodge' ||
            this.state === 'stagger' || this.state === 'hitstun' ||
-           this.state === 'parryRecover' || this.state === 'dead';
+           this.state === 'parryRecover' || this.state === 'dead' ||
+           this.state === 'charge' || this.state === 'flyaway' ||
+           this.state === 'getUp';
   }
   get blocking() { return this.state === 'block'; }
   get invulnerable() { return this.iframeT > 0; }
@@ -127,6 +133,7 @@ export class Fighter {
       const def = ATTACKS[this.attackType];
       if (this.phase !== 'recover') return false;        // windup/active commit
       if (action === 'light' && def.chain) return true;  // chain link
+      if (action === 'heavy' && def.chainHeavy) return true;  // combo ROUTE (FR-8.4)
       if (action === 'dodge' && def.cancelRecover.includes('dodge')) return true;
       if (action === 'block' && def.cancelRecover.includes('block')) return true;
       return false;
@@ -134,13 +141,19 @@ export class Fighter {
     return false;
   }
 
-  startAttack(action) {
-    // resolve chain step: pressing light mid-string continues the string
+  startAttack(action, charge = 0) {
+    // resolve chain step: pressing light mid-string continues the string;
+    // pressing heavy mid-string routes the combo (FR-8.4)
     let key = action;
     if (action === 'light') {
       key = (this.state === 'attack' && this.phase === 'recover' &&
              ATTACKS[this.attackType]?.chain)
         ? ATTACKS[this.attackType].chain : 'light1';
+    } else if (action === 'heavy') {
+      if (this.state === 'attack' && this.phase === 'recover' &&
+          ATTACKS[this.attackType]?.chainHeavy) {
+        key = ATTACKS[this.attackType].chainHeavy;
+      }
     }
     const def = ATTACKS[key];
     if (!def) return false;
@@ -149,12 +162,48 @@ export class Fighter {
       this.energy -= ENERGY.specialCost;
     }
     this.attackType = key;
+    this.attackCharge = charge;         // FR-8.3: resolver scales dmg + blast
     this.phase = 'windup';
     this.stateT = def.windup;
     this.hitLanded = false;
     this._setState('attack');
     this.onAction?.(def.kind);          // profiler hook (FR-3.3)
     return true;
+  }
+
+  // ---- FR-8.3: hold-to-charge heavy ----
+  startCharge(autoReleaseS = null) {
+    if (!this.canStart('heavy') || this.state === 'attack') return false;
+    this.chargeT = 0;
+    this._autoRelease = autoReleaseS;
+    this.attackType = null; this.phase = null;
+    this._setState('charge');
+    return true;
+  }
+  releaseCharge() {
+    if (this.state !== 'charge') return false;
+    // a tap is exactly a tap: sub-10% charges quantize to 0 so uncharged
+    // heavies keep their exact table damage
+    let c = Math.min(this.chargeT / CHARGE.maxS, 1);
+    if (c < 0.1) c = 0;
+    this.state = 'idle';                // startAttack asserts from idle
+    return this.startAttack('heavy', c);
+  }
+
+  // ---- FR-8.3.2: sent FLYING until they get up ----
+  enterFlyaway(dirX, dirZ, power01 = 1) {
+    if (!this.alive) return;
+    this.attackType = null; this.phase = null;
+    this.flying = false;
+    this.flyVel = new THREE.Vector3(
+      dirX * FLYAWAY.speed * (0.8 + 0.6 * power01),
+      FLYAWAY.up,
+      dirZ * FLYAWAY.speed * (0.8 + 0.6 * power01)
+    );
+    this.flyawayT = 0;
+    this._tumble = 0;
+    this.grounded = false;
+    this._setState('flyaway');
   }
 
   startBlock() {
@@ -316,7 +365,10 @@ export class Fighter {
     this._setAura(null);
     if (pos) { this.pos.set(pos.x, 0, pos.z); this.prevPos.copy(this.pos); }
     this.mesh.rotation.z = 0;
+    this.mesh.rotation.x = 0;
     this.mesh.position.y = 0;
+    this.mesh.visible = true;
+    this.chargeT = 0; this.flyawayT = 0; this._tumble = 0;
     this._trace({ state: 'revive' });
   }
 
@@ -385,6 +437,55 @@ export class Fighter {
       case 'hitstun': {
         this.stateT -= dt;
         if (this.stateT <= 0) this._setState('idle');
+        break;
+      }
+      case 'charge': {                   // FR-8.3: power builds while held
+        this.chargeT += dt;
+        if (it.face != null) this._turnToward(it.face, dt);
+        if (this._autoRelease != null && this.chargeT >= this._autoRelease) {
+          this._autoRelease = null;
+          this.releaseCharge();
+        }
+        break;
+      }
+      case 'flyaway': {                  // FR-8.3.2: tumbling through the air
+        this.flyawayT += dt;
+        this.flyVel.y -= FLYAWAY.gravity * dt;
+        this.pos.addScaledVector(this.flyVel, dt);
+        this._tumble += dt * 9;
+        const preSpeed = Math.hypot(this.flyVel.x, this.flyVel.z);
+        const slammedWall = zone.collide(this.pos, this.radius, this.height);
+        if (slammedWall && preSpeed > FLYAWAY.slamSpeed) {
+          this.applyDamage(FLYAWAY.slamDmg);         // respects hpFloor
+          this.justSlammed = true;                   // main: dust + thud
+          this.flyVel.x *= -0.15; this.flyVel.z *= -0.15;
+        }
+        if (this.pos.y <= 0 && this.flyVel.y < 0) {
+          this.pos.y = 0;
+          if (preSpeed > FLYAWAY.slamSpeed * 1.3 && this.flyawayT < FLYAWAY.maxS * 0.6) {
+            this.flyVel.y = 2.4;                     // one skip off the ground
+            this.flyVel.x *= 0.5; this.flyVel.z *= 0.5;
+            this.justSlammed = true;
+          } else {
+            this.grounded = true;
+            this.stateT = FLYAWAY.getUpS;
+            this._setState('getUp');
+          }
+        }
+        if (this.flyawayT > FLYAWAY.maxS && this.state === 'flyaway') {
+          this.pos.y = Math.max(0, this.pos.y);
+          this.grounded = this.pos.y <= 0.01;
+          this.stateT = FLYAWAY.getUpS;
+          this._setState('getUp');
+        }
+        break;
+      }
+      case 'getUp': {                    // picking themselves back up
+        this.stateT -= dt;
+        if (this.stateT <= 0) {
+          this.iframeT = FLYAWAY.riseIframes;        // fair rise
+          this._setState('idle');
+        }
         break;
       }
       case 'dead': {
@@ -469,10 +570,14 @@ export class Fighter {
     this.yaw += smooth ? d * Math.min(1, MOVE.turnRate * dt) : d * Math.min(1, 14 * dt);
   }
 
-  // ---- render sync: pose tells per state (blockout-readable) ----
+  // ---- render sync: martial poses per state (FR-8.1, blockout-readable) ----
+  // Limb convention: each limb group's segment extends along local +z, so
+  // rotation.x = PI/2 hangs it straight down, 0 punches straight forward,
+  // ~2.0 cocks it back. All rotations are assigned absolutely every frame.
   syncMesh(alpha) {
     this.mesh.position.lerpVectors(this.prevPos, this.pos, alpha);
     this.mesh.rotation.y = this.yaw;
+    this.mesh.rotation.x = 0;
     // life: idle breathing on the ground, hover bob in the air
     // (render-only clock — this.anim is sim state, not ours to touch)
     this._breath = (this._breath ?? 0) + 0.016;
@@ -488,18 +593,78 @@ export class Fighter {
     this.mat.emissive.setHex(this.flashT > 0 ? 0x664444 : this._baseEmissive ?? this.mat.emissive.getHex());
     if (this._baseEmissive == null) this._baseEmissive = this.mat.emissive.getHex();
 
-    let armX = 0.45, armY = 1.15, armRotX = 0, bodyRotX = 0, bodyRotZ = 0;
+    // FR-8.2: too fast to see — vanish through the dodge's early i-frames
+    this.mesh.visible = !(this.state === 'dodge' &&
+      this.iframeT > MOVE.dodge.iframes * 0.35);
+
+    // neutral: arms hang slightly forward, legs straight down
+    let aL = 1.25, aR = 1.25, aLy = 0, aRy = 0;   // arm rot.x / rot.y
+    let gL = Math.PI / 2, gR = Math.PI / 2;       // leg rot.x
+    let bodyRotX = 0, bodyRotZ = 0;
+
+    // locomotion: legs scissor with real displacement (arms counter-swing)
+    const speed = Math.hypot(this.pos.x - this.prevPos.x, this.pos.z - this.prevPos.z) * 120;
+    if (this.flying) {
+      gL = Math.PI / 2 + 0.4; gR = Math.PI / 2 + 0.28;  // legs trail behind
+      aL = aR = 1.5;
+    } else if (speed > 0.6 && (this.state === 'idle' || this.state === 'block')) {
+      this._walk = (this._walk ?? 0) + speed * 0.022;
+      const s = Math.sin(this._walk) * Math.min(0.55, 0.09 + speed * 0.045);
+      gL += s; gR -= s;
+      aL += s * 0.5; aR -= s * 0.5;
+    }
+
     if (this.state === 'attack') {
       const def = ATTACKS[this.attackType] || {};
-      if (this.phase === 'windup') { armRotX = 0.9; armY = 1.5; }            // raised: the telegraph
-      else if (this.phase === 'active') { armRotX = -1.1; armY = 1.0; }      // swung through
-      else { armRotX = -0.4; }
-      if (def.kind === 'heavy') bodyRotX = this.phase === 'windup' ? -0.12 : 0.15;
-      if (def.kind === 'special') { armRotX = 0.2; armX = 0.2; armY = 1.3; } // both-hands charge
+      const cock = this.phase === 'windup';
+      const hit = this.phase === 'active';
+      const ext = hit ? 0.0 : 0.55;               // recover: half-retracted
+      switch (def.pose) {
+        case 'jab':                               // lead-hand snap
+          aL = cock ? 1.9 : ext; break;
+        case 'cross':                             // rear straight, hips turn
+          aR = cock ? 2.1 : ext;
+          bodyRotZ = cock ? 0.08 : -0.08; break;
+        case 'roundhouse':                        // string finisher: leg sweep
+          gR = cock ? 2.1 : (hit ? 0.25 : 0.9);
+          bodyRotZ = cock ? 0.12 : -0.16;
+          aL = 0.8; aR = 1.6; break;
+        case 'haymaker':                          // heavy: full-body wind
+          aR = cock ? 2.5 : (hit ? -0.15 : 0.5);
+          aL = 0.9;
+          bodyRotX = cock ? -0.15 : 0.18; break;
+        case 'risingKick':                        // uppercut route: launcher
+          gR = cock ? 1.9 : (hit ? -0.7 : 0.2);
+          bodyRotX = cock ? 0.1 : -0.25;
+          aL = aR = 1.7; break;
+        case 'headbutt':                          // dash momentum, head first
+          bodyRotX = cock ? -0.1 : 0.55;
+          aL = aR = 2.0; break;
+        default:
+          if (def.kind === 'special') { aL = aR = 0.25; aLy = 0.3; aRy = -0.3; } // both hands forward
+          else aR = cock ? 1.9 : ext;
+      }
+    } else if (this.state === 'charge') {         // FR-8.3: power visibly builds
+      const c = Math.min((this.chargeT ?? 0) / CHARGE.maxS, 1);
+      const tremble = Math.sin(this._breath * 42) * 0.06 * c;
+      aL = 2.15 + tremble; aR = 2.15 - tremble;
+      bodyRotX = -0.1 - 0.06 * c;                 // coils deeper as it charges
+      gL = Math.PI / 2 - 0.12; gR = Math.PI / 2 - 0.12;
     } else if (this.state === 'block') {
-      armRotX = 0.35; armX = 0.15; armY = 1.35;                              // guard up
+      aL = 0.45; aR = 0.45; aLy = 0.7; aRy = -0.7;   // forearms crossed
     } else if (this.state === 'dodge') {
       bodyRotX = (1 - this.stateT / MOVE.dodge.dur) * Math.PI * 0.12;
+    } else if (this.state === 'flyaway') {        // FR-8.3.2: ragdoll tumble
+      this.mesh.rotation.x = this._tumble ?? 0;
+      const f = (this._tumble ?? 0) * 2;
+      aL = 2.0 + Math.sin(f) * 0.8; aR = 2.0 + Math.cos(f) * 0.8;
+      gL = Math.PI / 2 + Math.sin(f + 1) * 0.6;
+      gR = Math.PI / 2 + Math.cos(f + 2) * 0.6;
+    } else if (this.state === 'getUp') {          // pushing back to their feet
+      const k = 1 - Math.max(0, Math.min(1, this.stateT / FLYAWAY.getUpS));
+      this.mesh.rotation.x = -(Math.PI / 2) * (1 - k);
+      this.mesh.position.y -= 0.6 * (1 - k);
+      aL = aR = 1.25 + (1 - k) * 0.8;
     } else if (this.state === 'stagger' || this.state === 'hitstun') {
       bodyRotZ = 0.18;
     } else if (this.state === 'dead') {
@@ -507,8 +672,11 @@ export class Fighter {
       bodyRotZ = k * Math.PI / 2;
       this.mesh.position.y = -k * 0.2;
     }
-    this.arm.rotation.x = armRotX;
-    this.arm.position.set(armX, armY, 0.3);
+
+    this.armL.rotation.set(aL, aLy, 0);
+    this.armR.rotation.set(aR, aRy, 0);
+    this.legL.rotation.set(gL, 0, 0);
+    this.legR.rotation.set(gR, 0, 0);
     this.body.rotation.x = bodyRotX;
     this.mesh.rotation.z = bodyRotZ;
   }

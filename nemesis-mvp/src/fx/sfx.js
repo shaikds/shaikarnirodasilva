@@ -106,6 +106,15 @@ export class SFX {
     this._tone({ type: 'sine', freq: 320, freqEnd: 38, dur: 0.7, vol: 0.5 });
     this._noise({ dur: 0.4, vol: 0.3, filter: 900, filterEnd: 120 });
   }
+  blast() {          // FR-8.3.2: charged hit that sends them flying
+    this._noise({ dur: 0.3, vol: 0.7, filter: 500, filterEnd: 90 });
+    this._tone({ type: 'sine', freq: 110, freqEnd: 34, dur: 0.4, vol: 0.8 });
+    this._tone({ type: 'sawtooth', freq: 600, freqEnd: 120, dur: 0.2, vol: 0.25 });
+  }
+  slam() {           // body meets wall/ground at speed
+    this._noise({ dur: 0.16, vol: 0.55, filter: 420, filterEnd: 100 });
+    this._tone({ type: 'sine', freq: 90, freqEnd: 40, dur: 0.22, vol: 0.6 });
+  }
   taunt() {
     this._tone({ type: 'triangle', freq: 340, freqEnd: 300, dur: 0.05, vol: 0.2 });
     this._tone({ type: 'triangle', freq: 300, freqEnd: 260, dur: 0.05, vol: 0.18, delay: 0.07 });

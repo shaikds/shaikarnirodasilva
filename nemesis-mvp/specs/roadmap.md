@@ -169,6 +169,23 @@ gameplay video recorded and attached to the closing log entry.
 **Verification:** `tests/p9_saiyan.spec.mjs` 13/13 ×2; full p0–p9 regression
 green; aerial-battle video captured.
 
+## `[x]` P10 — Martial arts & blast momentum (M8, developer-requested)
+**Closes:** FR-8.1..8.5 · **Modules:** `combat/fighter.js` (limb rig, pose system, charge/flyaway/getUp states, vanish), `combat/attacks.js` (poses, uppercut/headbutt, chainHeavy route, CHARGE/FLYAWAY tuning), `combat/resolver.js` (charge damage scale, blast → fly-away, per-attack launch height), `combat/controller.js` (hold-to-charge, route/headbutt dispatch), `ai/rivalAgent.js` (safe-hold charging), `fx/vfx.js` + `fx/sfx.js` (afterimages, blast/slam), `ui/keymap.js` (boot overlay)
+
+- Articulated arms/legs/head replace the sword; every attack poses the body
+  (jab/cross/roundhouse/haymaker/rising-kick/headbutt) and walking swings
+  the limbs. Dodges VANISH through their i-frames with afterimage ghosts.
+- Hold heavy to charge: tap ×1 → full ×2.2; ≥50% charge turns the hit into
+  a BLAST that sends the victim FLYING — tumbling, wall slams for extra
+  damage, a get-up recovery with rise i-frames. Getting hit cancels a charge.
+- Combo routes: light-light-HEAVY branches into an uppercut launcher; heavy
+  pressed mid-ki-dash converts momentum into a headbutt.
+- Key-map overlay on boot (H reopens): every control, charge explained.
+
+**Exit criteria:** all FR-8 ACs pass; S-3 band holds; earlier suites green.
+**Verification:** `tests/p10_martial.spec.mjs` 16/16; full p0–p10 regression
+green; p8 band ×3 after the rival-charge retune (see 2026-07-08 log).
+
 ---
 
 ## After MVP

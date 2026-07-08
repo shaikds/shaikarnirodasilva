@@ -211,7 +211,15 @@ export class RivalAgent {
         break;
       case 'heavyAttack':
         if (dist > AI.meleeRange * 1.15) { f.intent.move.x = dirX; f.intent.move.z = dirZ; break; }
-        if (f.canStart('heavy')) f.startAttack('heavy');
+        if (f.canStart('heavy')) {
+          // FR-8.3: the rival charges its heavies too — but ONLY when the
+          // target can't punish the hold (charge cancels on hit, so charging
+          // into a live opponent is free damage for them; the first tuning
+          // pass held 0.08-0.33s always and lost the S-3 band 18/20)
+          const safe = t.busy && t.state !== 'attack';
+          if (safe) f.startCharge(0.5 + Math.random() * 0.4);
+          else f.startAttack('heavy');
+        }
         done();
         break;
       case 'fireSpecial':

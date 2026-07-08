@@ -28,8 +28,18 @@ export class PlayerController {
 
     // buffered discrete actions (AC-4.6.1): a press is consumed on the first
     // tick the fighter can legally act on it — zero idle frames by design
-    for (const a of ['light', 'heavy', 'special']) {
+    for (const a of ['light', 'special']) {
       if (f.canStart(a) && inp.consume(a)) { f.startAttack(a); break; }
+    }
+    // heavy is hold-to-charge (FR-8.3), with two instant exceptions:
+    // mid-string it ROUTES the combo (FR-8.4), and mid-dash it converts
+    // momentum into a headbutt (AC-8.1.2)
+    if (f.state === 'charge') {
+      if (!inp.down.heavy) f.releaseCharge();
+    } else if (f.canStart('heavy') && inp.consume('heavy')) {
+      if (f.state === 'attack') f.startAttack('heavy');          // combo route
+      else if (inp.down.dash && f.energy > 8) f.startAttack('headbutt');
+      else f.startCharge();
     }
     if (f.canStart('dodge') && inp.consume('dodge')) {
       f.startDodge(f.intent.move.x, f.intent.move.z);

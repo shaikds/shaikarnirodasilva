@@ -118,6 +118,29 @@ export class VFX {
     this._spawn(pos, { color, count: 2, speed: [0.2, 0.6], size: [0.05, 0.1], life: [0.15, 0.3], upBias: 0.3 });
   }
 
+  // FR-8.2: "too fast to see" — a fading ghost silhouette left behind by
+  // vanishing dodges and ki dashes
+  spawnAfterimage(pos, yaw, color = 0x8ab8ff) {
+    this._ghostGeo ??= new THREE.CapsuleGeometry(0.4, 0.9, 4, 8);
+    const mesh = new THREE.Mesh(this._ghostGeo, new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.32,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    mesh.position.set(pos.x, pos.y + 0.95, pos.z);
+    mesh.rotation.y = yaw;
+    this.scene.add(mesh);
+    (this.ghosts ??= []).push({ mesh, life: 0.22, max: 0.22 });
+  }
+
+  // FR-8.3.2: charged-blast impact + wall/ground slam
+  spawnBlast(pos) {
+    this._spawn(pos, { color: 0xffd24d, count: 26, speed: [4, 10], size: [0.14, 0.4], life: [0.3, 0.6], upBias: 1 });
+    this._spawn(pos, { color: 0xffffff, count: 12, speed: [2, 6], size: [0.1, 0.24], life: [0.2, 0.4], upBias: 1 });
+  }
+  spawnSlam(pos) {
+    this._spawn(pos, { color: 0xb0a890, count: 18, speed: [1.5, 5], size: [0.16, 0.4], life: [0.35, 0.7], upBias: 0.4 });
+  }
+
   // a handful of slow-drifting motes for atmosphere — cheap, always-on
   spawnAmbient(count = 35, bounds = { x: 45, z: 55, y: 6 }) {
     this.ambient = [];
@@ -142,6 +165,17 @@ export class VFX {
 
   update(dt, t = 0) {
     this._updateAmbient(t);
+    if (this.ghosts) {
+      for (const g of this.ghosts) {
+        g.life -= dt;
+        g.mesh.material.opacity = Math.max(0, g.life / g.max) * 0.32;
+        if (g.life <= 0) {
+          this.scene.remove(g.mesh);
+          g.mesh.material.dispose();
+        }
+      }
+      this.ghosts = this.ghosts.filter(g => g.life > 0);
+    }
     for (const p of this.particles) {
       p.life -= dt;
       p.vel.y -= p.grav * dt;

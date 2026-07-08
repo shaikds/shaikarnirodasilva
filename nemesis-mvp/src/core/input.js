@@ -11,6 +11,7 @@ const KEYMAP = {
   KeyJ: 'light', KeyK: 'heavy', KeyL: 'special',
   KeyI: 'ki', KeyF: 'flight', KeyQ: 'dash', KeyC: 'descend',
   KeyB: 'block',                    // hold (keyboard alias for RMB)
+  KeyH: 'help',                     // key-map overlay (FR-8.5)
   Tab: 'lock', KeyE: 'interact',
   Backquote: 'debug',
   ArrowLeft: 'camL', ArrowRight: 'camR', ArrowUp: 'camU', ArrowDown: 'camD',
