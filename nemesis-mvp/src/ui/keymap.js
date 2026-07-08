@@ -21,9 +21,9 @@ const CSS = `
 #keymap .grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 4px 30px;
 }
-#keymap .row { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; }
+#keymap .row { display: flex; align-items: baseline; gap: 12px; padding: 3px 0; }
 #keymap kbd {
-  min-width: 30px; padding: 2px 7px; text-align: center;
+  flex: none; min-width: 30px; padding: 2px 7px; text-align: center;
   border: 1px solid #4a4a6a; border-bottom-width: 3px; border-radius: 4px;
   background: #1c1c34; color: #dfe3ff; font: bold 12px monospace;
   white-space: nowrap;
