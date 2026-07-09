@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths: ["groupbuy/**", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["groupbuy/**", ".github/workflows/ci.yml"]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: groupbuy
+    env:
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+      AUTH_SECRET: "ci-only-secret-not-used-in-production"
+      LLM_PROVIDER: "mock"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: groupbuy/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run eval
+      - run: npm run build

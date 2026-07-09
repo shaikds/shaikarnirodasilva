@@ -1,0 +1,101 @@
+[
+  {
+    "name": "honest supplier at market price",
+    "expectFair": true,
+    "input": {
+      "claimedListPrice": 440,
+      "floorPrice": 280,
+      "marketReferencePrice": 450,
+      "history": [
+        { "listPrice": 450, "daysAgo": 80 },
+        { "listPrice": 440, "daysAgo": 30 }
+      ]
+    }
+  },
+  {
+    "name": "92% inflated list price vs market",
+    "expectFair": false,
+    "expectFlags": ["LIST_PRICE_INFLATED_VS_MARKET"],
+    "input": {
+      "claimedListPrice": 480,
+      "floorPrice": 210,
+      "marketReferencePrice": 250,
+      "history": [{ "listPrice": 480, "daysAgo": 10 }]
+    }
+  },
+  {
+    "name": "price hiked 85% three days before deal",
+    "expectFair": false,
+    "expectFlags": ["RECENT_PRICE_HIKE"],
+    "input": {
+      "claimedListPrice": 480,
+      "floorPrice": 210,
+      "marketReferencePrice": null,
+      "history": [
+        { "listPrice": 260, "daysAgo": 45 },
+        { "listPrice": 480, "daysAgo": 3 }
+      ]
+    }
+  },
+  {
+    "name": "slow-boil hike: +10% twice within window boundaries",
+    "expectReferenceAtMost": 300,
+    "input": {
+      "claimedListPrice": 363,
+      "floorPrice": 150,
+      "marketReferencePrice": null,
+      "history": [
+        { "listPrice": 300, "daysAgo": 85 },
+        { "listPrice": 330, "daysAgo": 50 },
+        { "listPrice": 363, "daysAgo": 10 }
+      ]
+    }
+  },
+  {
+    "name": "floor above market - win-win impossible",
+    "expectFair": false,
+    "expectFlags": ["FLOOR_ABOVE_MARKET"],
+    "input": {
+      "claimedListPrice": 300,
+      "floorPrice": 290,
+      "marketReferencePrice": 250,
+      "history": []
+    }
+  },
+  {
+    "name": "modest 20% premium over market is tolerated",
+    "expectFair": true,
+    "input": {
+      "claimedListPrice": 300,
+      "floorPrice": 180,
+      "marketReferencePrice": 250,
+      "history": [{ "listPrice": 300, "daysAgo": 60 }]
+    }
+  },
+  {
+    "name": "no market data, stable history - cautious pass",
+    "expectFair": true,
+    "input": {
+      "claimedListPrice": 500,
+      "floorPrice": 300,
+      "marketReferencePrice": null,
+      "history": [
+        { "listPrice": 500, "daysAgo": 80 },
+        { "listPrice": 500, "daysAgo": 20 }
+      ]
+    }
+  },
+  {
+    "name": "discount measured against pre-hike price, not claimed price",
+    "expectReferenceAtMost": 260,
+    "input": {
+      "claimedListPrice": 480,
+      "floorPrice": 210,
+      "marketReferencePrice": 250,
+      "history": [
+        { "listPrice": 260, "daysAgo": 45 },
+        { "listPrice": 480, "daysAgo": 3 }
+      ]
+    }
+  }
+]
