@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MEMBER
+  SUPPLIER
+  ADMIN
+}
+
+enum DealStatus {
+  PROPOSED
+  OPEN
+  CLOSED
+  EXPIRED
+  BLOCKED
+}
+
+enum AgentAction {
+  PROPOSE_DEAL
+  OPEN_DEAL
+  BLOCK_DEAL
+  CLOSE_DEAL
+  EXPIRE_DEAL
+  ADJUST_TRUST
+  SKIP
+}
+
+enum DecisionOutcome {
+  ALLOWED
+  BLOCKED_BY_GUARDRAIL
+  SKIPPED
+}
+
+model User {
+  id            String            @id @default(cuid())
+  email         String            @unique
+  name          String
+  passwordHash  String?
+  role          Role              @default(MEMBER)
+  countryCode   String            @default("IL")
+  createdAt     DateTime          @default(now())
+  supplier      Supplier?
+  memberships   GroupMembership[]
+  demandSignals DemandSignal[]
+  coupons       CouponCode[]
+}
+
+model Supplier {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String
+  websiteUrl  String
+  description String    @default("")
+  verified    Boolean   @default(false)
+  trustScore  Int       @default(70) // 0-100
+  createdAt   DateTime  @default(now())
+  products    Product[]
+}
+
+model Product {
+  id             String         @id @default(cuid())
+  supplierId     String
+  supplier       Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  name           String
+  description    String         @default("")
+  category       String
+  imageUrl       String?
+  currency       String         @default("ILS")
+  listPrice      Decimal        @db.Decimal(12, 2) // supplier-claimed regular price
+  floorPrice     Decimal        @db.Decimal(12, 2) // supplier's minimum acceptable price
+  maxDiscountPct Int            @default(40) // supplier's stated max discount
+  stock          Int            @default(0)
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  priceHistory   PriceHistory[]
+  demandSignals  DemandSignal[]
+  deals          Deal[]
+  couponCodes    CouponCode[]
+}
+
+model PriceHistory {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  listPrice  Decimal  @db.Decimal(12, 2)
+  recordedAt DateTime @default(now())
+
+  @@index([productId, recordedAt])
+}
+
+// Typical market price for a product category (or specific product) per country.
+// Seeded/curated; the fairness engine uses it to detect inflated list prices.
+model MarketReference {
+  id          String   @id @default(cuid())
+  category    String
+  countryCode String
+  typicalPrice Decimal @db.Decimal(12, 2)
+  currency    String   @default("ILS")
+  source      String   @default("seed")
+  updatedAt   DateTime @updatedAt
+
+  @@unique([category, countryCode])
+}
+
+// Purchasing-power index per country. 1.0 = baseline (US).
+// Lower pppFactor => lower local purchasing power => deeper target discount.
+model CountryPPP {
+  countryCode String  @id
+  countryName String
+  pppFactor   Decimal @db.Decimal(6, 3)
+  currency    String
+}
+
+model DemandSignal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model Deal {
+  id             String            @id @default(cuid())
+  productId      String
+  product        Product           @relation(fields: [productId], references: [id])
+  status         DealStatus        @default(PROPOSED)
+  groupPrice     Decimal           @db.Decimal(12, 2)
+  referencePrice Decimal           @db.Decimal(12, 2) // verified reference used for discount claims
+  discountPct    Int // real discount vs referencePrice
+  fairnessScore  Int // 0-100 from fairness verification
+  countryCode    String            @default("IL")
+  targetSize     Int
+  deadline       DateTime
+  aiRationale    String            @default("")
+  createdAt      DateTime          @default(now())
+  closedAt       DateTime?
+  memberships    GroupMembership[]
+  coupons        CouponCode[]
+
+  @@index([status])
+}
+
+model GroupMembership {
+  id       String   @id @default(cuid())
+  dealId   String
+  deal     Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  @@unique([dealId, userId])
+}
+
+// Supplier-uploaded pool of real coupon codes for their own website, per product.
+// A code is bound to a deal + member only when the deal closes.
+model CouponCode {
+  id         String    @id @default(cuid())
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  dealId     String?
+  deal       Deal?     @relation(fields: [dealId], references: [id])
+  code       String
+  assignedTo String?
+  user       User?     @relation(fields: [assignedTo], references: [id])
+  assignedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([productId, code])
+  @@index([assignedTo])
+}
+
+model AgentRun {
+  id          String          @id @default(cuid())
+  startedAt   DateTime        @default(now())
+  finishedAt  DateTime?
+  triggeredBy String // "admin:<userId>" | "cron"
+  llmProvider String
+  summary     String          @default("")
+  decisions   AgentDecision[]
+}
+
+model AgentDecision {
+  id            String          @id @default(cuid())
+  runId         String
+  run           AgentRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  action        AgentAction
+  outcome       DecisionOutcome
+  productId     String?
+  dealId        String?
+  supplierId    String?
+  reasons       String[] // guardrail/fairness reasons, machine-readable codes
+  detail        Json // input snapshot + computed values
+  createdAt     DateTime        @default(now())
+
+  @@index([runId])
+}
+
+model SystemSetting {
+  key   String @id
+  value String
+}
