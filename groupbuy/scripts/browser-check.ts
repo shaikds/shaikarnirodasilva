@@ -16,7 +16,7 @@ async function main() {
   await page.fill('input[name="email"]', "dana@groupbuy.local");
   await page.fill('input[name="password"]', "Demo1234!");
   await page.click('main form button');
-  await page.waitForURL(`${BASE}/`, { timeout: 15000 });
+  await page.waitForURL(`${BASE}/deals`, { timeout: 15000 });
   console.log("member login OK");
   await page.screenshot({ path: `${SHOT_DIR}/01-deals-feed.png` });
 
@@ -44,7 +44,7 @@ async function main() {
   await admin.fill('input[name="email"]', "admin@groupbuy.local");
   await admin.fill('input[name="password"]', "Demo1234!");
   await admin.click("main form button");
-  await admin.waitForURL(`${BASE}/`, { timeout: 15000 });
+  await admin.waitForURL(`${BASE}/deals`, { timeout: 15000 });
   await admin.goto(`${BASE}/admin`);
   await admin.waitForSelector("table");
   const blocked = await admin.locator("text=BLOCKED_BY_GUARDRAIL").count();

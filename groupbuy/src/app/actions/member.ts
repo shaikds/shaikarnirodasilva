@@ -22,6 +22,7 @@ export async function joinDeal(dealId: string) {
     update: {},
     create: { dealId: id, userId: user.id },
   });
+  revalidatePath("/");
   revalidatePath("/deals");
   revalidatePath(`/deals/${id}`);
   return { ok: true };
@@ -33,6 +34,7 @@ export async function leaveDeal(dealId: string) {
   const deal = await prisma.deal.findUnique({ where: { id } });
   if (!deal || deal.status !== "OPEN") return { error: "deal_not_open" };
   await prisma.groupMembership.deleteMany({ where: { dealId: id, userId: user.id } });
+  revalidatePath("/");
   revalidatePath("/deals");
   revalidatePath(`/deals/${id}`);
   return { ok: true };

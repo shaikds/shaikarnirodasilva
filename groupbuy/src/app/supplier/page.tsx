@@ -21,32 +21,34 @@ export default async function SupplierPage() {
   if (!supplier) redirect("/");
 
   const input =
-    "mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none";
-  const label = "block text-xs font-medium text-zinc-600";
+    "mt-1 w-full rounded-xl border border-line bg-background px-3 py-2 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30";
+  const label = "block text-xs font-bold text-muted";
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="rise-in flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">{t("title")}</h1>
-          <p className="mt-1 text-sm text-zinc-500">{supplier.companyName}</p>
+          <h1 className="text-4xl font-black tracking-tight">{t("title")}</h1>
+          <p className="mt-1 text-muted">{supplier.companyName}</p>
         </div>
-        <div className="flex gap-3 text-sm">
+        <div className="flex gap-2 text-sm">
           <span
-            className={`rounded-full px-3 py-1 font-medium ${supplier.verified ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}
+            className={`rounded-full px-3 py-1.5 font-bold ${supplier.verified ? "bg-brand-soft text-brand-strong" : "bg-pop-soft text-pop-strong"}`}
           >
-            {supplier.verified ? t("verified") : t("unverified")}
+            {supplier.verified ? `✓ ${t("verified")}` : `⏳ ${t("unverified")}`}
           </span>
-          <span className="rounded-full bg-zinc-100 px-3 py-1 font-medium text-zinc-700">
+          <span className="rounded-full bg-line px-3 py-1.5 font-bold">
             {t("trust")}: {supplier.trustScore}/100
           </span>
         </div>
       </div>
 
-      <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{t("priceNote")}</p>
+      <p className="rounded-2xl border border-pop-soft bg-pop-soft/50 p-4 text-sm font-medium text-pop-strong">
+        ⚠️ {t("priceNote")}
+      </p>
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="font-semibold">{t("addProduct")}</h2>
+      <section className="rounded-2xl border border-line bg-surface p-6 shadow-sm sm:p-8">
+        <h2 className="text-lg font-bold">➕ {t("addProduct")}</h2>
         <form
           action={async (formData: FormData) => {
             "use server";
@@ -83,7 +85,7 @@ export default async function SupplierPage() {
             <input name="maxDiscountPct" type="number" min={0} max={95} defaultValue={40} required className={input} />
           </div>
           <div className="flex items-end">
-            <button className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+            <button className="rounded-full bg-gradient-to-r from-brand to-brand-strong px-6 py-2.5 text-sm font-bold text-white shadow-md transition hover:brightness-110">
               {t("save")}
             </button>
           </div>
@@ -91,17 +93,19 @@ export default async function SupplierPage() {
       </section>
 
       <section>
-        <h2 className="font-semibold">{t("products")}</h2>
-        <div className="mt-3 space-y-4">
+        <h2 className="text-lg font-bold">{t("products")}</h2>
+        <div className="stagger mt-4 space-y-4">
           {supplier.products.map((p) => (
-            <div key={p.id} className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div key={p.id} className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <span className="font-medium">{p.name}</span>
-                  <span className="ms-2 text-xs text-zinc-500">({p.category})</span>
+                  <span className="font-bold">{p.name}</span>
+                  <span className="ms-2 rounded-full bg-line px-2 py-0.5 text-xs font-semibold text-muted">
+                    {p.category}
+                  </span>
                 </div>
-                <div className="text-sm text-zinc-600">
-                  ₪{Number(p.listPrice).toFixed(0)} · {t("stock")}: {p.stock} ·{" "}
+                <div className="text-sm font-medium text-muted">
+                  ₪{Number(p.listPrice).toFixed(0)} · {t("stock")}: {p.stock} · 🎟️{" "}
                   {t("unassigned", { count: p._count.couponCodes })}
                 </div>
               </div>
@@ -113,7 +117,7 @@ export default async function SupplierPage() {
                 className="mt-3 flex gap-2"
               >
                 <input name="codes" placeholder={t("couponsHelp")} className={input + " mt-0 grow"} />
-                <button className="shrink-0 rounded-md border border-emerald-600 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+                <button className="shrink-0 rounded-full border-2 border-brand px-4 py-2 text-sm font-bold text-brand transition hover:bg-brand-soft">
                   {t("upload")}
                 </button>
               </form>

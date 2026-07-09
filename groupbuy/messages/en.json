@@ -80,7 +80,8 @@
     "unverify": "Unverify",
     "action": "Action",
     "outcome": "Outcome",
-    "reasons": "Reasons"
+    "reasons": "Reasons",
+    "trust": "Trust {score}/100"
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -99,8 +100,36 @@
     "invalid": "Invalid email or password",
     "signupOk": "Account created — you can sign in now."
   },
+  "landing": {
+    "heroBadge": "AI agent · verified fair prices",
+    "heroTitle1": "Buy together.",
+    "heroTitle2": "Save for real.",
+    "heroText": "Our AI agent finds products people actually want, verifies the discount is genuine against real market prices, and opens group deals. Group fills up — everyone gets a coupon code for the supplier's own site.",
+    "ctaDeals": "Browse open deals",
+    "ctaHow": "How it works",
+    "statDeals": "deals opened",
+    "statMembers": "group members",
+    "statAvgDiscount": "avg. verified discount",
+    "statBlocked": "fake discounts blocked",
+    "howTitle": "How it works",
+    "how1Title": "Vote for what you want",
+    "how1Text": "Browse the catalog and hit “I want this”. Demand is what wakes the AI up.",
+    "how2Title": "The AI opens a group",
+    "how2Text": "It verifies the price is honestly discounted for your location, computes a win-win price, and opens a group with a deadline.",
+    "how3Title": "Group fills → coupon lands",
+    "how3Text": "When the group hits its target, every member gets a personal coupon code to redeem on the supplier's website.",
+    "trustTitle": "An AI you can audit",
+    "trustText": "Every decision the agent makes is logged with reasons. Prices are computed by deterministic code the AI can't override, and suppliers who fake discounts get blocked automatically.",
+    "trust1": "Discounts measured against 90-day price history and market references — inflated “regular prices” don't count",
+    "trust2": "Never below the supplier's floor price — a win-win by construction",
+    "trust3": "Purchasing-power aware: a fair price in Tel Aviv isn't the same as in Mumbai",
+    "trust4": "Kill switch, action caps, and a full audit trail",
+    "liveTitle": "Live group deals",
+    "liveAll": "See all deals →"
+  },
   "common": {
     "language": "עברית",
-    "ils": "₪"
+    "ils": "₪",
+    "footer": "Win-win group buying, managed by an audited AI agent."
   }
 }

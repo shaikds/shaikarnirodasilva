@@ -25,37 +25,37 @@ export default function LoginPage() {
     setBusy(false);
     if (res?.error) setError(t("invalid"));
     else {
-      router.push("/");
+      router.push("/deals");
       router.refresh();
     }
   }
 
   const input =
-    "mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none";
+    "mt-1 w-full rounded-xl border border-line bg-background px-3 py-2 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30";
 
   return (
-    <div className="mx-auto max-w-sm rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <h1 className="text-xl font-bold">{t("loginTitle")}</h1>
+    <div className="rise-in mx-auto mt-8 max-w-sm rounded-3xl border border-line bg-surface p-8 shadow-lg">
+      <h1 className="text-2xl font-black tracking-tight">{t("loginTitle")}</h1>
       <form onSubmit={onSubmit} className="mt-4 space-y-4">
         <div>
-          <label className="block text-xs font-medium text-zinc-600">{t("email")}</label>
+          <label className="block text-xs font-bold text-muted">{t("email")}</label>
           <input name="email" type="email" required autoComplete="email" className={input} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-600">{t("password")}</label>
+          <label className="block text-xs font-bold text-muted">{t("password")}</label>
           <input name="password" type="password" required autoComplete="current-password" className={input} />
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm font-semibold text-danger">{error}</p>}
         <button
           disabled={busy}
-          className="w-full rounded-md bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          className="w-full rounded-full bg-gradient-to-r from-brand to-brand-strong py-3 text-sm font-bold text-white shadow-md transition hover:brightness-110 disabled:opacity-50"
         >
           {t("submitLogin")}
         </button>
       </form>
-      <p className="mt-4 text-center text-sm text-zinc-500">
+      <p className="mt-4 text-center text-sm text-muted">
         {t("noAccount")}{" "}
-        <Link href="/signup" className="text-emerald-700 underline">
+        <Link href="/signup" className="font-bold text-brand hover:underline">
           {t("submitSignup")}
         </Link>
       </p>

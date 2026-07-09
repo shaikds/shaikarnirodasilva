@@ -1,14 +1,21 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getFormatter, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { joinDeal, leaveDeal } from "@/app/actions/member";
+import Countdown from "@/components/Countdown";
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  headphones: "🎧",
+  kitchen: "🍳",
+  fitness: "⌚",
+  "smart-home": "🏠",
+};
 
 export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const t = await getTranslations("deals");
-  const format = await getFormatter();
   const session = await auth();
 
   const deal = await prisma.deal.findUnique({
@@ -32,104 +39,121 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
 
   const joined = deal._count.memberships;
   const pct = Math.min(100, Math.round((joined / deal.targetSize) * 100));
+  const almostFull = pct >= 70;
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold">{deal.product.name}</h1>
-            <p className="mt-1 text-sm text-zinc-500">{deal.product.supplier.companyName}</p>
-          </div>
-          <span className="shrink-0 rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">
-            {t("verifiedDiscount", { pct: deal.discountPct })}
+    <div className="mx-auto max-w-3xl rise-in">
+      <div className="overflow-hidden rounded-3xl border border-line bg-surface shadow-lg">
+        {/* hero strip */}
+        <div className="relative flex h-44 items-center justify-center bg-gradient-to-br from-brand-soft via-surface to-pop-soft">
+          <span className="text-8xl">{CATEGORY_EMOJI[deal.product.category] ?? "🛍️"}</span>
+          <span className="absolute end-5 top-5 rounded-full bg-gradient-to-r from-pop to-pop-strong px-4 py-1.5 text-lg font-black text-white shadow-lg">
+            -{deal.discountPct}%
           </span>
         </div>
 
-        <p className="mt-4 text-sm text-zinc-600">{deal.product.description}</p>
-
-        <div className="mt-6 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-          <div className="rounded-lg bg-zinc-50 p-3">
-            <div className="text-xs text-zinc-500">{t("groupPrice")}</div>
-            <div className="text-lg font-bold text-emerald-700">₪{Number(deal.groupPrice).toFixed(0)}</div>
+        <div className="p-6 sm:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-black tracking-tight">{deal.product.name}</h1>
+              <p className="mt-1 text-sm text-muted">{deal.product.supplier.companyName}</p>
+            </div>
+            <span className="rounded-full bg-brand-soft px-3 py-1 text-sm font-bold text-brand-strong">
+              ✓ {t("fairness", { score: deal.fairnessScore })}
+            </span>
           </div>
-          <div className="rounded-lg bg-zinc-50 p-3">
-            <div className="text-xs text-zinc-500">{t("reference")}</div>
-            <div className="text-lg font-semibold text-zinc-400 line-through">
-              ₪{Number(deal.referencePrice).toFixed(0)}
+
+          <p className="mt-4 leading-relaxed text-muted">{deal.product.description}</p>
+
+          <div className="mt-6 grid grid-cols-2 gap-4">
+            <div className="rounded-2xl bg-gradient-to-br from-brand to-brand-strong p-5 text-white shadow-md">
+              <div className="text-xs font-semibold uppercase tracking-wide opacity-80">{t("groupPrice")}</div>
+              <div className="mt-1 text-4xl font-black">₪{Number(deal.groupPrice).toFixed(0)}</div>
+            </div>
+            <div className="rounded-2xl border border-line p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted">{t("reference")}</div>
+              <div className="mt-1 text-4xl font-black text-muted line-through">
+                ₪{Number(deal.referencePrice).toFixed(0)}
+              </div>
             </div>
           </div>
-          <div className="rounded-lg bg-zinc-50 p-3">
-            <div className="text-xs text-zinc-500">{t("fairness", { score: deal.fairnessScore })}</div>
-            <div className="text-lg font-bold">{deal.fairnessScore}/100</div>
-          </div>
-        </div>
 
-        {deal.aiRationale && (
-          <div className="mt-5 rounded-lg border border-emerald-100 bg-emerald-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{t("aiRationale")}</div>
-            <p className="mt-1 text-sm text-emerald-900">{deal.aiRationale}</p>
-          </div>
-        )}
-
-        <div className="mt-6">
-          <div className="h-2.5 overflow-hidden rounded-full bg-zinc-100">
-            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
-          </div>
-          <div className="mt-2 flex justify-between text-xs text-zinc-500">
-            <span>{t("joined", { count: joined, target: deal.targetSize })}</span>
-            <span>{t("deadline", { date: format.dateTime(deal.deadline, { dateStyle: "medium" }) })}</span>
-          </div>
-        </div>
-
-        <div className="mt-6">
-          {deal.status === "CLOSED" ? (
-            myCoupon ? (
-              <div className="rounded-lg border-2 border-dashed border-emerald-400 bg-emerald-50 p-4 text-center">
-                <div className="text-xs uppercase tracking-wide text-emerald-700">{t("yourCoupon")}</div>
-                <div className="mt-1 font-mono text-2xl font-bold text-emerald-800">{myCoupon.code}</div>
-                <a
-                  className="mt-2 inline-block text-sm text-emerald-700 underline"
-                  href={deal.product.supplier.websiteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {t("redeemAt")}
-                </a>
+          {deal.aiRationale && (
+            <div className="mt-6 rounded-2xl border border-brand-soft bg-brand-soft/40 p-5">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-brand-strong">
+                <span className="text-base">🤖</span> {t("aiRationale")}
               </div>
-            ) : (
-              <p className="text-center text-sm font-semibold text-zinc-500">{t("closed")}</p>
-            )
-          ) : !session ? (
-            <Link
-              href="/login"
-              className="block w-full rounded-lg bg-emerald-600 py-3 text-center font-semibold text-white hover:bg-emerald-700"
-            >
-              {t("signInToJoin")}
-            </Link>
-          ) : membership ? (
-            <form
-              action={async () => {
-                "use server";
-                await leaveDeal(deal.id);
-              }}
-            >
-              <button className="w-full rounded-lg border border-zinc-300 py-3 font-semibold text-zinc-600 hover:bg-zinc-50">
-                {t("leave")}
-              </button>
-            </form>
-          ) : (
-            <form
-              action={async () => {
-                "use server";
-                await joinDeal(deal.id);
-              }}
-            >
-              <button className="w-full rounded-lg bg-emerald-600 py-3 font-semibold text-white hover:bg-emerald-700">
-                {t("join")}
-              </button>
-            </form>
+              <p className="mt-2 text-sm leading-relaxed">{deal.aiRationale}</p>
+            </div>
           )}
+
+          <div className="mt-8">
+            <div className="h-3.5 overflow-hidden rounded-full bg-line">
+              <div
+                className={`bar-animate h-full rounded-full ${almostFull ? "bg-gradient-to-r from-pop to-pop-strong" : "bg-gradient-to-r from-brand to-brand-strong"}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-sm">
+              <span className={`font-bold ${almostFull ? "text-pop-strong" : "text-muted"}`}>
+                {almostFull && "🔥 "}
+                {t("joined", { count: joined, target: deal.targetSize })}
+              </span>
+              <Countdown deadline={deal.deadline.toISOString()} doneLabel={t("closed")} />
+            </div>
+          </div>
+
+          <div className="mt-8">
+            {deal.status === "CLOSED" ? (
+              myCoupon ? (
+                <div className="rounded-2xl border-2 border-dashed border-brand bg-brand-soft/40 p-6 text-center">
+                  <div className="text-xs font-bold uppercase tracking-wide text-brand-strong">{t("yourCoupon")}</div>
+                  <div className="mt-2 font-mono text-3xl font-black tracking-widest text-brand-strong">
+                    {myCoupon.code}
+                  </div>
+                  <a
+                    className="mt-3 inline-block rounded-full bg-brand px-5 py-2 text-sm font-bold text-white shadow-md transition hover:brightness-110"
+                    href={deal.product.supplier.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t("redeemAt")} ↗
+                  </a>
+                </div>
+              ) : (
+                <p className="text-center font-bold text-muted">{t("closed")}</p>
+              )
+            ) : !session ? (
+              <Link
+                href="/login"
+                className="block w-full rounded-2xl bg-gradient-to-r from-brand to-brand-strong py-4 text-center text-lg font-black text-white shadow-lg transition hover:shadow-xl hover:brightness-110"
+              >
+                {t("signInToJoin")}
+              </Link>
+            ) : membership ? (
+              <form
+                action={async () => {
+                  "use server";
+                  await leaveDeal(deal.id);
+                }}
+              >
+                <button className="w-full rounded-2xl border-2 border-line py-4 text-lg font-bold text-muted transition hover:border-danger hover:text-danger">
+                  {t("leave")}
+                </button>
+              </form>
+            ) : (
+              <form
+                action={async () => {
+                  "use server";
+                  await joinDeal(deal.id);
+                }}
+              >
+                <button className="w-full rounded-2xl bg-gradient-to-r from-brand to-brand-strong py-4 text-lg font-black text-white shadow-lg transition hover:scale-[1.01] hover:shadow-xl hover:brightness-110">
+                  🎉 {t("join")}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     </div>
