@@ -158,7 +158,7 @@ async function main() {
     },
   });
 
-  await prisma.product.create({
+  const smartwatch = await prisma.product.create({
     data: {
       supplierId: shadySupplier.id,
       name: "MegaFit Smart Watch",
@@ -198,6 +198,14 @@ async function main() {
       where: { userId_productId: { userId: m.id, productId: blender.id } },
       update: {},
       create: { userId: m.id, productId: blender.id },
+    });
+  }
+  // Demand for the shady product too — the agent must consider and BLOCK it.
+  for (const m of members.slice(0, 4)) {
+    await prisma.demandSignal.upsert({
+      where: { userId_productId: { userId: m.id, productId: smartwatch.id } },
+      update: {},
+      create: { userId: m.id, productId: smartwatch.id },
     });
   }
 
