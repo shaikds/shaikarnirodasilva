@@ -1,13 +1,17 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import Counter from "@/components/Counter";
 import DealCard from "@/components/DealCard";
+import TrendingCard from "@/components/TrendingCard";
 
 export default async function LandingPage() {
   const t = await getTranslations("landing");
+  const tt = await getTranslations("trending");
+  const session = await auth();
 
-  const [openDeals, totalDeals, memberCount, blockedCount, avgDiscount] = await Promise.all([
+  const [openDeals, totalDeals, memberCount, blockedCount, avgDiscount, trendingItems] = await Promise.all([
     prisma.deal.findMany({
       where: { status: "OPEN" },
       include: {
@@ -21,6 +25,15 @@ export default async function LandingPage() {
     prisma.groupMembership.count(),
     prisma.agentDecision.count({ where: { outcome: "BLOCKED_BY_GUARDRAIL" } }),
     prisma.deal.aggregate({ _avg: { discountPct: true }, where: { status: { in: ["OPEN", "CLOSED"] } } }),
+    prisma.trendingItem.findMany({
+      where: { status: { in: ["LISTED", "CLAIMABLE", "CLAIM_WINDOW"] } },
+      include: {
+        _count: { select: { votes: true } },
+        votes: { where: { userId: session?.user?.id ?? "-" }, select: { id: true } },
+      },
+      orderBy: [{ scrapedAt: "desc" }, { createdAt: "desc" }],
+      take: 5,
+    }),
   ]);
 
   const stats = [
@@ -87,6 +100,40 @@ export default async function LandingPage() {
           </div>
         ))}
       </section>
+
+      {/* ---------- Trending in Israel ---------- */}
+      {trendingItems.length > 0 && (
+        <section>
+          <div className="text-center">
+            <span className="inline-flex items-center gap-2 rounded-full bg-pop-soft px-4 py-1.5 text-sm font-bold text-pop-strong">
+              📈 {tt("badge")}
+            </span>
+            <h2 className="mt-4 text-3xl font-black tracking-tight">{tt("title")}</h2>
+            <p className="mx-auto mt-2 max-w-xl text-muted">{tt("subtitle")}</p>
+          </div>
+          <div className="stagger mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {trendingItems.map((item) => (
+              <TrendingCard
+                key={item.id}
+                signedIn={Boolean(session)}
+                item={{
+                  id: item.id,
+                  title: item.title,
+                  category: item.category,
+                  source: item.source,
+                  zapLowestPriceIls: item.zapLowestPriceIls == null ? null : Number(item.zapLowestPriceIls),
+                  rating: item.rating == null ? null : Number(item.rating),
+                  reviewCount: item.reviewCount,
+                  status: item.status,
+                  votes: item._count.votes,
+                  votesNeeded: item.votesNeeded,
+                  voted: item.votes.length > 0,
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ---------- How it works ---------- */}
       <section id="how" className="scroll-mt-24">

@@ -1,0 +1,28 @@
+# Weekly trending scrape. Calls the deployed app's protected cron endpoint.
+# Requires two repository secrets once the app is deployed:
+#   APP_URL     e.g. https://groupbuy.example.com
+#   CRON_SECRET the same value as the app's CRON_SECRET env var
+# Until those secrets exist the job exits quietly without doing anything.
+name: Scrape trending items
+
+on:
+  schedule:
+    - cron: "0 2 * * 0" # every Sunday 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scrape endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_URL / CRON_SECRET secrets not configured — skipping."
+            exit 0
+          fi
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/scrape"

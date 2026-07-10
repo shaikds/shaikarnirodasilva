@@ -215,6 +215,73 @@ async function main() {
     create: { key: "agent_kill_switch", value: "off" },
   });
 
+  // --- Trending items (as if scraped from Israeli sources this week) ---
+  const trendingSeed = [
+    {
+      source: "KSP",
+      externalId: "ksp-289411",
+      title: "אוזניות אלחוטיות Sony WH-CH720N",
+      category: "headphones",
+      sourceUrl: "https://ksp.co.il/web/item/289411",
+      sourcePriceIls: 449,
+      zapLowestPriceIls: 429,
+      rating: 4.6,
+      reviewCount: 1830,
+    },
+    {
+      source: "KSP",
+      externalId: "ksp-301254",
+      title: "שעון חכם Xiaomi Smart Band 9",
+      category: "fitness",
+      sourceUrl: "https://ksp.co.il/web/item/301254",
+      sourcePriceIls: 169,
+      zapLowestPriceIls: 155,
+      rating: 4.4,
+      reviewCount: 2540,
+    },
+    {
+      source: "KSP",
+      externalId: "ksp-277890",
+      title: "רמקול חכם Echo Dot דור 5",
+      category: "smart-home",
+      sourceUrl: "https://ksp.co.il/web/item/277890",
+      sourcePriceIls: 219,
+      zapLowestPriceIls: 199,
+      rating: 4.7,
+      reviewCount: 4120,
+    },
+    {
+      source: "SUPER_PHARM",
+      externalId: "sp-118332",
+      title: "מברשת שיניים חשמלית Oral-B Pro 3",
+      category: "kitchen",
+      sourceUrl: "https://shop.super-pharm.co.il/p/118332",
+      sourcePriceIls: 299,
+      zapLowestPriceIls: 279,
+      rating: 4.5,
+      reviewCount: 960,
+    },
+    {
+      source: "SUPER_PHARM",
+      externalId: "sp-120775",
+      title: "מייבש שיער Remington D5715",
+      category: "kitchen",
+      sourceUrl: "https://shop.super-pharm.co.il/p/120775",
+      sourcePriceIls: 189,
+      zapLowestPriceIls: 175,
+      rating: 4.2,
+      reviewCount: 640,
+    },
+  ] as const;
+
+  for (const t of trendingSeed) {
+    await prisma.trendingItem.upsert({
+      where: { source_externalId: { source: t.source, externalId: t.externalId } },
+      update: { sourcePriceIls: t.sourcePriceIls, zapLowestPriceIls: t.zapLowestPriceIls, scrapedAt: new Date() },
+      create: { ...t },
+    });
+  }
+
   console.log("Seeded. Demo login password for all users:", DEMO_PASSWORD);
   console.log("Admin: admin@groupbuy.local | Member: dana@groupbuy.local | Supplier: supplier@soundwave.co.il");
   console.log("Admin id:", admin.id);

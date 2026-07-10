@@ -29,6 +29,29 @@ enum AgentAction {
   EXPIRE_DEAL
   ADJUST_TRUST
   SKIP
+  EXPIRE_TRENDING
+  ACTIVATE_TRENDING
+  RESOLVE_CLAIM
+}
+
+enum TrendingSource {
+  KSP
+  SUPER_PHARM
+  ZAP
+}
+
+enum TrendingStatus {
+  LISTED // scraped, collecting votes
+  CLAIMABLE // votes reached the win-win threshold; suppliers may offer
+  CLAIM_WINDOW // at least one offer submitted; window ticking
+  CONVERTED // winning offer became a Product + open Deal
+  EXPIRED
+}
+
+enum OfferStatus {
+  PENDING
+  WON
+  LOST
 }
 
 enum DecisionOutcome {
@@ -208,4 +231,59 @@ model AgentDecision {
 model SystemSetting {
   key   String @id
   value String
+}
+
+// A product scraped from an Israeli trend source. Members vote on it; once
+// votes reach the deterministic win-win threshold, verified suppliers compete
+// to claim it. The scraped Zap lowest price is the fairness bar: the final
+// group price must beat it (free shipping mandatory).
+model TrendingItem {
+  id                String          @id @default(cuid())
+  title             String
+  category          String
+  source            TrendingSource
+  externalId        String
+  sourceUrl         String
+  sourcePriceIls    Decimal         @db.Decimal(12, 2) // price at the discovery source
+  zapLowestPriceIls Decimal?        @db.Decimal(12, 2) // verified lowest Israeli market price
+  rating            Decimal?        @db.Decimal(3, 1)
+  reviewCount       Int?
+  status            TrendingStatus  @default(LISTED)
+  votesNeeded       Int? // deterministic activation threshold; null = win-win impossible
+  claimWindowEndsAt DateTime?
+  productId         String? // set when converted to a real Product
+  scrapedAt         DateTime        @default(now())
+  createdAt         DateTime        @default(now())
+  votes             TrendingVote[]
+  offers            SupplierOffer[]
+
+  @@unique([source, externalId])
+  @@index([status])
+}
+
+model TrendingVote {
+  id             String       @id @default(cuid())
+  userId         String
+  trendingItemId String
+  item           TrendingItem @relation(fields: [trendingItemId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, trendingItemId])
+}
+
+// A supplier's competing bid to fulfil a claimable trending item.
+// Free shipping is mandatory; the agent picks the offer that yields the
+// lowest verified member price. The supplier never sets the final price.
+model SupplierOffer {
+  id             String       @id @default(cuid())
+  trendingItemId String
+  item           TrendingItem @relation(fields: [trendingItemId], references: [id], onDelete: Cascade)
+  supplierId     String
+  floorPrice     Decimal      @db.Decimal(12, 2)
+  stock          Int
+  freeShipping   Boolean
+  status         OfferStatus  @default(PENDING)
+  createdAt      DateTime     @default(now())
+
+  @@unique([trendingItemId, supplierId])
 }

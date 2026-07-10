@@ -88,3 +88,44 @@ export function checkCloseDeal(check: CloseDealCheck): GuardrailVerdict {
   if (check.availableCouponCodes < check.memberCount) violations.push("INSUFFICIENT_COUPON_POOL");
   return { allowed: violations.length === 0, violations };
 }
+
+export interface TrendingOfferCheck {
+  killSwitchOn: boolean;
+  supplierVerified: boolean;
+  supplierTrustScore: number;
+  freeShipping: boolean;
+  floorPrice: number;
+  /** Verified lowest Israeli market price for the item (Zap). */
+  marketPrice: number;
+  /** Member price the pricing engine produced for this offer. */
+  computedGroupPrice: number;
+  pricingOk: boolean;
+  stock: number;
+  targetSize: number;
+}
+
+/**
+ * A supplier offer on a trending item may only win when the member price it
+ * yields strictly beats the verified lowest Israeli market price — with free
+ * shipping mandatory, so the comparison needs no shipping adjustment.
+ */
+export function checkTrendingOffer(check: TrendingOfferCheck, limits: GuardrailLimits): GuardrailVerdict {
+  const violations: string[] = [];
+
+  if (check.killSwitchOn) violations.push("KILL_SWITCH_ON");
+  if (!check.supplierVerified) violations.push("SUPPLIER_NOT_VERIFIED");
+  if (check.supplierTrustScore < limits.minTrustScore) violations.push("SUPPLIER_TRUST_TOO_LOW");
+
+  if (!check.freeShipping) violations.push("NO_FREE_SHIPPING");
+  if (check.floorPrice >= check.marketPrice) violations.push("FLOOR_NOT_BELOW_MARKET");
+
+  if (!check.pricingOk) violations.push("PRICING_CHECK_FAILED");
+  // The whole point of a trending deal: members must pay strictly less than
+  // the best price they could get alone anywhere in Israel.
+  if (check.computedGroupPrice >= check.marketPrice) violations.push("PRICE_NOT_BELOW_MARKET");
+  if (check.computedGroupPrice < check.floorPrice) violations.push("PRICE_BELOW_FLOOR");
+
+  if (check.stock < check.targetSize) violations.push("INSUFFICIENT_STOCK");
+
+  return { allowed: violations.length === 0, violations };
+}

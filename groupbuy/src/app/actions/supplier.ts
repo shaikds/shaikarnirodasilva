@@ -91,3 +91,54 @@ export async function uploadCoupons(productId: string, rawCodes: string) {
   revalidatePath("/supplier");
   return { ok: true, added: result.count };
 }
+
+const offerSchema = z.object({
+  floorPrice: z.coerce.number().positive().max(1_000_000),
+  stock: z.coerce.number().int().min(1).max(1_000_000),
+  // HTML checkbox: "on" when checked, absent otherwise.
+  freeShipping: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
+});
+
+/**
+ * Competitive claim on a trending item. The supplier bids a floor price and
+ * stock, and MUST commit to free shipping; the agent later computes the final
+ * member price with the pricing engine and picks the lowest-price offer.
+ * Suppliers never set the deal price.
+ */
+export async function submitOffer(trendingItemId: string, formData: FormData) {
+  const { supplier } = await requireSupplier();
+  const id = z.string().cuid().parse(trendingItemId);
+
+  if (!supplier.verified) return { error: "not_verified" };
+
+  const parsed = offerSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  const d = parsed.data;
+  if (!d.freeShipping) return { error: "free_shipping_required" };
+
+  const item = await prisma.trendingItem.findUnique({ where: { id } });
+  if (!item || (item.status !== "CLAIMABLE" && item.status !== "CLAIM_WINDOW")) return { error: "not_claimable" };
+
+  const marketPrice = item.zapLowestPriceIls ? Number(item.zapLowestPriceIls) : null;
+  if (marketPrice !== null && d.floorPrice >= marketPrice) return { error: "floor_not_below_market" };
+
+  const claimWindowHours = Number(process.env.TRENDING_CLAIM_WINDOW_HOURS) || 72;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.supplierOffer.upsert({
+      where: { trendingItemId_supplierId: { trendingItemId: id, supplierId: supplier.id } },
+      update: { floorPrice: d.floorPrice, stock: d.stock, freeShipping: d.freeShipping, status: "PENDING" },
+      create: { trendingItemId: id, supplierId: supplier.id, floorPrice: d.floorPrice, stock: d.stock, freeShipping: d.freeShipping },
+    });
+    // First offer opens the claim window; later offers join it.
+    if (item.status === "CLAIMABLE") {
+      await tx.trendingItem.update({
+        where: { id },
+        data: { status: "CLAIM_WINDOW", claimWindowEndsAt: new Date(Date.now() + claimWindowHours * 3_600_000) },
+      });
+    }
+  });
+  revalidatePath("/supplier");
+  revalidatePath("/");
+  return { ok: true };
+}

@@ -3,6 +3,7 @@ import { verifyFairness } from "@/lib/fairness/verify";
 import { computeGroupPrice } from "@/lib/pricing/engine";
 import { getLlmProvider, LlmError, MockProvider, type OpportunityInput } from "@/lib/llm";
 import { checkCloseDeal, checkOpenDeal, defaultLimits } from "./guardrails";
+import { processTrendingSteps } from "./trending";
 import type { Prisma } from "@prisma/client";
 
 /**
@@ -32,6 +33,9 @@ export interface CycleSummary {
   closed: number;
   opened: number;
   blocked: number;
+  trendingExpired: number;
+  trendingActivated: number;
+  trendingConverted: number;
   llmProvider: string;
   llmFellBack: boolean;
 }
@@ -140,6 +144,19 @@ export async function runAgentCycle(triggeredBy: string): Promise<CycleSummary> 
     closed++;
     actionsUsed++;
   }
+
+  // ---- T. Trending items: expire / activate / resolve competitive claims ----
+  // Runs before discovery so a freshly converted trending product (with its
+  // demand signals from votes) enters the regular pipeline in this same run.
+  const countryForTrending = await prisma.countryPPP.findUnique({ where: { countryCode: "IL" } });
+  const trending = await processTrendingSteps({
+    record,
+    killSwitchOn,
+    limits,
+    pppFactor: countryForTrending ? Number(countryForTrending.pppFactor) : 1,
+  });
+  blocked += trending.trendingBlocked;
+  actionsUsed += trending.trendingActivated + trending.trendingConverted + trending.trendingExpired;
 
   // ---- 3. Discover & open new deals ----
   const candidates = await prisma.product.findMany({
@@ -353,6 +370,9 @@ export async function runAgentCycle(triggeredBy: string): Promise<CycleSummary> 
     closed,
     opened,
     blocked,
+    trendingExpired: trending.trendingExpired,
+    trendingActivated: trending.trendingActivated,
+    trendingConverted: trending.trendingConverted,
     llmProvider: provider.name,
     llmFellBack,
   };

@@ -63,7 +63,18 @@
     "trust": "Trust score",
     "verified": "Verified",
     "unverified": "Awaiting verification",
-    "priceNote": "Price changes are recorded. Raising your list price before a deal will get deals blocked and lower your trust score."
+    "priceNote": "Price changes are recorded. Raising your list price before a deal will get deals blocked and lower your trust score.",
+    "trendingTitle": "Trending items open for offers",
+    "trendingHelp": "These items reached real member demand. Bid your floor price — the AI computes the final member price and the lowest verified price wins. Free shipping is mandatory and the final price must beat the market's lowest.",
+    "marketPrice": "Market low",
+    "offersCount": "{count} offers",
+    "windowClosed": "Window closed",
+    "offerSubmitted": "Offer in: floor ₪{floor}, stock {stock}. The AI decides after the window closes.",
+    "offerFloor": "Your floor price (₪)",
+    "freeShipping": "I commit to free shipping",
+    "submitOffer": "Submit offer",
+    "offerNote": "You never set the member price — the AI computes it from your floor and it must beat the lowest Israeli market price.",
+    "verifyToOffer": "Your account must be verified before you can submit offers."
   },
   "admin": {
     "title": "Agent control room",
@@ -81,7 +92,14 @@
     "action": "Action",
     "outcome": "Outcome",
     "reasons": "Reasons",
-    "trust": "Trust {score}/100"
+    "trust": "Trust {score}/100",
+    "trendingTitle": "Trending pipeline",
+    "runScraper": "Run scraper",
+    "trendingItem": "Item",
+    "trendingStatus": "Status",
+    "trendingVotes": "Votes",
+    "trendingOffers": "Offers",
+    "trendingMarket": "Market low"
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -131,5 +149,16 @@
     "language": "עברית",
     "ils": "₪",
     "footer": "Win-win group buying, managed by an audited AI agent."
+  },
+  "trending": {
+    "badge": "Trending in Israel",
+    "title": "What everyone wants right now",
+    "subtitle": "Scraped weekly from Israel's biggest stores. Vote — when enough of us want it, suppliers compete to beat the lowest market price, free shipping included.",
+    "marketPrice": "lowest market price",
+    "votesProgress": "{count} / {needed} votes to unlock",
+    "vote": "I want this",
+    "unvote": "Remove vote",
+    "claiming": "Suppliers competing",
+    "checkingViability": "Checking deal viability…"
   }
 }
