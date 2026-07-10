@@ -16,6 +16,12 @@ An AI-managed group-buying platform. An autonomous agent finds deal opportunitie
    - opens groups, expires stale ones, and closes full ones by assigning one coupon code per member.
 4. **Members redeem** their code directly on the supplier's website.
 
+### Trending items (default section on the landing page)
+
+A weekly scraper pulls what's actually trending in Israel — KSP bestsellers (electronics) and Super-Pharm bestsellers (beauty/household) — and price-checks every item against **Zap's verified lowest Israeli price**, which becomes the fairness bar. Members vote; once votes cross a **deterministic win-win threshold** (the smallest group size at which the pricing engine can beat that market price with a real, PPP-adjusted discount above a plausible floor), verified suppliers compete to fulfil it: they bid a floor price + stock and must commit to **free shipping**. The agent scores every bid with the same pricing engine and picks whichever yields members the lowest price — ties go to the higher-trust supplier. The winner never sets the price; the engine's number, anchored to Zap, is final. The item then becomes a real `Product` (with the votes converted into demand signals) and flows through the same guardrailed pipeline once coupons are uploaded.
+
+Scraping runs on the deterministic mock provider by default (dev/CI); set `FIRECRAWL_API_KEY` to scrape live (KSP via its own JSON API, Super-Pharm/Zap via Firecrawl, since both sit behind bot protection).
+
 ## AI safety & security design
 
 | Layer | Guarantee |
@@ -71,11 +77,12 @@ Any OpenAI-compatible endpoint works (DeepSeek etc.), but note data leaves your 
 ## Commands
 
 ```bash
-npm test          # 42 unit tests (pricing, fairness, guardrails, prompts)
+npm test          # 67 unit tests (pricing, fairness, guardrails, prompts, trending)
 npm run eval      # AI eval scorecard (mock provider)
 EVAL_LIVE=1 npm run eval   # evals against your configured live model
 npm run lint && npm run typecheck
 npx tsx scripts/smoke-lifecycle.ts   # full open→join→close→kill-switch check
+npx tsx scripts/smoke-trending.ts    # scrape→vote→activate→claim→convert→open check
 ```
 
 ## Architecture
@@ -86,6 +93,8 @@ src/lib/fairness/verify.ts    anti-fake-discount verification
 src/lib/agent/guardrails.ts   hard limits, kill switch checks
 src/lib/agent/cycle.ts        the autonomous agent loop + audit trail
 src/lib/llm/                  provider abstraction (mock / Ollama / any OpenAI-compat)
+src/lib/scraper/              trending scraper abstraction (mock / Firecrawl)
+src/lib/trending/             win-win activation threshold (pure)
 src/app/                      Next.js 16 App Router UI (he/en, RTL)
 evals/                        golden-set AI evaluations
 ```
