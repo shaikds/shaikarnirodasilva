@@ -2,7 +2,9 @@
 
 Extract the handwritten regions from a filled exam, given the blank exam PDF.
 Language-agnostic (no OCR): works for any script, math, drawings, check-marks —
-dense or sparse. See [RESEARCH.md](RESEARCH.md) for the method and its rationale.
+dense or sparse. See [RESEARCH.md](RESEARCH.md) for the method and its rationale,
+and [GAP_ANALYSIS.md](GAP_ANALYSIS.md) for an honest map of this system against
+a full production handwriting-processing architecture (what's covered, what isn't).
 
 ## Install
 
