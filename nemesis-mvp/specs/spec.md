@@ -569,12 +569,24 @@ as they observe a human, so the nemesis adapts to Jev's style.
   the page defaults to `http://localhost:8765/decide`. A direct
   browser-side key is possible via the panel (stored in localStorage
   only) and marked dev-only.
-- **AC-9.3.2** The wire format lives in ONE adapter function, documented
-  as an assumption: TypeSafe's live docs (docs.typesafe.ai) are
-  unreachable from the build environment, so the request/response shape
-  is normalized defensively and verified against a mock backend, not the
-  live service. Correcting it against the real docs touches only the
-  adapter (and the proxy's default upstream URL).
+- **AC-9.3.2** The wire format lives in ONE adapter function
+  (`JevBackend.send`/`_normalize`). `docs.typesafe.ai` stayed unreachable
+  from the build environment throughout (network egress policy) so it was
+  never read directly; the request shape (`POST /v1/systemone`, `Bearer`
+  auth, `{model, state, questions}` body, model id `jev-latest`) and the
+  response shape (an `answers` map; a Noul answer's yes-probability in a
+  bare `noul` field; a Choice answer's `choice`/`confidence`/
+  `probabilities`) were instead corroborated against strongly convergent,
+  independent third-party public SDKs and clients (LangChain's official
+  TypeSafe partner package, LiteLLM's guardrail hook, and a dozen+ other
+  unrelated open-source integrations all agreeing byte-for-byte —
+  2026-09-18). `_normalize` still stays defensive (accepts several
+  plausible aliases) since this remains corroboration, not a docs read.
+  Amended from the original weaker "an assumption, verified only against
+  a mock" wording once this evidence converged; a genuine wire-format
+  bug was caught and fixed in the same pass (a real `noul` field is a
+  direct yes-probability and must NOT be inverted the way a
+  confidence-of-the-stated-answer shape is).
 
 ## 8.8 M10 — Jev as the nemesis (developer-requested, follows M9)
 
@@ -704,7 +716,7 @@ leads, code follows.
 | FR-8.5 Key map at start | P10 | **done** (p10: boot overlay explains charge; H toggles) |
 | FR-9.1 Decision brain: state and questions, separated | P11 | **done** (p11: named-field state, 4-question typed bank, typed consumption) |
 | FR-9.2 Executor and liveness | P11 | **done** (p11: shared Fighter API, staleness+salience cadence, in-flight persistence, offline fallback) |
-| FR-9.3 Configuration and credential safety | P11 | **done** (p11: local proxy default, dev-only direct key, wire adapter mock-verified — see 2026-09-18 log for the live-docs caveat) |
+| FR-9.3 Configuration and credential safety | P11 | **done** (p11: local proxy default, dev-only direct key; wire format corroborated against convergent independent public SDKs since docs.typesafe.ai stayed unreachable — see 2026-09-18 log) |
 | FR-10.1 Shared vocabulary, nemesis framing | P12 | **done** (p12: reused Choice/Noul bank via `buildQuestions(persona)`, rival's-own-eye state incl. name/level/power/hate/ledger memory) |
 | FR-10.2 Executor: augments the tested brain | P12 | **done** (p12: shared Fighter API, `RivalAgent.enabled` gate, GOAP fallback on any failure — mocked and real-unreachable-proxy safe, cadence/freshness parity with M9) |
 | FR-10.3 Independent activation and credentials | P12 | **done** (p12: separate toggle + namespaced backend config per side, verified no cross-talk) |

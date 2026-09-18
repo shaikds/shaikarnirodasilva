@@ -55,9 +55,9 @@ export class JevPanel {
       <div class="gear" title="configure backend">⚙</div>
       <div class="cfg">
         <label>decision endpoint (local proxy holds your key)</label>
-        <input class="url" spellcheck="false">
+        <input class="url" spellcheck="false" placeholder="https://api.typesafe.ai/v1/systemone for direct mode">
         <label>model</label>
-        <input class="model" spellcheck="false">
+        <input class="model" spellcheck="false" placeholder="jev-latest">
         <label>API key — dev only; prefer the proxy</label>
         <input class="key" type="password" spellcheck="false" placeholder="leave empty when using the proxy">
         <div class="note">key is kept in this browser's localStorage only — never in the page or the repo.

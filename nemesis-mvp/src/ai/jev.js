@@ -165,7 +165,7 @@ export class JevBackend {
     try { cfg = JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { /* defaults */ }
     this.url = cfg.url || 'http://localhost:8765/decide';
     this.apiKey = cfg.apiKey || '';               // dev-only path; prefer the proxy
-    this.model = cfg.model || 'jev';
+    this.model = cfg.model || 'jev-latest';
     this.timeoutMs = 2500;
   }
 
@@ -201,14 +201,26 @@ export class JevBackend {
   }
 
   // Defensive normalization to {id: {answer, p, distribution}} — accepts
-  // an answers map or array, probability under several plausible names.
+  // an answers map or array. Corroborated against TypeSafe's real wire
+  // shape via convergent independent third-party SDKs/clients (AC-9.3.2
+  // amendment, 2026-09-18): a Noul answer carries its yes-probability in
+  // a field literally named `noul` (no separate answer/value field), so
+  // that's derived into a boolean + used directly as `p`; a Choice answer
+  // uses `choice` + `confidence` + `probabilities` — all already covered.
   _normalize(body) {
     const raw = body?.answers ?? body?.results ?? body;
     const out = {};
     const takeOne = (id, a) => {
       if (a == null) return;
       if (typeof a !== 'object') { out[id] = { answer: a, p: 1 }; return; }
-      const answer = a.answer ?? a.value ?? a.choice ?? a.label;
+      if (typeof a.noul === 'number') {
+        // the real field is a direct P(yes) — mark it so noulYesProbability()
+        // doesn't try to invert it the way it does for a {answer,p}-shaped
+        // confidence-of-the-stated-answer response
+        out[id] = { answer: a.noul >= 0.5, p: a.noul, distribution: null, directP: true };
+        return;
+      }
+      const answer = a.answer ?? a.value ?? a.choice ?? a.score ?? a.label;
       const p = a.probability ?? a.p ?? a.confidence ?? null;
       const distribution = a.distribution ?? a.probabilities ?? null;
       out[id] = { answer, p, distribution };
@@ -217,4 +229,19 @@ export class JevBackend {
     else if (raw && typeof raw === 'object') for (const [id, a] of Object.entries(raw)) takeOne(id, a);
     return out;
   }
+}
+
+// shared Noul→yes-probability reader (used by both drivers): a real
+// TypeSafe `noul` field IS the yes-probability directly (directP), so it
+// is returned as-is; a {answer,p}-shaped mock/alternate response is read
+// as "p confidence in whichever way `answer` points" and inverted when
+// `answer` is false/'no'.
+export function noulYesProbability(a) {
+  if (!a) return 0;
+  if (a.directP && typeof a.p === 'number') return Math.max(0, Math.min(1, a.p));
+  if (typeof a.p === 'number') {
+    const yes = a.answer === false || a.answer === 'no' ? 1 - a.p : a.p;
+    return Math.max(0, Math.min(1, yes));
+  }
+  return a.answer === true || a.answer === 'yes' ? 0.8 : 0.2;
 }

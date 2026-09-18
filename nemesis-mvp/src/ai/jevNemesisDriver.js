@@ -11,7 +11,7 @@
 import { buildNemesisState, NEMESIS_QUESTIONS, VOICE_LINES } from './jevNemesis.js';
 import { CHARGE, ENERGY } from '../combat/attacks.js';
 import { AI } from '../core/tuning.js';
-import { JevBackend } from './jev.js';
+import { JevBackend, noulYesProbability } from './jev.js';
 
 const STALE_S = 1.4;
 const DIRECTIVE_MAX_S = 1.8;
@@ -118,23 +118,14 @@ export class JevNemesisDriver {
   }
 
   _apply(ans) {
-    this.alert = this._noulP(ans.danger_now);
-    this.commitCharge = this._noulP(ans.commit_full_charge);
+    this.alert = noulYesProbability(ans.danger_now);
+    this.commitCharge = noulYesProbability(ans.commit_full_charge);
     const move = ans.next_move?.answer;
     if (typeof move === 'string' && move.length) {
       this.directive = { move, t: 0, hits: 0, taken: 0 };
     }
     const v = ans.voice?.answer;
     if (v && v !== 'stay_silent') this._say(v);
-  }
-
-  _noulP(a) {
-    if (!a) return 0;
-    if (typeof a.p === 'number') {
-      const yes = a.answer === false || a.answer === 'no' ? 1 - a.p : a.p;
-      return Math.max(0, Math.min(1, yes));
-    }
-    return a.answer === true || a.answer === 'yes' ? 0.8 : 0.2;
   }
 
   // ---- per-tick drive ----

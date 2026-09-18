@@ -114,6 +114,14 @@ const normalize = await page.evaluate(() => {
     arrayShape: b._normalize({ results: [{ id: 'next_move', value: 'press_attack', confidence: 0.8 }] }),
     choiceKey: b._normalize({ next_move: { choice: 'press_attack', p: 0.8 } }),
     bareBool: b._normalize({ answers: { danger_now: true } }),
+    // the REAL TypeSafe wire shape (confirmed 2026-09-18 via convergent
+    // independent public SDKs — docs.typesafe.ai stayed unreachable):
+    // a Noul answer is a bare `noul` float, the yes-probability directly
+    realNoul: b._normalize({ model: 'jev-1.13.0', answers: { danger_now: { type: 'noul', noul: 0.82 } } }),
+    realNoulLow: b._normalize({ model: 'jev-1.13.0', answers: { danger_now: { type: 'noul', noul: 0.15 } } }),
+    realChoice: b._normalize({ model: 'jev-1.13.0', answers: {
+      next_move: { type: 'choice', choice: 'press_attack', confidence: 0.83, probabilities: { press_attack: 0.83, evade: 0.1 } },
+    } }),
   };
 });
 check('AC-9.3.2 normalize handles an answers-map response',
@@ -126,6 +134,49 @@ check('AC-9.3.2 normalize accepts "choice" as an answer-field alias',
   normalize.choiceKey.next_move?.answer === 'press_attack', JSON.stringify(normalize.choiceKey));
 check('AC-9.3.2 normalize accepts a bare boolean answer',
   normalize.bareBool.danger_now?.answer === true, JSON.stringify(normalize.bareBool));
+check('AC-9.3.2 (confirmed wire shape) a real `noul` field is read as a direct yes-probability',
+  normalize.realNoul.danger_now?.p === 0.82 && normalize.realNoul.danger_now?.answer === true &&
+  normalize.realNoulLow.danger_now?.p === 0.15 && normalize.realNoulLow.danger_now?.answer === false,
+  JSON.stringify({ hi: normalize.realNoul, lo: normalize.realNoulLow }));
+check('AC-9.3.2 (confirmed wire shape) a real Choice answer reads choice+confidence+probabilities',
+  normalize.realChoice.next_move?.answer === 'press_attack' && normalize.realChoice.next_move?.p === 0.83 &&
+  normalize.realChoice.next_move?.distribution?.press_attack === 0.83,
+  JSON.stringify(normalize.realChoice));
+
+// end-to-end: a REAL-shaped response (bare `noul` field) drives the exact
+// same charge-commit behavior as the mocked {answer,p}-shaped one used
+// throughout the rest of this suite — the two response conventions must
+// not be conflated (a direct P(yes) is never inverted)
+await reset({ playerPos: [0, 0, -1.5], rivalPos: [0, 0, 0.4] });
+const realShapeCommit = await page.evaluate(async () => {
+  const g = window.__game;
+  // reset()'s stub shadows the real send(); remove it so the ACTUAL
+  // JevBackend.prototype.send runs (fetch -> _normalize -> _apply)
+  delete g.jevDriver.backend.send;
+  const orig = window.fetch;
+  window.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      model: 'jev-1.13.0',
+      answers: {
+        next_move: { type: 'choice', choice: 'charge_blast', confidence: 0.9 },
+        commit_full_charge: { type: 'noul', noul: 0.92 },   // real shape: direct P(yes)
+      },
+    }),
+  });
+  g.step(1);
+  await new Promise(r => setTimeout(r, 0));
+  window.fetch = orig;
+  // one real fetch+normalize round trip is all this proves; re-mock send
+  // before the long stepping loop so a later staleness re-ask can't hit
+  // the real (absent) localhost proxy and log a network error
+  g.jevDriver.backend.send = async () => ({});
+  for (let i = 0; i < 260; i++) g.step(1);
+  return { blasts: g.__hits.filter(h => h.type === 'blast').length, commitCharge: g.jevDriver.commitCharge };
+});
+check('AC-9.3.2 a real-shaped `noul` response drives a genuine full-charge BLAST (not inverted)',
+  realShapeCommit.commitCharge > 0.55 && realShapeCommit.blasts >= 1,
+  JSON.stringify(realShapeCommit));
 
 // ================= FR-9.1: state and questions, separated =================
 

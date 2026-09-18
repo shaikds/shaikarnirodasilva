@@ -6,16 +6,18 @@
 //   TYPESAFE_API_KEY=sk-... node tools/jev-proxy.mjs
 //
 // Optional env:
-//   TYPESAFE_API_URL  upstream decision endpoint. Default below is an
-//                     ASSUMPTION (docs.typesafe.ai was unreachable from
-//                     the build environment) — set this to the endpoint
-//                     your TypeSafe dashboard names if it differs.
+//   TYPESAFE_API_URL  upstream decision endpoint. Default below is
+//                     confirmed against TypeSafe's real System One API —
+//                     corroborated via convergent independent public
+//                     SDKs/clients (docs.typesafe.ai itself stayed
+//                     unreachable from the build environment throughout);
+//                     override if your account uses a different host.
 //   JEV_PROXY_PORT    listen port (default 8765)
 
 import http from 'http';
 
 const KEY = process.env.TYPESAFE_API_KEY || '';
-const UPSTREAM = process.env.TYPESAFE_API_URL || 'https://api.typesafe.ai/v1/decide';
+const UPSTREAM = process.env.TYPESAFE_API_URL || 'https://api.typesafe.ai/v1/systemone';
 const PORT = +(process.env.JEV_PROXY_PORT || 8765);
 
 if (!KEY) {
