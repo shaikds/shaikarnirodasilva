@@ -516,7 +516,68 @@ and a key map shown at start.
   charge mechanic) shows on boot; dismissed by H/Enter/click; `H` reopens
   it any time.
 
+## 8.7 M9 — Jev plays the player (TypeSafe System One integration)
+
+The player fighter can be driven by **Jev**, TypeSafe's System One model:
+typed judgments over game state, not generated text. The sim stays
+authoritative — Jev supplies the *reads*, code supplies the hands. The
+rivalry systems (profiler, sync ELO, zenkai, taunts) observe Jev exactly
+as they observe a human, so the nemesis adapts to Jev's style.
+
+### FR-9.1 Decision brain: state and questions, separated
+- **AC-9.1.1** `buildFightState()` returns observed facts only, as named
+  JSON fields: `me`, `foe` (state AND phase — a wind-up, a stagger, and a
+  charge are different worlds), `duel` (combo counts, near-wall flag),
+  `recent` (last 4 combat events as short strings), `rivalry` (record,
+  hate, last taunt heard, macro threat), `lastDirective` (+outcome). No
+  inferred conclusions in state — inference is the model's job.
+- **AC-9.1.2** The question bank is static code (IDs for code, meaning in
+  the question): Choice `next_move` over a bounded tactical vocabulary
+  with per-option criteria; speculative Noul `commit_full_charge` (premise
+  stated in the question, consumed only when `next_move` selects the
+  charge); Noul `danger_now`; Choice `voice` over canned lines with a
+  `stay_silent` no-match outcome (selection, never generation).
+- **AC-9.1.3** One request per decision: `state` and `questions` are
+  separate request fields; the questions are independent and batched —
+  none consumes another's answer.
+- **AC-9.1.4** Typed consumption: `next_move` by highest probability;
+  charge hold length gated by the `commit_full_charge` probability
+  (>0.55 → full-charge blast, else a safe early release); `danger_now`
+  sets the executor's defensive-reflex alertness; `voice` non-silent
+  answers surface as JEV subtitles.
+
+### FR-9.2 Executor and liveness: code owns the workflow
+- **AC-9.2.1** Directives execute through the same Fighter API a human
+  drives (canStart/startAttack/startCharge/…): frame legality, timing,
+  and movement stay deterministic code.
+- **AC-9.2.2** Cadence: a fresh judgment on directive completion, on
+  staleness (~1.4 s), or on a salient event (foe staggered, blast taken,
+  duel start). Requests are async; the current directive keeps executing
+  while one is in flight; a stale answer for a finished directive is
+  discarded (freshness check before applying).
+- **AC-9.2.3** No config, request error, or timeout → a heuristic
+  fallback fights on; the duel never stalls; the HUD nameplate shows
+  `JEV·OFFLINE` in that mode.
+- **AC-9.2.4** Toggling "LET JEV PLAY" swaps the player driver at
+  runtime; toggling off restores human control. Profiler/sync/zenkai
+  treat Jev's fighter identically to a human's.
+
+### FR-9.3 Configuration and credential safety
+- **AC-9.3.1** The API key is NEVER in the repo, bundle, or page source.
+  Preferred path: `tools/jev-proxy.mjs`, a local proxy that holds the key
+  in `TYPESAFE_API_KEY` server-side (per TypeSafe guidance for web apps);
+  the page defaults to `http://localhost:8765/decide`. A direct
+  browser-side key is possible via the panel (stored in localStorage
+  only) and marked dev-only.
+- **AC-9.3.2** The wire format lives in ONE adapter function, documented
+  as an assumption: TypeSafe's live docs (docs.typesafe.ai) are
+  unreachable from the build environment, so the request/response shape
+  is normalized defensively and verified against a mock backend, not the
+  live service. Correcting it against the real docs touches only the
+  adapter (and the proxy's default upstream URL).
+
 ## 9. Post-MVP (explicitly deferred, kept from PRD)
+
 
 Order is a suggestion; nothing here blocks MVP acceptance.
 
@@ -593,5 +654,8 @@ leads, code follows.
 | FR-8.3 Charged attacks & blast fly-away | P10 | **done** (p10: tap x1 / full x2.2, blast ≥50%, fly-away → slam → get-up i-frames, hit-cancel; AC-8.3.4 amended — rival charges only safe holds) |
 | FR-8.4 Combo routes | P10 | **done** (p10: light-light-HEAVY → uppercut launcher, positional) |
 | FR-8.5 Key map at start | P10 | **done** (p10: boot overlay explains charge; H toggles) |
+| FR-9.1 Decision brain: state and questions, separated | P11 | **done** (p11: named-field state, 4-question typed bank, typed consumption) |
+| FR-9.2 Executor and liveness | P11 | **done** (p11: shared Fighter API, staleness+salience cadence, in-flight persistence, offline fallback) |
+| FR-9.3 Configuration and credential safety | P11 | **done** (p11: local proxy default, dev-only direct key, wire adapter mock-verified — see 2026-09-18 log for the live-docs caveat) |
 | NFR-1..5 | P0/P7 | **done** (NFR-5 degraded mode at P7; NFR-1 amended at P0) |
 | S-1..S-4 success criteria | P8 | **done** — S-1 journey scripted + on video; S-2 canonical taunt live on video; S-3 20-duel band (amended, 1 resample); S-4 systems verified, 60fps pending developer hardware |

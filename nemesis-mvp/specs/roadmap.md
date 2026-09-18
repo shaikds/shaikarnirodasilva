@@ -188,6 +188,48 @@ green; p8 band ×3 after the rival-charge retune (see 2026-07-08 log).
 
 ---
 
+## `[x]` P11 — Jev plays the player (M9, developer-requested; TypeSafe System One)
+**Closes:** FR-9.1..9.3 · **Modules:** `ai/jev.js` (state builder, question bank, wire adapter), `ai/jevPlayer.js` (executor driver, cadence, fallback), `ui/jevPanel.js` (toggle + backend config), `tools/jev-proxy.mjs` (credential-safe local proxy)
+
+- Jev, TypeSafe's System One model, can drive the player fighter. State and
+  questions stay strictly separate per the typesafe-ai skill's contract:
+  `buildFightState` returns only named, observed facts (self, foe — state
+  AND phase, duel, recent combat events, rivalry memory, last directive's
+  outcome); a static 4-question bank (Choice `next_move` over the whole
+  tactical vocabulary, speculative Noul `commit_full_charge`, Noul
+  `danger_now`, Choice `voice` with a `stay_silent` no-match outcome) is
+  the only place judgment logic lives. Code owns the workflow: a
+  deterministic executor turns the chosen move into the same Fighter API
+  a human drives; the rivalry systems (profiler, sync, zenkai) cannot tell
+  Jev from a person.
+- Living memory: recent combat events and the previous directive's outcome
+  feed back into the NEXT state, and the rival's last taunt is remembered
+  — the loop the developer asked for.
+- Liveness: a fresh judgment on directive completion, staleness (~1.4s),
+  or a salient event; the current directive keeps executing while a
+  request is in flight; any failure (no backend, timeout, bad response)
+  falls back to a heuristic bot so the duel never stalls, with the HUD
+  showing `JEV · OFFLINE`.
+- Credentials: the key defaults to a local proxy (`tools/jev-proxy.mjs`)
+  that holds it server-side; a direct browser-side key is available in the
+  panel as a marked dev-only path, stored in localStorage only, never in
+  the repo or the bundle.
+- **Documented limitation:** TypeSafe's live docs (docs.typesafe.ai) were
+  unreachable from the build environment (network egress policy), so the
+  exact wire format is a defensive assumption confined to one adapter
+  (`JevBackend.send`/`_normalize`) and verified against a mock backend,
+  not the live service. See the 2026-09-18 log.
+
+**Exit criteria:** all FR-9 ACs pass; earlier suites keep passing; no key
+ever appears in the repo or the published bundle.
+**Verification:** `tests/p11_jev.spec.mjs` 34/34 (state shape, question
+bank, typed-answer consumption incl. charge-commit gating, cadence +
+in-flight persistence + freshness, living memory, offline fallback
+liveness, runtime toggle, profiler blindness to driver identity, wire
+contract via a mocked `fetch`); full p0–p11 regression green; p8 band ×2.
+
+---
+
 ## After MVP
 
 Post-MVP items in spec §9 (LLM taunts, Unity port, asset pipeline, climbing,

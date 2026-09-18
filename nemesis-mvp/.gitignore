@@ -1,0 +1,6 @@
+# Never commit TypeSafe (or any other) API credentials. tools/jev-proxy.mjs
+# reads TYPESAFE_API_KEY from the environment on purpose — this stops the
+# obvious local habit of dropping it in a .env file from landing in git.
+.env
+.env.*
+*.local

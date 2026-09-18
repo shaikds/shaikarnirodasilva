@@ -27,6 +27,8 @@ import { TauntEngine } from './rivalry/taunts.js';
 import { ATTACKS, CHARGE } from './combat/attacks.js';
 import { SFX } from './fx/sfx.js';
 import { KeymapOverlay } from './ui/keymap.js';
+import { JevPlayerDriver } from './ai/jevPlayer.js';
+import { JevPanel } from './ui/jevPanel.js';
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -126,10 +128,11 @@ function separate(a, b) {
   }
 }
 
-// the player's driver is swappable: human controller or a test bot
+// the player's driver is swappable: human controller, a test bot, or Jev
 let playerDriver = controller;
 function setPlayerDriver(spec) {
   if (spec === 'human') playerDriver = controller;
+  else if (spec === 'jev') playerDriver = jevDriver;        // M9 (FR-9.2)
   else playerDriver = new PlayerBot(player, rival, spec);   // 'aggressive'|'turtle'|'heavyOnly'
   return playerDriver;
 }
@@ -261,6 +264,14 @@ const loop = new Loop({
     vfx.update(rdt, loop.simTime);
     landmarks.update(loop.simTime);
     degrade.check();
+    // M9: Jev status (AC-9.2.3 visibility) + who owns the blue fighter
+    jevPanel.tick();
+    const meName = document.querySelector('#hud .bars.me .name');
+    if (meName) {
+      const label = playerDriver === jevDriver
+        ? (jevDriver.offline ? 'JEV · OFFLINE' : 'JEV') : 'YOU';
+      if (meName.textContent !== label) meName.textContent = label;
+    }
     renderer.render(scene, camera);
     statsEl.textContent =
       `fps ${loop.fps.toFixed(0)} · ticks ${loop.ticks}` +
@@ -343,9 +354,21 @@ const flow = new GameFlow({
   hud, prompts, zone, nav, resolver, rig, loop, bootMode,
   macroAgent, taunts,
 });
-// rival speech gets a voice blip
+// rival speech gets a voice blip — and Jev remembers what it heard (M9)
 const _subtitle = hud.subtitle.bind(hud);
-hud.subtitle = (who, text, ms) => { sfx.taunt(); _subtitle(who, text, ms); };
+hud.subtitle = (who, text, ms) => {
+  sfx.taunt();
+  if (who !== 'JEV') jevDriver.lastTauntHeard = text;
+  _subtitle(who, text, ms);
+};
+// M9: Jev can hold the controller (FR-9.2) — same Fighter API as a human
+const jevDriver = new JevPlayerDriver({
+  player, rival, manager, flow, macroAgent, hud, rig, loop, resolver,
+});
+const jevPanel = new JevPanel({
+  driver: jevDriver,
+  onToggle: on => setPlayerDriver(on ? 'jev' : 'human'),
+});
 flow.boot();
 // title beat: a first-boot moment before the training prompt takes over
 if (bootMode === 'created') hud.announce('N E M E S I S', 2600);
@@ -371,5 +394,7 @@ window.__game = {
   resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
   manager, bootMode, debugPanel, vfx, landmarks, sun,
   nav, prompts, flow, macroAgent, taunts, degrade, sfx, keymap,
+  jevDriver, jevPanel,
+  get playerDriver() { return playerDriver; },        // M9 test surface
   setPlayerDriver, step,
 };
