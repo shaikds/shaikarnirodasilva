@@ -28,6 +28,7 @@ import { ATTACKS, CHARGE } from './combat/attacks.js';
 import { SFX } from './fx/sfx.js';
 import { KeymapOverlay } from './ui/keymap.js';
 import { JevPlayerDriver } from './ai/jevPlayer.js';
+import { JevNemesisDriver } from './ai/jevNemesisDriver.js';
 import { JevPanel } from './ui/jevPanel.js';
 
 // ---------- renderer / scene ----------
@@ -184,7 +185,10 @@ const loop = new Loop({
     const combat = flow.combatEnabled;
     playerDriver.update(dt);
     dummyBrain.update(dt);
-    rivalAgent.update(dt, loop.simTime);
+    // FR-10.2: Jev can also BE the nemesis — the rival's own brain is
+    // swappable exactly like the player's, GOAP (RivalAgent) by default
+    if (nemesisPanel.active) jevNemesisDriver.update(dt, loop.simTime);
+    else rivalAgent.update(dt, loop.simTime);
     player.update(dt, zone, loop.simTime);
     dummy.update(dt, zone, loop.simTime);
     rival.update(dt, zone, loop.simTime);
@@ -257,15 +261,17 @@ const loop = new Loop({
     debugPanel.update(rdt);
     hud.consume(resolver.events);
     hud.setGoalHint(
-      rivalAgent.enabled && rivalAgent.currentGoal ? rivalAgent.currentGoal.hud : null
+      nemesisPanel.active ? null :
+      (rivalAgent.enabled && rivalAgent.currentGoal ? rivalAgent.currentGoal.hud : null)
     );
     hud.setPower(player.power, player.surge, player.surgeMeter);
     hud.update(rdt);
     vfx.update(rdt, loop.simTime);
     landmarks.update(loop.simTime);
     degrade.check();
-    // M9: Jev status (AC-9.2.3 visibility) + who owns the blue fighter
+    // M9/M10: Jev status (AC-9.2.3/FR-10.2 visibility) + who owns each fighter
     jevPanel.tick();
+    nemesisPanel.tick();
     const meName = document.querySelector('#hud .bars.me .name');
     if (meName) {
       const label = playerDriver === jevDriver
@@ -366,8 +372,22 @@ const jevDriver = new JevPlayerDriver({
   player, rival, manager, flow, macroAgent, hud, rig, loop, resolver,
 });
 const jevPanel = new JevPanel({
+  id: 'jev', bottom: 18,
   driver: jevDriver,
   onToggle: on => setPlayerDriver(on ? 'jev' : 'human'),
+});
+// M10 (FR-10.2): Jev can ALSO be the nemesis itself — independent toggle,
+// independent backend config; falls back to the tuned GOAP RivalAgent
+const jevNemesisDriver = new JevNemesisDriver({
+  rival, player, manager, flow, macroAgent, hud, rig, loop, resolver, rivalAgent,
+});
+const nemesisPanel = new JevPanel({
+  id: 'jevNemesis', bottom: 60,
+  driver: jevNemesisDriver,
+  idleLabel: 'JEV IS THE NEMESIS',
+  onLabel: 'JEV NEMESIS FIGHTING · click to revert',
+  offlineLabel: 'JEV NEMESIS · OFFLINE (GOAP fighting)',
+  onToggle: () => {},   // pure read of .active in the loop; nothing else to swap
 });
 flow.boot();
 // title beat: a first-boot moment before the training prompt takes over
@@ -394,7 +414,8 @@ window.__game = {
   resolver, hud, profile, sync, rivalAgent, profiler, projectiles,
   manager, bootMode, debugPanel, vfx, landmarks, sun,
   nav, prompts, flow, macroAgent, taunts, degrade, sfx, keymap,
-  jevDriver, jevPanel,
+  jevDriver, jevPanel, jevNemesisDriver, nemesisPanel,
   get playerDriver() { return playerDriver; },        // M9 test surface
+  get rivalBrain() { return nemesisPanel.active ? jevNemesisDriver : rivalAgent; },  // M10
   setPlayerDriver, step,
 };

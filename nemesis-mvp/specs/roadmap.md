@@ -230,6 +230,55 @@ contract via a mocked `fetch`); full p0–p11 regression green; p8 band ×2.
 
 ---
 
+## `[x]` P12 — Jev as the nemesis (M10, developer-requested follow-up to M9)
+**Closes:** FR-10.1..10.3 · **Modules:** `ai/jev.js` (question bank extracted to a reusable `buildQuestions(persona)`; `JevBackend` gets a namespaced `storageKey`), `ai/jevNemesis.js` (nemesis-eyed state + persona), `ai/jevNemesisDriver.js` (executor, falls back to `RivalAgent`), `ui/jevPanel.js` (generalized to a reusable, positionable component), `main.js` (rival-brain driver selection)
+
+- The developer's actual intent for M9 was Jev AS the nemesis, not the
+  player's own controller. Both are kept (zero regression risk to the
+  already-tested M9 work; "Jev fights Jev" is a legitimate option too),
+  but `JevNemesisDriver` is the one that matters for the game's core
+  hypothesis — the autonomous, memory-driven rival, now literally
+  model-driven instead of only GOAP-driven.
+- One rulebook, two framings: the exact same tactical vocabulary and
+  Choice/Noul questions from M9 are reused via `buildQuestions(persona)`
+  — only the persona text and which Fighter is `me` vs `foe` change.
+  State is built from the rival's own point of view: its in-world
+  name/level/power, its OWN hate (not the foe's), the win/loss record,
+  and its most recent ledger memories verbatim — richer than the
+  player-side state, because the nemesis is the one who has lived this
+  rivalry.
+- The executor drives `rival` through the identical Fighter API; the
+  gate for "a real duel is happening" is `RivalAgent.enabled` (the
+  existing flow/macro-owned source of truth), and on ANY failure the
+  fallback is `RivalAgent.update()` itself — the already balance-tested
+  GOAP brain, not a generic bot — so the S-3 fairness band holds by
+  construction whenever Jev is offline.
+- Independent activation: "JEV IS THE NEMESIS" is a separate toggle from
+  "LET JEV PLAY", each with its own namespaced backend config (separate
+  localStorage key, independently a different TypeSafe account/key);
+  both, either, or neither may be active.
+- **Real bug found in testing:** the driver hands off to the fallback
+  brain for any tick where its own directive is still null (e.g. the
+  very first tick, before the first answer arrives) — by design, so the
+  fighter is never idle. But with `RivalAgent`'s plan cleared to empty by
+  a test, GOAP's own "nothing to do → replan now" rule (documented at
+  P3) fires unconditionally and can commit the rival to an attack that
+  then blocks Jev's own directive until it naturally finishes. Not a
+  driver defect — the same interim-fallback design M9 already shipped —
+  but it meant two probes needed a wider tick budget / a cleared
+  `plannedDefense`, the same isolation convention `p3_rival` already
+  uses for `RivalAgent`.
+
+**Exit criteria:** all FR-10 ACs pass; S-3 band holds (structurally
+guaranteed — offline Jev IS the GOAP brain); earlier suites keep passing.
+**Verification:** `tests/p12_jev_nemesis.spec.mjs` 21/21 (shared
+vocabulary + nemesis-framed state, executor parity, GOAP fallback both
+mocked and unmocked-safe, cadence/freshness parity, canonical-channel
+voice, independent toggling + config isolation); full p0–p12 regression
+green; p8 band ×2.
+
+---
+
 ## After MVP
 
 Post-MVP items in spec §9 (LLM taunts, Unity port, asset pipeline, climbing,

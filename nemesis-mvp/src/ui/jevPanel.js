@@ -1,46 +1,56 @@
-// JEV panel (FR-9.2/9.3): the "LET JEV PLAY" toggle + backend config.
-// The key field is optional and dev-only — the preferred path is the
-// local proxy, which holds the key server-side (AC-9.3.1).
+// Jev panel (FR-9.2/9.3, FR-10.2): a reusable "LET JEV PLAY/BE THE
+// NEMESIS" toggle + backend config. Two independent instances exist — one
+// drives the player, one drives the rival — each with its own namespaced
+// backend config (separate localStorage key, possibly a different
+// account). The key field is optional and dev-only; the preferred path
+// is the local proxy, which holds the key server-side (AC-9.3.1).
 
 const CSS = `
-#jev {
-  position: fixed; right: 18px; bottom: 18px; z-index: 30;
-  font-size: 11px; letter-spacing: 1px;
+.jevpanel {
+  position: fixed; right: 18px; z-index: 30; font-size: 11px; letter-spacing: 1px;
 }
-#jev .toggle {
+.jevpanel .toggle {
   padding: 7px 14px; cursor: pointer; user-select: none; text-align: center;
   border: 1px solid #33334f; background: rgba(14,14,28,0.9); color: #8a8aa5;
 }
-#jev.on .toggle { color: #ffd24d; border-color: #ffd24d; box-shadow: 0 0 12px rgba(255,210,77,0.25); }
-#jev.offline .toggle { color: #ff4d6a; border-color: #ff4d6a; }
-#jev .cfg {
+.jevpanel.on .toggle { color: #ffd24d; border-color: #ffd24d; box-shadow: 0 0 12px rgba(255,210,77,0.25); }
+.jevpanel.offline .toggle { color: #ff4d6a; border-color: #ff4d6a; }
+.jevpanel .cfg {
   display: none; margin-bottom: 6px; padding: 10px 12px; width: 250px;
   border: 1px solid #33334f; background: rgba(14,14,28,0.95);
 }
-#jev.cfgopen .cfg { display: block; }
-#jev .cfg label { display: block; color: #667; margin: 6px 0 2px; }
-#jev .cfg input {
+.jevpanel.cfgopen .cfg { display: block; }
+.jevpanel .cfg label { display: block; color: #667; margin: 6px 0 2px; }
+.jevpanel .cfg input {
   width: 100%; box-sizing: border-box; padding: 4px 6px;
   background: #10101f; border: 1px solid #33334f; color: #dfe3ff;
   font: 11px monospace;
 }
-#jev .cfg .note { color: #554; color: #776a3a; margin-top: 7px; line-height: 1.5; }
-#jev .cfg .gear { color: #667; }
-#jev .gear {
+.jevpanel .cfg .note { color: #776a3a; margin-top: 7px; line-height: 1.5; }
+.jevpanel .gear {
   position: absolute; right: 4px; top: -18px; cursor: pointer; color: #556;
 }
 `;
+let styleInjected = false;
 
 export class JevPanel {
-  constructor({ driver, onToggle }) {
+  constructor({ id, driver, onToggle, bottom = 18, idleLabel = 'LET JEV PLAY',
+                onLabel = 'JEV IS FIGHTING · click to take over',
+                offlineLabel = 'JEV · OFFLINE (fallback fighting)' }) {
     this.driver = driver;
     this.onToggle = onToggle;
     this.active = false;
-    const style = document.createElement('style');
-    style.textContent = CSS;
-    document.head.appendChild(style);
+    this.idleLabel = idleLabel; this.onLabel = onLabel; this.offlineLabel = offlineLabel;
+    if (!styleInjected) {
+      const style = document.createElement('style');
+      style.textContent = CSS;
+      document.head.appendChild(style);
+      styleInjected = true;
+    }
     this.el = document.createElement('div');
-    this.el.id = 'jev';
+    this.el.id = id;
+    this.el.className = 'jevpanel';
+    this.el.style.bottom = bottom + 'px';
     this.el.innerHTML = `
       <div class="gear" title="configure backend">⚙</div>
       <div class="cfg">
@@ -53,7 +63,7 @@ export class JevPanel {
         <div class="note">key is kept in this browser's localStorage only — never in the page or the repo.
         proxy: <b>TYPESAFE_API_KEY=… node tools/jev-proxy.mjs</b></div>
       </div>
-      <div class="toggle">LET JEV PLAY</div>`;
+      <div class="toggle">${idleLabel}</div>`;
     document.body.appendChild(this.el);
     const q = s => this.el.querySelector(s);
     q('.url').value = driver.backend.url;
@@ -82,8 +92,8 @@ export class JevPanel {
   tick() {
     this.el.classList.toggle('offline', this.active && this.driver.offline);
     const t = this.el.querySelector('.toggle');
-    const label = !this.active ? 'LET JEV PLAY'
-      : this.driver.offline ? 'JEV · OFFLINE (fallback fighting)' : 'JEV IS FIGHTING · click to take over';
+    const label = !this.active ? this.idleLabel
+      : this.driver.offline ? this.offlineLabel : this.onLabel;
     if (t.textContent !== label) t.textContent = label;
   }
 }

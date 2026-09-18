@@ -576,6 +576,54 @@ as they observe a human, so the nemesis adapts to Jev's style.
   live service. Correcting it against the real docs touches only the
   adapter (and the proxy's default upstream URL).
 
+## 8.8 M10 — Jev as the nemesis (developer-requested, follows M9)
+
+M9 gave Jev the player's controller. The developer's actual intent was
+for **Jev to BE the nemesis** — the rival itself. Both stay available
+(zero regression risk, and "Jev fights Jev" is a legitimate curiosity),
+but this milestone is the one that matters for the game's core
+hypothesis: it makes the autonomous, memory-driven, vengeful rival
+*literally* driven by a model instead of only by GOAP.
+
+### FR-10.1 Shared vocabulary, nemesis framing
+- **AC-10.1.1** The tactical vocabulary (Choice `next_move` options),
+  Noul `commit_full_charge`/`danger_now`, and the `voice` no-match
+  contract are IDENTICAL to M9's — one rulebook, both sides — reused via
+  a shared question-bank builder, not duplicated. Only the persona
+  framing changes: Jev-as-nemesis speaks in first person as the rival
+  itself, not as a separate voice possessing the player's body.
+- **AC-10.1.2** State is built from the rival's own point of view: `me`
+  carries its in-world name/level/power (it knows who it is); `rivalry`
+  carries ITS OWN hate (not the foe's), the win/loss record, and its most
+  recent ledger memories verbatim (`ledger.last(3)` labels) — richer than
+  the player-side state, because the nemesis is the one who has lived
+  this rivalry and owns its memory.
+
+### FR-10.2 Executor: augments the tested brain, doesn't replace it
+- **AC-10.2.1** `JevNemesisDriver` drives `rival` through the same
+  Fighter API as `RivalAgent`; the gate for "a real duel is happening"
+  is `RivalAgent.enabled` — the single existing flow/macro-owned source
+  of truth — not a re-derived condition.
+- **AC-10.2.2** On any failure (no backend, timeout, bad response), the
+  fallback is `RivalAgent.update()` itself — the already balance-tested
+  GOAP brain — not a generic bot. The S-3 fairness band must hold with
+  Jev active exactly as it does with GOAP alone, since the fallback path
+  IS the GOAP brain.
+- **AC-10.2.3** Cadence, freshness, and liveness match FR-9.2 exactly
+  (staleness ~1.4s, salient-event re-ask, in-flight persistence, offline
+  HUD indicator) — one shared contract, two drivers.
+- **AC-10.2.4** Jev's `voice` answers speak through the SAME subtitle
+  channel the canonical taunt engine already uses, under the rival's own
+  in-world name — indistinguishable in the UI from a scripted taunt.
+
+### FR-10.3 Independent activation and credentials
+- **AC-10.3.1** "JEV IS THE NEMESIS" is a separate toggle from "LET JEV
+  PLAY"; either, both, or neither may be active at once. Each has its
+  own namespaced backend config (separate localStorage key) — a
+  different TypeSafe account/key may drive each side.
+- **AC-10.3.2** Same credential-safety contract as FR-9.3: proxy-first
+  default, dev-only direct key, key never in the repo or the bundle.
+
 ## 9. Post-MVP (explicitly deferred, kept from PRD)
 
 
@@ -657,5 +705,8 @@ leads, code follows.
 | FR-9.1 Decision brain: state and questions, separated | P11 | **done** (p11: named-field state, 4-question typed bank, typed consumption) |
 | FR-9.2 Executor and liveness | P11 | **done** (p11: shared Fighter API, staleness+salience cadence, in-flight persistence, offline fallback) |
 | FR-9.3 Configuration and credential safety | P11 | **done** (p11: local proxy default, dev-only direct key, wire adapter mock-verified — see 2026-09-18 log for the live-docs caveat) |
+| FR-10.1 Shared vocabulary, nemesis framing | P12 | **done** (p12: reused Choice/Noul bank via `buildQuestions(persona)`, rival's-own-eye state incl. name/level/power/hate/ledger memory) |
+| FR-10.2 Executor: augments the tested brain | P12 | **done** (p12: shared Fighter API, `RivalAgent.enabled` gate, GOAP fallback on any failure — mocked and real-unreachable-proxy safe, cadence/freshness parity with M9) |
+| FR-10.3 Independent activation and credentials | P12 | **done** (p12: separate toggle + namespaced backend config per side, verified no cross-talk) |
 | NFR-1..5 | P0/P7 | **done** (NFR-5 degraded mode at P7; NFR-1 amended at P0) |
 | S-1..S-4 success criteria | P8 | **done** — S-1 journey scripted + on video; S-2 canonical taunt live on video; S-3 20-duel band (amended, 1 resample); S-4 systems verified, 60fps pending developer hardware |
