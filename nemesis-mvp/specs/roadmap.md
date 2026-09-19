@@ -307,7 +307,7 @@ green; p8 band ×2.
 **Exit criteria:** all FR-11 ACs pass; a desktop context is proven
 byte-identical to every earlier suite (no touch DOM, no mobile class,
 `touchControls === null`); earlier suites keep passing.
-**Verification:** `tests/p13_mobile.spec.mjs` 17/17 — real `TouchEvent`
+**Verification:** `tests/p13_mobile.spec.mjs` 19/19 — real `TouchEvent`
 dispatch (not just internal method calls) driving joystick movement,
 hold-to-charge through the actual button, tap-attack, camera-drag look,
 responsive HUD position, and mobile key-map content, PLUS an explicit

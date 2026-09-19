@@ -27,11 +27,22 @@ const TUTORIAL_STEPS = [
   { key: 'dodge', main: 'DODGE', sub: 'SHIFT' },
 ];
 
+// FR-11.3: the same tutorial, described in touch terms
+const TUTORIAL_STEPS_MOBILE = [
+  { key: 'move', main: 'MOVE', sub: 'left joystick' },
+  { key: 'lock', main: 'LOCK ON', sub: 'face the training dummy · tap LOCK' },
+  { key: 'light', main: 'LIGHT ATTACK', sub: 'tap LIGHT — strike the dummy' },
+  { key: 'heavy', main: 'HEAVY ATTACK', sub: 'tap HEAVY — strike the dummy' },
+  { key: 'block', main: 'BLOCK', sub: 'hold BLOCK for a moment' },
+  { key: 'dodge', main: 'DODGE', sub: 'tap DODGE' },
+];
+
 export class GameFlow {
   constructor(ctx) {
     // ctx: { player, dummy, rival, dummyBrain, rivalAgent, manager, hud,
-    //        prompts, zone, nav, resolver, rig, loop, bootMode }
+    //        prompts, zone, nav, resolver, rig, loop, bootMode, mobile }
     this.ctx = ctx;
+    this.steps = ctx.mobile ? TUTORIAL_STEPS_MOBILE : TUTORIAL_STEPS;   // FR-11.3
     this.enabled = true;
     this.state = 'boot';
     this.sessionLog = [];
@@ -159,13 +170,13 @@ export class GameFlow {
   // ---------- observation hooks ----------
   _onPlayerAction(a) {
     if (!this.enabled || this.state !== 'tutorial') return;
-    const step = TUTORIAL_STEPS[this.tutorial.step];
+    const step = this.steps[this.tutorial.step];
     if (step?.key === 'dodge' && a === 'dodge') this._advanceTutorial();
   }
 
   _onCombatEvent(e) {
     if (!this.enabled || this.state !== 'tutorial') return;
-    const step = TUTORIAL_STEPS[this.tutorial.step];
+    const step = this.steps[this.tutorial.step];
     if (!step) return;
     if (e.type === 'hit' && e.att === this.ctx.player && e.def === this.ctx.dummy) {
       if (step.key === 'light' && e.kind === 'light') this._advanceTutorial();
@@ -175,13 +186,13 @@ export class GameFlow {
 
   _showTutorialPrompt() {
     const i = this.tutorial.step;
-    const s = TUTORIAL_STEPS[i];
-    if (s) this.ctx.prompts.show(`TRAINING ${i + 1}/${TUTORIAL_STEPS.length} — ${s.main}`, s.sub);
+    const s = this.steps[i];
+    if (s) this.ctx.prompts.show(`TRAINING ${i + 1}/${this.steps.length} — ${s.main}`, s.sub);
   }
 
   _advanceTutorial() {
     this.tutorial.step++;
-    if (this.tutorial.step >= TUTORIAL_STEPS.length) {
+    if (this.tutorial.step >= this.steps.length) {
       this.log('tutorial_complete');            // AC-1.1.3
       this.enter('approach');
     } else {
@@ -196,7 +207,7 @@ export class GameFlow {
 
     switch (this.state) {
       case 'tutorial': {
-        const step = TUTORIAL_STEPS[this.tutorial.step];
+        const step = this.steps[this.tutorial.step];
         if (!step) break;
         if (step.key === 'move') {
           const d = c.player.pos.distanceTo(c.player.prevPos);
@@ -250,7 +261,8 @@ export class GameFlow {
           this._awaken = false;
           this._awakenT = 8;
           c.prompts.show('POWER AWAKENED',
-            'F fly · Space/C rise & dive · hold Q to RUSH · I ki blast', true);
+            c.mobile ? 'FLY · ▲/▼ rise & dive · hold DASH to RUSH · hold KI blast'
+              : 'F fly · Space/C rise & dive · hold Q to RUSH · I ki blast', true);
         }
         if (this._awakenT > 0) {
           this._awakenT -= dt;

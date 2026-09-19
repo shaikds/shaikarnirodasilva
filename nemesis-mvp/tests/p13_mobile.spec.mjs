@@ -157,6 +157,20 @@ const km = await page.evaluate(() => {
 check('AC-11.3.1 the key map shows touch instructions, not keyboard rows',
   km.mentionsStick && !km.mentionsWASD, JSON.stringify(km));
 
+// the tutorial's OWN prompt text (core/states.js) also branches on mobile —
+// a real gap caught while screenshotting the in-game layout: the flow
+// module has its own device-specific strings, separate from the key map
+const tutorialPrompt = await page.evaluate(() => {
+  const g = window.__game;
+  g.flow.enabled = true;
+  g.flow.state = 'tutorial';
+  g.flow.tutorial = { step: 0, moved: 0, blockHeld: 0 };
+  g.flow._showTutorialPrompt();
+  return document.querySelector('#prompts .sub')?.textContent ?? '';
+});
+check('AC-11.3.1 the tutorial\'s own MOVE prompt says "joystick", not "W A S D"',
+  /joystick/i.test(tutorialPrompt) && !/W A S D/.test(tutorialPrompt), tutorialPrompt);
+
 check('no console/page errors (mobile)', errors.length === 0, errors.join(' | ').slice(0, 400));
 await page.screenshot({ path: process.env.SHOT || '/tmp/p13-mobile.png' });
 await browser.close();
@@ -183,6 +197,16 @@ const desktopKeymapText = await desktop.page.evaluate(() => {
 check('AC-11.3.1 desktop key map is unchanged (keyboard rows, not touch rows)',
   /W A S D/.test(desktopKeymapText) && !/left joystick/i.test(desktopKeymapText),
   desktopKeymapText.slice(0, 80));
+const desktopTutorialPrompt = await desktop.page.evaluate(() => {
+  const g = window.__game;
+  g.flow.enabled = true;
+  g.flow.state = 'tutorial';
+  g.flow.tutorial = { step: 0, moved: 0, blockHeld: 0 };
+  g.flow._showTutorialPrompt();
+  return document.querySelector('#prompts .sub')?.textContent ?? '';
+});
+check('AC-11.3.1 desktop tutorial prompt is unchanged ("W A S D")',
+  desktopTutorialPrompt === 'W A S D', desktopTutorialPrompt);
 check('no console/page errors (desktop)', desktop.errors.length === 0, desktop.errors.join(' | ').slice(0, 400));
 await desktop.browser.close();
 

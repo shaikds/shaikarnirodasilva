@@ -367,7 +367,7 @@ const macroAgent = new MacroAgent({ rival, player, manager, nav, zone });
 const flow = new GameFlow({
   player, dummy, rival, dummyBrain, rivalAgent, manager,
   hud, prompts, zone, nav, resolver, rig, loop, bootMode,
-  macroAgent, taunts,
+  macroAgent, taunts, mobile,
 });
 // rival speech gets a voice blip — and Jev remembers what it heard (M9)
 const _subtitle = hud.subtitle.bind(hud);

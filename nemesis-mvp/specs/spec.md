@@ -686,6 +686,13 @@ unaffected byte-for-byte; this is purely additive.
   (joystick/drag/button rows) instead of keyboard rows when mobile is
   detected; since there's no `H` key to reopen it, a small `?` button is
   always present in the corner instead.
+- **AC-11.3.2** The tutorial's OWN prompt text (`core/states.js`,
+  independent of the key-map overlay) also branches on mobile — the MOVE
+  step says "left joystick" rather than "W A S D", and every other
+  tutorial/awakening prompt naming a key names its on-screen button
+  instead. Caught while reviewing an actual mobile screenshot: the
+  overlay and the flow's own strings are two separate systems and both
+  needed the branch.
 
 ## 9. Post-MVP (explicitly deferred, kept from PRD)
 
@@ -773,6 +780,6 @@ leads, code follows.
 | FR-10.3 Independent activation and credentials | P12 | **done** (p12: separate toggle + namespaced backend config per side, verified no cross-talk) |
 | FR-11.1 Detection and responsive layout | P13 | **done** (p13: touch+small-viewport gate, `body.mobile`-driven CSS, gesture suppression) |
 | FR-11.2 On-screen touch controls | P13 | **done** (p13: joystick + drag-look + buttons via `Input.press`/`release`/`touchAxes` — zero PlayerController changes) |
-| FR-11.3 Mobile-aware onboarding | P13 | **done** (p13: touch key-map rows, `?` reopen button) |
+| FR-11.3 Mobile-aware onboarding | P13 | **done** (p13: touch key-map rows, `?` reopen button, tutorial's own prompt strings also branch — AC-11.3.2) |
 | NFR-1..5 | P0/P7 | **done** (NFR-5 degraded mode at P7; NFR-1 amended at P0) |
 | S-1..S-4 success criteria | P8 | **done** — S-1 journey scripted + on video; S-2 canonical taunt live on video; S-3 20-duel band (amended, 1 resample); S-4 systems verified, 60fps pending developer hardware |
