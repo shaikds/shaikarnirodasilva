@@ -180,20 +180,36 @@ export class JevBackend {
   }
 
   // state and questions are SEPARATE request fields — the contract's core
+  // errors are re-thrown with a human-readable message — the panel
+  // surfaces it on screen (FR-9.2.3 visibility), since dev tools are not
+  // always reachable (keyboard shortcuts collide with game hotkeys,
+  // artifacts render in an iframe, etc.)
   async send(state, questions) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     try {
-      const res = await fetch(this.url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
-        },
-        body: JSON.stringify({ model: this.model, state, questions }),
-        signal: ctrl.signal,
-      });
-      if (!res.ok) throw new Error(`jev http ${res.status}`);
+      let res;
+      try {
+        res = await fetch(this.url, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
+          },
+          body: JSON.stringify({ model: this.model, state, questions }),
+          signal: ctrl.signal,
+        });
+      } catch (e) {
+        if (e?.name === 'AbortError') throw new Error(`timeout after ${this.timeoutMs}ms (${this.url})`);
+        // fetch rejects with a bare TypeError for network failure AND for
+        // a CORS refusal alike — the browser deliberately hides which
+        throw new Error(`network error reaching ${this.url} — proxy not running, wrong URL, or CORS blocked it (${e?.message ?? e})`);
+      }
+      if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.text()).slice(0, 200); } catch { /* ignore */ }
+        throw new Error(`http ${res.status} from ${this.url}${detail ? ': ' + detail : ''}`);
+      }
       return this._normalize(await res.json());
     } finally {
       clearTimeout(timer);

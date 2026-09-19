@@ -33,6 +33,7 @@ export class JevNemesisDriver {
     this.pending = false;
     this.seq = 0;
     this.offline = false;
+    this.lastError = null;              // human-readable failure (panel shows it)
     this._retryT = 0;
     this.alert = 0;
     this.commitCharge = 0;
@@ -97,10 +98,12 @@ export class JevNemesisDriver {
       this.pending = false;
       if (seq !== this.seq) return;
       this.offline = false;
+      this.lastError = null;
       this._apply(ans);
-    }).catch(() => {
+    }).catch(e => {
       this.pending = false;
       this.offline = true;
+      this.lastError = e?.message ?? String(e);
       this._retryT = 5;
     });
   }

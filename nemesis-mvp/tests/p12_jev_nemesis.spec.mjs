@@ -163,15 +163,20 @@ const offlineMocked = await page.evaluate(async () => {
   g.step(1);
   await new Promise(r => setTimeout(r, 0));
   const offlineFlag = g.jevNemesisDriver.offline;
+  g.nemesisPanel.tick();
+  const panelErrText = document.querySelector('#jevNemesis .err')?.textContent ?? '';
   // GOAP's own goal selection only happens inside RivalAgent.update() —
   // seeing it populate proves delegation, not a parallel implementation
   g.rivalAgent.currentGoal = null;
   g.player.pos.set(0, 0, -6); g.player.prevPos.copy(g.player.pos);   // give GOAP something to plan around
   for (let i = 0; i < 60; i++) g.step(1);
-  return { offlineFlag, goapActed: g.rivalAgent.currentGoal != null };
+  return { offlineFlag, goapActed: g.rivalAgent.currentGoal != null, lastError: g.jevNemesisDriver.lastError, panelErrText };
 });
 check('AC-10.2.2 a failed backend sets offline and hands the fighter to RivalAgent.update()',
   offlineMocked.offlineFlag && offlineMocked.goapActed, JSON.stringify(offlineMocked));
+check('AC-9.2.3 the nemesis panel also shows the real failure reason on screen',
+  offlineMocked.lastError === 'connection refused' && offlineMocked.panelErrText === 'connection refused',
+  JSON.stringify(offlineMocked));
 
 // (AC-10.2.2's "no backend configured at all" case is the exact same
 // code path as offlineMocked above — backend.send rejects, .catch() sets

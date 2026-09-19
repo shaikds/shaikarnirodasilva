@@ -418,12 +418,50 @@ const offline = await page.evaluate(async () => {
   const d1 = g.player.distanceTo(g.rival);
   g.jevPanel.tick();
   const panelOffline = document.getElementById('jev').classList.contains('offline');
-  return { offlineFlag, closed: d1 < d0 - 1, panelOffline };
+  const errText = document.querySelector('#jev .err')?.textContent ?? '';
+  return { offlineFlag, closed: d1 < d0 - 1, panelOffline, lastError: g.jevDriver.lastError, errText };
 });
 check('AC-9.2.3 a failed backend sets the offline flag and the HUD reflects it',
   offline.offlineFlag && offline.panelOffline, JSON.stringify(offline));
 check('AC-9.2.3 the heuristic fallback keeps fighting — the duel never stalls',
   offline.closed, JSON.stringify(offline));
+check('AC-9.2.3 the actual failure reason is captured AND shown on screen (no dev tools needed)',
+  offline.lastError === 'connection refused' && offline.errText === 'connection refused',
+  JSON.stringify(offline));
+
+// distinct, readable messages for the real failure modes (network/CORS,
+// timeout, bad HTTP status) — this is what actually gets shown on screen
+await reset();
+const errorShapes = await page.evaluate(async () => {
+  const g = window.__game, b = g.jevDriver.backend;
+  delete b.send;   // reset()'s stub shadows the real method; run the actual one
+  const orig = window.fetch;
+  const tryOne = async (mockFetch) => {
+    window.fetch = mockFetch;
+    try { await b.send({}, []); return null; }
+    catch (e) { return e.message; }
+    finally { window.fetch = orig; }
+  };
+  const networkErr = await tryOne(async () => { throw new TypeError('Failed to fetch'); });
+  const httpErr = await tryOne(async () => ({ ok: false, status: 401, text: async () => '{"error":"invalid key"}' }));
+  b.timeoutMs = 30;
+  // a real fetch rejects with AbortError once the signal fires — mimic
+  // that instead of a bare hung promise (which never settles at all and
+  // would hang this whole test)
+  const timeoutErr = await tryOne((url, init) => new Promise((resolve, reject) => {
+    init.signal.addEventListener('abort', () => {
+      const e = new Error('The operation was aborted.'); e.name = 'AbortError'; reject(e);
+    });
+  }));
+  b.timeoutMs = 2500;
+  return { networkErr, httpErr, timeoutErr };
+});
+check('AC-9.2.3 a network/CORS failure gets a readable, actionable message',
+  /network error|CORS|proxy not running/i.test(errorShapes.networkErr ?? ''), JSON.stringify(errorShapes.networkErr));
+check('AC-9.2.3 a bad HTTP status surfaces the status code and response body',
+  /401/.test(errorShapes.httpErr ?? '') && /invalid key/.test(errorShapes.httpErr ?? ''), JSON.stringify(errorShapes.httpErr));
+check('AC-9.2.3 a timeout surfaces as a timeout, not a generic error',
+  /timeout/i.test(errorShapes.timeoutErr ?? ''), JSON.stringify(errorShapes.timeoutErr));
 
 // ================= FR-9.2.4: runtime toggle, and the profiler is blind to WHO plays =================
 

@@ -28,6 +28,7 @@ export class JevPlayerDriver {
     this.pending = false;
     this.seq = 0;
     this.offline = false;                 // last request failed / no backend
+    this.lastError = null;                // human-readable failure (panel shows it)
     this._retryT = 0;
     this.alert = 0;                       // danger_now probability
     this.commitCharge = 0;                // commit_full_charge probability
@@ -97,10 +98,12 @@ export class JevPlayerDriver {
       this.pending = false;
       if (seq !== this.seq) return;       // freshness: superseded request
       this.offline = false;
+      this.lastError = null;
       this._apply(ans);
-    }).catch(() => {
+    }).catch(e => {
       this.pending = false;
       this.offline = true;                // fallback fights on (AC-9.2.3)
+      this.lastError = e?.message ?? String(e);   // panel shows this on screen
       this._retryT = 5;
     });
   }

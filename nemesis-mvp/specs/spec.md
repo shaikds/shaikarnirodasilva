@@ -557,7 +557,11 @@ as they observe a human, so the nemesis adapts to Jev's style.
   discarded (freshness check before applying).
 - **AC-9.2.3** No config, request error, or timeout → a heuristic
   fallback fights on; the duel never stalls; the HUD nameplate shows
-  `JEV·OFFLINE` in that mode.
+  `JEV·OFFLINE` in that mode. The actual failure reason (network error,
+  CORS refusal, timeout, HTTP status + response body) is a human-readable
+  string surfaced directly on the panel itself, not only the console —
+  browser dev tools are not always reachable (keyboard shortcuts collide
+  with game hotkeys, published artifacts render in an iframe).
 - **AC-9.2.4** Toggling "LET JEV PLAY" swaps the player driver at
   runtime; toggling off restores human control. Profiler/sync/zenkai
   treat Jev's fighter identically to a human's.

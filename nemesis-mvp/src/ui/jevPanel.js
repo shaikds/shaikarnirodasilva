@@ -30,6 +30,13 @@ const CSS = `
 .jevpanel .gear {
   position: absolute; right: 4px; top: -18px; cursor: pointer; color: #556;
 }
+.jevpanel .err {
+  display: none; margin-top: 4px; padding: 6px 8px; max-width: 320px;
+  background: rgba(30,8,14,0.95); border: 1px solid #ff4d6a; color: #ffb3c0;
+  font-size: 10px; line-height: 1.5; word-break: break-word; white-space: normal;
+  cursor: text; user-select: text;
+}
+.jevpanel.offline .err { display: block; }
 `;
 let styleInjected = false;
 
@@ -63,7 +70,8 @@ export class JevPanel {
         <div class="note">key is kept in this browser's localStorage only — never in the page or the repo.
         proxy: <b>TYPESAFE_API_KEY=… node tools/jev-proxy.mjs</b></div>
       </div>
-      <div class="toggle">${idleLabel}</div>`;
+      <div class="toggle">${idleLabel}</div>
+      <div class="err"></div>`;
     document.body.appendChild(this.el);
     const q = s => this.el.querySelector(s);
     q('.url').value = driver.backend.url;
@@ -88,12 +96,17 @@ export class JevPanel {
     this.onToggle(this.active);
   }
 
-  // render-loop status: red border while the backend is failing
+  // render-loop status: red border while the backend is failing, with the
+  // actual failure text shown on screen — no dev tools required
   tick() {
-    this.el.classList.toggle('offline', this.active && this.driver.offline);
+    const failing = this.active && this.driver.offline;
+    this.el.classList.toggle('offline', failing);
     const t = this.el.querySelector('.toggle');
     const label = !this.active ? this.idleLabel
       : this.driver.offline ? this.offlineLabel : this.onLabel;
     if (t.textContent !== label) t.textContent = label;
+    const errEl = this.el.querySelector('.err');
+    const errText = failing ? (this.driver.lastError ?? 'unknown error') : '';
+    if (errEl.textContent !== errText) errEl.textContent = errText;
   }
 }
