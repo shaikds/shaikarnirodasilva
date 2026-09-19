@@ -279,6 +279,43 @@ green; p8 band ×2.
 
 ---
 
+## `[x]` P13 — Mobile: touch controls & responsive layout (M11, developer-requested)
+**Closes:** FR-11.1..11.3 · **Modules:** `core/device.js` (detection), `core/input.js` (`press`/`release`, `touchAxes`), `ui/touchControls.js` (joystick, camera drag-zone, action buttons), `ui/hud.js`/`ui/jevPanel.js`/`ui/keymap.js`/`index.html` (responsive CSS + mobile content), `core/tuning.js` (`TOUCH`), `main.js` (detection wiring)
+
+- One detection (`isMobile()`: touch-capable AND phone-sized — a
+  touchscreen laptop stays on the desktop experience) sets a
+  `body.mobile` class every UI module's CSS keys off. HUD bars move to
+  the top corners, the two Jev panels move to the top-left, the fps
+  readout hides — nothing overlaps the touch controls.
+- Touch controls drive the EXACT same `Input` state keyboard/mouse
+  already write — `Input.press(action)`/`release(action)` mirror
+  keydown/keyup, and a joystick's continuous `Input.touchAxes` is read
+  by `moveAxes()` ahead of the WASD-derived vector. `PlayerController`
+  needed zero changes: one input abstraction, two producers (the same
+  discipline as the rival's GOAP-vs-Jev drivers). A joystick (movement),
+  a full-screen drag zone (camera orbit, feeding the same `mouseDX`/
+  `mouseDY` mouselook already uses), and on-screen buttons for the whole
+  action set — including heavy's hold-to-charge, which needed no special
+  handling since press/release already IS what `startCharge`/
+  `releaseCharge` are gated on.
+- Page-level gestures that would fight a game (pinch-zoom, pull-to-
+  refresh, double-tap-zoom) are suppressed on the game surface.
+- The key-map overlay shows touch-instruction rows instead of keyboard
+  rows on mobile, with a small always-visible `?` button replacing the
+  `H` key (no keyboard to press it from).
+
+**Exit criteria:** all FR-11 ACs pass; a desktop context is proven
+byte-identical to every earlier suite (no touch DOM, no mobile class,
+`touchControls === null`); earlier suites keep passing.
+**Verification:** `tests/p13_mobile.spec.mjs` 17/17 — real `TouchEvent`
+dispatch (not just internal method calls) driving joystick movement,
+hold-to-charge through the actual button, tap-attack, camera-drag look,
+responsive HUD position, and mobile key-map content, PLUS an explicit
+desktop-context regression check in the same run; full p0–p13 regression
+green; p8 band ×2.
+
+---
+
 ## After MVP
 
 Post-MVP items in spec §9 (LLM taunts, Unity port, asset pipeline, climbing,

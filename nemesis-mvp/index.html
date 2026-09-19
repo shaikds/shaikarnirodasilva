@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>NEMESIS</title>
 <style>
   :root {
@@ -12,9 +12,12 @@
     --dim: #8a8aa5;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #07070d; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden; background: #07070d;
+    overscroll-behavior: none;               /* no pull-to-refresh (FR-11.1.3) */
+  }
   body { font-family: 'Courier New', monospace; color: #d8d8e8; }
-  #game { display: block; width: 100%; height: 100%; }
+  #game { display: block; width: 100%; height: 100%; touch-action: none; }
 
   /* layers */
   .layer { position: fixed; inset: 0; pointer-events: none; }
@@ -40,6 +43,8 @@
     font-size: 11px; line-height: 1.5; display: none; pointer-events: auto;
     white-space: pre-wrap;
   }
+  /* FR-11.1.2: the fps/tick readout would sit under the touch buttons */
+  body.mobile #stats { display: none; }
 </style>
 </head>
 <body>

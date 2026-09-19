@@ -83,6 +83,18 @@ const CSS = `
   filter: drop-shadow(0 0 7px rgba(255,77,106,0.9));
   transition: opacity 0.25s;
 }
+/* FR-11.1.2: on a phone both bars move to the top corners, clear of the
+   bottom-left joystick and bottom-right action-button cluster */
+body.mobile #hud .bars { width: 150px; }
+body.mobile #hud .bars.me { left: 10px; bottom: auto; top: 10px; }
+body.mobile #hud .bars.foe { right: 10px; top: 10px; }
+body.mobile #hud .name { font-size: 10px; }
+body.mobile #hud .combo { right: 6vw; top: 40vh; }
+body.mobile #hud .announce { font-size: 26px; letter-spacing: 3px; }
+body.mobile #hud .plate { width: 96px; margin-left: -48px; }
+body.mobile #hud .plate .pname { font-size: 9px; }
+body.mobile #subtitles { bottom: 20vh; }
+body.mobile #subtitles .line { padding: 0 8vw; font-size: 13px; }
 `;
 
 export class Hud {

@@ -7,7 +7,7 @@
 
 const CSS = `
 .jevpanel {
-  position: fixed; right: 18px; z-index: 30; font-size: 11px; letter-spacing: 1px;
+  position: fixed; z-index: 30; font-size: 11px; letter-spacing: 1px;
 }
 .jevpanel .toggle {
   padding: 7px 14px; cursor: pointer; user-select: none; text-align: center;
@@ -37,11 +37,20 @@ const CSS = `
   cursor: text; user-select: text;
 }
 .jevpanel.offline .err { display: block; }
+@media (max-width: 560px) {
+  .jevpanel .cfg { width: 190px; }
+  .jevpanel .toggle { font-size: 10px; padding: 6px 8px; }
+  .jevpanel .err { max-width: 220px; }
+}
 `;
 let styleInjected = false;
 
 export class JevPanel {
-  constructor({ id, driver, onToggle, bottom = 18, idleLabel = 'LET JEV PLAY',
+  // pos: any mix of {left,right,top,bottom} in px — lets the caller place
+  // this clear of the touch-button cluster on mobile (FR-11.1.2) without
+  // the component itself knowing about layout, same component either way
+  constructor({ id, driver, onToggle, pos = { right: 18, bottom: 18 },
+                idleLabel = 'LET JEV PLAY',
                 onLabel = 'JEV IS FIGHTING · click to take over',
                 offlineLabel = 'JEV · OFFLINE (fallback fighting)' }) {
     this.driver = driver;
@@ -57,7 +66,7 @@ export class JevPanel {
     this.el = document.createElement('div');
     this.el.id = id;
     this.el.className = 'jevpanel';
-    this.el.style.bottom = bottom + 'px';
+    for (const [k, v] of Object.entries(pos)) this.el.style[k] = v + 'px';
     this.el.innerHTML = `
       <div class="gear" title="configure backend">⚙</div>
       <div class="cfg">

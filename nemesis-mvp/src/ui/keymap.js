@@ -38,6 +38,11 @@ const CSS = `
   margin-top: 18px; text-align: center; font-size: 12px; color: #667;
   letter-spacing: 2px;
 }
+@media (max-width: 560px) {
+  #keymap { font-size: 12px; padding: 16px; }
+  #keymap .panel { min-width: 0; width: 100%; max-width: 420px; padding: 18px 16px; }
+  #keymap .grid { grid-template-columns: 1fr; }
+}
 `;
 
 const ROWS = [
@@ -61,15 +66,34 @@ const ROWS = [
   ['C', 'descend in flight'],
 ];
 
+// FR-11.3: touch device — describe the on-screen controls, not keys
+const TOUCH_ROWS = [
+  ['MOVEMENT', null],
+  ['stick', 'left joystick — move'],
+  ['drag', 'right side of screen — camera'],
+  ['▲ / ▼', 'jump / rise · descend (in flight)'],
+  ['LOCK', 'lock on to your nemesis'],
+  ['COMBAT', null],
+  ['LIGHT', 'light attack — chains ×3'],
+  ['HEAVY hold', 'CHARGE heavy — release to strike. Full charge = BLAST: sends them flying'],
+  ['DODGE', 'vanish through attacks'],
+  ['BLOCK hold', 'block · quick tap-release = parry'],
+  ['BEAM', 'special beam (full energy)'],
+  ['SAIYAN', null],
+  ['FLY', 'flight (awakens after First Blood)'],
+  ['DASH hold', 'ki dash toward your foe'],
+  ['KI hold', 'ki blast barrage'],
+];
+
 export class KeymapOverlay {
-  constructor() {
+  constructor(mobile = false) {
     const style = document.createElement('style');
     style.textContent = CSS;
     document.head.appendChild(style);
     this.el = document.createElement('div');
     this.el.id = 'keymap';
     this.el.className = 'hidden';
-    const rows = ROWS.map(([k, what]) => what == null
+    const rows = (mobile ? TOUCH_ROWS : ROWS).map(([k, what]) => what == null
       ? `<div class="sect">${k}</div>`
       : `<div class="row"><kbd>${k}</kbd><span class="what${/CHARGE|BLAST/.test(what) ? ' hot' : ''}">${what}</span></div>`
     ).join('');
@@ -77,11 +101,13 @@ export class KeymapOverlay {
       <div class="panel">
         <h1>HOW TO FIGHT</h1>
         <div class="grid">${rows}</div>
-        <div class="dismiss">press H, Enter, or click to close — H reopens any time</div>
+        <div class="dismiss">${mobile ? 'tap anywhere to close — the ? button (top-left) reopens'
+          : 'press H, Enter, or click to close — H reopens any time'}</div>
       </div>`;
     document.body.appendChild(this.el);
     this.visible = false;
     this.el.addEventListener('mousedown', () => this.hide());
+    this.el.addEventListener('touchstart', () => this.hide(), { passive: true });
     addEventListener('keydown', e => {
       if (this.visible && (e.code === 'Enter' || e.code === 'Escape')) this.hide();
     });

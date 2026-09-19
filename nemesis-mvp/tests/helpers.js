@@ -9,12 +9,13 @@ import path from 'path';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export async function boot({ width = 1280, height = 800, record = null } = {}) {
+export async function boot({ width = 1280, height = 800, record = null, hasTouch = false, isMobile = false } = {}) {
   const browser = await chromium.launch({
     args: ['--allow-file-access-from-files'],
   });
   const ctx = await browser.newContext({
     viewport: { width, height },
+    hasTouch, isMobile,
     ...(record ? { recordVideo: { dir: record, size: { width, height } } } : {}),
   });
   const page = await ctx.newPage();

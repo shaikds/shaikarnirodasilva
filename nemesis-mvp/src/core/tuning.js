@@ -34,6 +34,12 @@ export const INPUT = {
   bufferMs: 150,         // AC-4.6.1
 };
 
+// FR-11.2: touch controls — joystick feel + camera-drag sensitivity
+export const TOUCH = {
+  joystickRadius: 46,    // px, clamps the knob
+  lookSens: 1.0,         // multiplier on top of CAMERA.mouseSens for drag-look
+};
+
 // Skill scaling (AC-3.3.4): [at skill 0, at skill 1], lerped by sync skill.
 export const AI = {
   reactionMs: [420, 130],

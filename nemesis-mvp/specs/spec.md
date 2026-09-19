@@ -640,6 +640,53 @@ hypothesis: it makes the autonomous, memory-driven, vengeful rival
 - **AC-10.3.2** Same credential-safety contract as FR-9.3: proxy-first
   default, dev-only direct key, key never in the repo or the bundle.
 
+## 8.9 M11 — Mobile: touch controls & responsive layout (developer-requested)
+
+The game auto-detects a touch-capable, phone-sized device (never a
+touchscreen laptop with a big screen — see AC-11.1.1) and switches to
+touch controls + a rearranged layout. Desktop keyboard/mouse play is
+unaffected byte-for-byte; this is purely additive.
+
+### FR-11.1 Detection and responsive layout
+- **AC-11.1.1** Detection requires BOTH touch capability (`ontouchstart`,
+  `maxTouchPoints`, or `pointer: coarse`) AND a small viewport
+  (`min(innerWidth, innerHeight) < 760`) — one central `isMobile()`
+  (`core/device.js`), read once at boot, sets a `body.mobile` class every
+  UI module's CSS keys off.
+- **AC-11.1.2** On mobile, the HUD health bars move to the top corners,
+  the two Jev panels move to the top-left (stacked), and the fps/tick
+  readout hides — nothing overlaps the touch controls below.
+- **AC-11.1.3** Page-level gestures that would fight the game (pinch-zoom,
+  pull-to-refresh, double-tap-zoom, text selection) are suppressed on the
+  game surface (`touch-action: none`, `overscroll-behavior: none`,
+  `user-scalable=no`).
+
+### FR-11.2 On-screen touch controls
+- **AC-11.2.1** A virtual joystick (bottom-left) drives continuous
+  movement, replacing WASD, via `Input.touchAxes` — `moveAxes()` returns
+  it when set, otherwise the existing WASD-derived vector; no change to
+  `PlayerController`.
+- **AC-11.2.2** Dragging anywhere on the right two-thirds of the screen
+  orbits the camera (the touch equivalent of pointer-lock mouselook),
+  feeding the same `mouseDX`/`mouseDY` `takeMouseDelta()` already reads.
+- **AC-11.2.3** On-screen buttons cover the action set through
+  `Input.press(action)`/`release(action)` — the SAME state a keyboard
+  keydown/keyup already writes, so `PlayerController` has no separate
+  touch code path (NFR-4 discipline: one input abstraction, two
+  producers, same as the rival's GOAP-vs-Jev drivers): light, heavy
+  (hold-to-charge — press starts the hold exactly like a keydown would,
+  release fires `releaseCharge()` exactly like a keyup would), block
+  (hold, tap-release parries), dodge, special, ki (hold-barrage), flight
+  (tap-toggle), dash (hold), jump/rise, descend, lock-on.
+- **AC-11.2.4** Touch controls render only when `isMobile()` is true; a
+  desktop session never sees them, and its own tests are unaffected.
+
+### FR-11.3 Mobile-aware onboarding
+- **AC-11.3.1** The key-map overlay shows touch-control instructions
+  (joystick/drag/button rows) instead of keyboard rows when mobile is
+  detected; since there's no `H` key to reopen it, a small `?` button is
+  always present in the corner instead.
+
 ## 9. Post-MVP (explicitly deferred, kept from PRD)
 
 
@@ -724,5 +771,8 @@ leads, code follows.
 | FR-10.1 Shared vocabulary, nemesis framing | P12 | **done** (p12: reused Choice/Noul bank via `buildQuestions(persona)`, rival's-own-eye state incl. name/level/power/hate/ledger memory) |
 | FR-10.2 Executor: augments the tested brain | P12 | **done** (p12: shared Fighter API, `RivalAgent.enabled` gate, GOAP fallback on any failure — mocked and real-unreachable-proxy safe, cadence/freshness parity with M9) |
 | FR-10.3 Independent activation and credentials | P12 | **done** (p12: separate toggle + namespaced backend config per side, verified no cross-talk) |
+| FR-11.1 Detection and responsive layout | P13 | **done** (p13: touch+small-viewport gate, `body.mobile`-driven CSS, gesture suppression) |
+| FR-11.2 On-screen touch controls | P13 | **done** (p13: joystick + drag-look + buttons via `Input.press`/`release`/`touchAxes` — zero PlayerController changes) |
+| FR-11.3 Mobile-aware onboarding | P13 | **done** (p13: touch key-map rows, `?` reopen button) |
 | NFR-1..5 | P0/P7 | **done** (NFR-5 degraded mode at P7; NFR-1 amended at P0) |
 | S-1..S-4 success criteria | P8 | **done** — S-1 journey scripted + on video; S-2 canonical taunt live on video; S-3 20-duel band (amended, 1 resample); S-4 systems verified, 60fps pending developer hardware |

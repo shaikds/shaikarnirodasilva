@@ -22,6 +22,7 @@ export class Input {
     this.down = {};                  // action -> bool
     this.pressT = {};                // action -> sim time of last press
     this.mouseDX = 0; this.mouseDY = 0;
+    this.touchAxes = null;           // {x,z} set by TouchControls' joystick, else null
     this.simTime = () => 0;          // wired by main to loop.simTime
 
     addEventListener('keydown', e => {
@@ -37,6 +38,9 @@ export class Input {
 
     if (canvas) {
       canvas.addEventListener('click', () => {
+        // pointer lock is a desktop mouse-look concept; on a touch device
+        // TouchControls drives the camera via a drag zone instead (FR-11.2)
+        if (('ontouchstart' in window) || (navigator.maxTouchPoints ?? 0) > 0) return;
         if (document.pointerLockElement !== canvas) {
           canvas.requestPointerLock?.();
         }
@@ -60,8 +64,15 @@ export class Input {
     }
   }
 
+  // programmatic press/release (FR-11.2): TouchControls drives the exact
+  // same state a keyboard would, through this instead of duplicating the
+  // keydown/keyup logic above — one input pipeline, two producers.
+  press(action) { this.down[action] = true; this.pressT[action] = this.simTime(); }
+  release(action) { this.down[action] = false; }
+
   // camera-relative move vector (x=right, z=forward), unnormalized -1..1
   moveAxes() {
+    if (this.touchAxes) return this.touchAxes;
     return {
       x: (this.down.right ? 1 : 0) - (this.down.left ? 1 : 0),
       z: (this.down.fwd ? 1 : 0) - (this.down.back ? 1 : 0),

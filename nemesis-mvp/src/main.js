@@ -30,6 +30,12 @@ import { KeymapOverlay } from './ui/keymap.js';
 import { JevPlayerDriver } from './ai/jevPlayer.js';
 import { JevNemesisDriver } from './ai/jevNemesisDriver.js';
 import { JevPanel } from './ui/jevPanel.js';
+import { isMobile } from './core/device.js';
+import { TouchControls } from './ui/touchControls.js';
+
+// FR-11.1: one detection, read everywhere that needs to adapt layout
+const mobile = isMobile();
+document.body.classList.toggle('mobile', mobile);
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('game');
@@ -103,6 +109,9 @@ const rival = new Fighter({
 });
 
 const input = new Input(canvas);
+// FR-11.2: on a phone, touch controls drive the SAME Input state a
+// keyboard/mouse would — no separate PlayerController code path
+const touchControls = mobile ? new TouchControls({ input }) : null;
 const rig = new CameraRig(camera, player, zone);
 const controller = new PlayerController(player, input, rig);
 controller.candidates = [dummy, rival];
@@ -372,7 +381,7 @@ const jevDriver = new JevPlayerDriver({
   player, rival, manager, flow, macroAgent, hud, rig, loop, resolver,
 });
 const jevPanel = new JevPanel({
-  id: 'jev', bottom: 18,
+  id: 'jev', pos: mobile ? { left: 10, top: 78 } : { right: 18, bottom: 18 },
   driver: jevDriver,
   onToggle: on => setPlayerDriver(on ? 'jev' : 'human'),
 });
@@ -382,7 +391,7 @@ const jevNemesisDriver = new JevNemesisDriver({
   rival, player, manager, flow, macroAgent, hud, rig, loop, resolver, rivalAgent,
 });
 const nemesisPanel = new JevPanel({
-  id: 'jevNemesis', bottom: 60,
+  id: 'jevNemesis', pos: mobile ? { left: 10, top: 124 } : { right: 18, bottom: 60 },
   driver: jevNemesisDriver,
   idleLabel: 'JEV IS THE NEMESIS',
   onLabel: 'JEV NEMESIS FIGHTING · click to revert',
@@ -393,8 +402,24 @@ flow.boot();
 // title beat: a first-boot moment before the training prompt takes over
 if (bootMode === 'created') hud.announce('N E M E S I S', 2600);
 // FR-8.5: the key map greets every boot; H reopens it any time
-const keymap = new KeymapOverlay();
+const keymap = new KeymapOverlay(mobile);
 keymap.show();
+// FR-11.3: no H key on a touch keyboard — a small always-visible button instead
+let helpBtn = null;
+if (mobile) {
+  helpBtn = document.createElement('div');
+  helpBtn.textContent = '?';
+  Object.assign(helpBtn.style, {
+    position: 'fixed', left: '14px', top: '14px', zIndex: 45,
+    width: '34px', height: '34px', borderRadius: '50%',
+    border: '1px solid rgba(216,216,232,0.4)', background: 'rgba(20,20,36,0.7)',
+    color: '#dfe3ff', font: "bold 16px 'Courier New', monospace",
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    userSelect: 'none',
+  });
+  helpBtn.addEventListener('touchstart', e => { e.preventDefault(); keymap.toggle(); }, { passive: false });
+  document.body.appendChild(helpBtn);
+}
 
 loop.start();
 
@@ -415,6 +440,7 @@ window.__game = {
   manager, bootMode, debugPanel, vfx, landmarks, sun,
   nav, prompts, flow, macroAgent, taunts, degrade, sfx, keymap,
   jevDriver, jevPanel, jevNemesisDriver, nemesisPanel,
+  mobile, touchControls,
   get playerDriver() { return playerDriver; },        // M9 test surface
   get rivalBrain() { return nemesisPanel.active ? jevNemesisDriver : rivalAgent; },  // M10
   setPlayerDriver, step,
