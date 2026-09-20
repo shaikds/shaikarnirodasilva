@@ -224,6 +224,13 @@ check('AC-9.1.2 next_move is a Choice covering the whole tactical vocabulary',
 const chargeQ = shape?.questions.find(q => q.id === 'commit_full_charge');
 check('AC-9.1.2 commit_full_charge is a speculative Noul (premise stated in the question)',
   chargeQ?.type === 'noul' && /assume|charging/i.test(chargeQ.instructions), chargeQ?.instructions);
+const dangerQ = shape?.questions.find(q => q.id === 'danger_now');
+check('AC-9.3.2 (second correction, real 422 confirmed 2026-09-20) a Noul question\'s criteria is an object keyed yes/no, not a bare string',
+  chargeQ?.type === 'noul' && typeof chargeQ.criteria === 'object' && !Array.isArray(chargeQ.criteria) &&
+  'yes' in chargeQ.criteria && 'no' in chargeQ.criteria &&
+  dangerQ?.type === 'noul' && typeof dangerQ.criteria === 'object' &&
+  'yes' in dangerQ.criteria && 'no' in dangerQ.criteria,
+  JSON.stringify({ charge: chargeQ?.criteria, danger: dangerQ?.criteria }));
 const voiceQ = shape?.questions.find(q => q.id === 'voice');
 check('AC-9.1.2 voice is a Choice with a stay_silent no-match outcome',
   voiceQ?.type === 'choice' && 'stay_silent' in voiceQ.criteria, JSON.stringify(Object.keys(voiceQ?.criteria ?? {})));

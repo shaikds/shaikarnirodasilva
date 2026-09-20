@@ -607,6 +607,19 @@ as they observe a human, so the nemesis adapts to Jev's style.
   this point — the on-screen error text (AC-9.2.3) is what made the real
   server response visible without dev tools and let this get caught at
   all.
+  **Second correction (2026-09-20, same day):** after pulling the fix
+  above, the developer's proxy returned a follow-up `422` — `loc:
+  ["body","questions","commit_full_charge","noul","criteria"]`, `msg:
+  "Input should be a valid dictionary or object to extract fields
+  from"`, `input: "Yes means..."` — proving a Noul question's `criteria`
+  must ALSO be an object (`{yes, no}`), not the bare instructional
+  string this code was sending, mirroring how a Choice question's
+  `criteria` was already correctly an object keyed by option. Fixed at
+  the source in `buildQuestions()` (both `commit_full_charge` and
+  `danger_now`, the game's only two Noul questions) — no separate
+  wire-boundary conversion needed since criteria is sent as authored.
+  `tests/p11_jev.spec.mjs` gained a check asserting both Noul questions'
+  criteria are `{yes, no}` objects.
 
 ## 8.8 M10 — Jev as the nemesis (developer-requested, follows M9)
 

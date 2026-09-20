@@ -218,10 +218,11 @@ green; p8 band ×3 after the rival-charge retune (see 2026-07-08 log).
   unreachable from the build environment (network egress policy), so the
   wire format was corroborated against convergent independent public
   SDKs (2026-09-18) rather than read directly, confined to one adapter
-  (`JevBackend.send`/`_normalize`). That corroboration missed one
-  structural detail — `questions` must be a dictionary keyed by ID, not
-  an array — caught via a live 422 from the developer's own proxy and
-  fixed 2026-09-20. See both logs.
+  (`JevBackend.send`/`_normalize`). That corroboration missed two
+  structural details, each caught via a live 422 from the developer's
+  own proxy and fixed the same day (2026-09-20): `questions` must be a
+  dictionary keyed by ID, not an array; and a Noul question's `criteria`
+  must be an object (`{yes, no}`), not a bare string. See both logs.
 
 **Exit criteria:** all FR-9 ACs pass; earlier suites keep passing; no key
 ever appears in the repo or the published bundle.

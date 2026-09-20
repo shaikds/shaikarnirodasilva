@@ -119,7 +119,10 @@ export function buildQuestions(persona) {
         'cancelled if JEV is hit. Judge: will the hold reach FULL charge ' +
         'and land on `foe` unpunished, given `foe.state`, `foe.phase`, and ' +
         '`foe.distanceMeters`?',
-      criteria: 'Yes means `foe` cannot reach and interrupt JEV within the hold, and will still be hittable at release. No means the hold gets stuffed or whiffs.',
+      criteria: {
+        yes: '`foe` cannot reach and interrupt JEV within the hold, and will still be hittable at release.',
+        no: 'The hold gets stuffed or whiffs.',
+      },
     },
     {
       id: 'danger_now',
@@ -128,7 +131,10 @@ export function buildQuestions(persona) {
         ' Judge: must JEV act defensively within the next half second? ' +
         'Consider `foe.state` and `foe.phase` (a wind-up in melee range or ' +
         'a charging foe is imminent danger; a staggered foe is none).',
-      criteria: 'Yes means an attack, blast, or charge release is about to reach JEV. No means JEV is free to act offensively.',
+      criteria: {
+        yes: 'An attack, blast, or charge release is about to reach JEV.',
+        no: 'JEV is free to act offensively.',
+      },
     },
     {
       id: 'voice',
@@ -192,6 +198,16 @@ export class JevBackend {
   // array this code was sending. The internal question bank/tests stay
   // array-shaped (an `id` field per entry is more ergonomic to iterate
   // and assert on) — only the wire boundary converts, right here.
+  //
+  // AC-9.3.2 second correction (2026-09-20): a follow-up 422 — loc
+  // `["body","questions","commit_full_charge","noul","criteria"]`, msg
+  // "Input should be a valid dictionary or object to extract fields
+  // from", input the plain "Yes means..." string — proved a Noul
+  // question's `criteria` must ALSO be an object (`{yes, no}`), not a
+  // bare string, mirroring how a Choice question's `criteria` is already
+  // an object keyed by option. Fixed at the question-bank source
+  // (`buildQuestions`) since criteria is defined once and sent as-is —
+  // no separate wire-boundary conversion needed for this one.
   async send(state, questions) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
