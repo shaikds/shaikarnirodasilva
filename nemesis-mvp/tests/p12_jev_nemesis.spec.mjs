@@ -48,6 +48,11 @@ async function reset(opts = {}) {
     jd.directive = null; jd.pending = false; jd.offline = false; jd.seq = 0;
     jd.alert = 0; jd.commitCharge = 0; jd.recent = []; jd.lastDirective = null;
     jd._sinceDecision = 99; jd._salient = false; jd._voiceT = -99; jd._retryT = 0;
+    // FR-10.2's checks assert the RAW LLM answer is applied faithfully;
+    // P14's skill-scaled mistake throttle (FR-12.2) is a separate concern
+    // with its own dedicated tests (p14) — disable it here so this
+    // suite's deterministic move assertions stay deterministic.
+    jd.mistakeEnabled = false;
     if (!g.nemesisPanel.active) g.nemesisPanel.toggle(true);
     jd.backend.send = async () => ({});    // default stub the test overrides
   }, {

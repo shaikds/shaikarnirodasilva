@@ -376,6 +376,64 @@ following clean re-runs confirmed no regression).
 
 ---
 
+## `[x]` P15 — Combat feel (M13, developer-requested; descoped from the original combo plan)
+**Closes:** FR-13.2..13.3 (FR-13.1 descoped, see below) · **Modules:**
+`combat/resolver.js` (killed-triggered FOV punch), `fx/vfx.js`
+(`spawnFinisherImpact`), `world/camera.js` (`fovPunch()`),
+`ai/comboMoves.js` (new — shared `route_uppercut` executor + the
+`inRouteUppercutChainWindow` bug fix), `ai/jevPlayer.js`/`jevNemesisDriver.js`
+(use the shared helper)
+
+- The developer asked for "more effects and combos, with camera
+  effects." The combo half of that (a `skySpike` finisher chained off
+  `uppercut`) was designed, implemented, and then **reverted** after
+  extensive empirical S-3 band testing (many dozens of duels run across
+  the session) found a genuine balance problem that no damage value
+  could fix: making `uppercut` chainable at all removes its own recovery
+  punish-window, exploitable by the S-3 test's raw-input `PlayerBot` but
+  structurally unreachable by `RivalAgent` (GOAP) — the same busy-gate
+  limitation that blocks GOAP from ever continuing any light-chain. A
+  first attempt to give GOAP an equivalent opportunistic follow-up was
+  ALSO reverted after it produced a 20/20 duel shutout in testing — a
+  correctness risk, not just a tuning nuance. `ai/rivalAgent.js` and
+  `combat/fighter.js` are confirmed byte-identical to their pre-P15
+  state; `combat/attacks.js` differs from the prior commit by exactly
+  one unused constant. Full investigation, including the specific
+  damage values tried (9→5→3→2→1) and why each still skewed the band, is
+  in `logs/2026-09-20.md`.
+- **What shipped instead:** the new VFX (`spawnFinisherImpact`, reusing
+  existing particle/texture primitives) and camera FOV-punch primitive
+  (`CameraRig.fovPunch()`, mirroring `shake()`'s decay shape) — the
+  actual "more effects... camera effects" ask — retargeted to trigger on
+  the killing blow (already computed as `Resolver.strike()`'s `killed`
+  field) instead of a new attack, since that moment needs zero balance
+  tuning (the duel is already deciding its outcome).
+- **A genuinely separate, low-risk bug fix surfaced while building
+  this:** both Jev drivers' `route_uppercut` executors could never
+  actually complete their own pre-existing, documented light-light-heavy
+  sequence (FR-8.4) — a "busy? bail" gate blocked them from ever seeing
+  the chain-continuation window, silently re-starting `light1` forever
+  instead. This was present before P15, just never exercised end-to-end
+  by a test until this session's work. Fixed via a new shared helper
+  (`ai/comboMoves.js`), which also deduped the two drivers' previously
+  byte-identical `route_uppercut` case bodies.
+
+**Exit criteria:** FR-13.2/13.3 ACs pass; FR-13.1 explicitly marked
+descoped with its reasoning recorded; `rivalAgent.js`/`fighter.js`
+unchanged from pre-P15; earlier suites keep passing.
+**Verification:** `tests/p15_combat_feel.spec.mjs` 13/13 (human-driven
+route_uppercut regression, both Jev drivers' bug-fix verification, GOAP
+confirmed unaffected, S-3 band as a pure regression check, killing-blow
+VFX trigger incl. the ordinary-hit negative case, ground decal, camera
+FOV punch incl. end-to-end through a real kill and decay-to-baseline);
+full p0–p15 regression green; p8 band run to two consecutive clean
+passes (several individual runs during the investigation landed outside
+the band — consistent with this exact matchup's own pre-existing,
+confirmed-independent-of-P15 variance, documented in full in
+`logs/2026-09-20.md` rather than papered over).
+
+---
+
 ## After MVP
 
 Post-MVP items in spec §9 (LLM taunts, Unity port, asset pipeline, climbing,

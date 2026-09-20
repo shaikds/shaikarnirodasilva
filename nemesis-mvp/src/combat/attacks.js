@@ -103,6 +103,7 @@ export const FEEL = {
   hitstopMs: { light: 40, heavy: 80, special: 80, ki: 12, blocked: 20, parried: 60 },
   shake: { light: 0.06, heavy: 0.16, special: 0.2, ki: 0.02, blocked: 0.03, parried: 0.1 },
   impulse: 0.35,              // camera kick on heavy+ hits (AC-4.6.4)
+  fovPunch: { blast: 6, kill: 4 },   // FR-13.3: camera FOV punch, degrees
 };
 
 // M7 Saiyan combat (FR-7.x) — all tuning here per NFR-4

@@ -112,10 +112,17 @@ export class Resolver {
     this.rig?.shake(blast ? FEEL.shake.special * 1.5 : FEEL.shake[kind]);
     if (kind !== 'light') this.rig?.impulse(dir.x * FEEL.impulse, 0.05, dir.z * FEEL.impulse);
     if (att.combo >= COMBO.slowmoAt) this.loop.slowmo(COMBO.slowmoMs, COMBO.slowmoFactor);
+    const killed = !def.alive;
+    // FR-13.3: camera FOV punch on the game's two biggest hit-weight
+    // moments — a charged blast, or the killing blow — co-located with
+    // the shake/impulse calls above for the same moments rather than a
+    // separate main.js listener
+    if (blast) this.rig?.fovPunch(FEEL.fovPunch.blast);
+    else if (killed) this.rig?.fovPunch(FEEL.fovPunch.kill);
     if (blast) this._emit({ type: 'blast', att, def, pos: hitPos, charge });
     this._emit({
       type: 'hit', att, def, pos: hitPos, kind,
-      amount: dmg, combo: att.combo, killed: !def.alive,
+      amount: dmg, combo: att.combo, killed,
     });
     return 'hit';
   }

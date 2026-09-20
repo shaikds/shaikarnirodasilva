@@ -12,6 +12,7 @@ import { buildNemesisState, NEMESIS_QUESTIONS, VOICE_LINES } from './jevNemesis.
 import { CHARGE, ENERGY } from '../combat/attacks.js';
 import { AI } from '../core/tuning.js';
 import { JevBackend, noulYesProbability } from './jev.js';
+import { driveRouteUppercut, inRouteUppercutChainWindow } from './comboMoves.js';
 
 const STALE_S = 1.4;
 const DIRECTIVE_MAX_S = 1.8;
@@ -46,6 +47,7 @@ export class JevNemesisDriver {
     this.commitCharge = 0;
     this.recent = [];
     this.lastDirective = null;
+    this.mistakeEnabled = true;         // FR-12.2: off for deterministic wiring tests (p12)
     this._voiceT = -99;
     this._sinceDecision = 99;
     this._salient = false;
@@ -135,7 +137,7 @@ export class JevNemesisDriver {
       this.directive = { move, t: 0, hits: 0, taken: 0 };
       const skill = this.ctx.rivalAgent.skill;
       const mistakeP = AI.mistakeRate[0] + (AI.mistakeRate[1] - AI.mistakeRate[0]) * skill;
-      if (Math.random() < mistakeP) {
+      if (this.mistakeEnabled && Math.random() < mistakeP) {
         this.directive.move = MISTAKE_MOVES[(Math.random() * MISTAKE_MOVES.length) | 0];
         this.directive.mistake = true;
       }
@@ -184,7 +186,11 @@ export class JevNemesisDriver {
       return;
     }
     if (f.state === 'charge') return;
-    if (f.busy) { if (f.state === 'stagger' || f.state === 'hitstun') d.interrupted = true; return; }
+    // FR-13.1: route_uppercut's chain link only exists during the recover
+    // phase of the attack that opened it, which is also when f.busy is
+    // still true — let the gate through specifically for that window.
+    const chainWindow = d.move === 'route_uppercut' && inRouteUppercutChainWindow(f);
+    if (f.busy && !chainWindow) { if (f.state === 'stagger' || f.state === 'hitstun') d.interrupted = true; return; }
 
     const advance = () => { f.intent.move.x = dirX; f.intent.move.z = dirZ; };
     const finish = () => { d.t = DIRECTIVE_MAX_S + 1; };
@@ -195,9 +201,7 @@ export class JevNemesisDriver {
         if (f.canStart('light')) f.startAttack('light');
         break;
       case 'route_uppercut':
-        if (dist > AI.meleeRange * 1.1) { advance(); break; }
-        if (f.state === 'attack' && f.attackType === 'light2' && f.canStart('heavy')) f.startAttack('heavy');
-        else if (f.canStart('light')) f.startAttack('light');
+        driveRouteUppercut(f, dist, AI.meleeRange, advance);
         break;
       case 'charge_blast': {
         if (dist > 2.4) { advance(); break; }

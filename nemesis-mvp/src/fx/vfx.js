@@ -61,6 +61,7 @@ export class VFX {
         life: [0.2, 0.45],
       });
       this._spawnBlood(pos, bloodColor, big ? 16 : 8);
+      if (e.killed) this.spawnFinisherImpact(pos);
     } else if (e.type === 'blocked') {
       this._spawn(pos, { color: 0xffd24d, count: e.broke ? 16 : 9, speed: [2, 5], size: [0.08, 0.2], life: [0.2, 0.4] });
     } else if (e.type === 'parried') {
@@ -139,6 +140,15 @@ export class VFX {
   }
   spawnSlam(pos) {
     this._spawn(pos, { color: 0xb0a890, count: 18, speed: [1.5, 5], size: [0.16, 0.4], life: [0.35, 0.7], upBias: 0.4 });
+  }
+
+  // FR-13.2: the killing blow — a distinct burst on top of the ordinary
+  // hit VFX, low upBias to read as a heavier downward impact than the
+  // upward-biased spawnBlast
+  spawnFinisherImpact(pos) {
+    this._spawn(pos, { color: 0xffd24d, count: 20, speed: [3, 8], size: [0.12, 0.32], life: [0.25, 0.55], upBias: 0.1 });
+    this._spawn(pos, { color: 0xffffff, count: 10, speed: [2, 5], size: [0.08, 0.2], life: [0.2, 0.4], upBias: 0.05 });
+    this.addDecal(pos, 0x4de0ff);
   }
 
   // a handful of slow-drifting motes for atmosphere — cheap, always-on

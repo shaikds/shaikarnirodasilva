@@ -17,6 +17,8 @@ export class CameraRig {
     this._impulse = new THREE.Vector3();
     this._shake = 0;
     this._first = true;
+    this._baseFov = camera.fov;   // FR-13.3: camera FOV punch
+    this._fovPunch = 0;
   }
 
   toggleLock(candidates) {
@@ -39,6 +41,7 @@ export class CameraRig {
 
   impulse(x, y, z) { this._impulse.set(x, y, z); }
   shake(amount) { this._shake = Math.max(this._shake, amount); }
+  fovPunch(amount) { this._fovPunch = Math.max(this._fovPunch, amount); }
 
   update(dt, orbitInput = { x: 0, y: 0 }) {
     // lock maintenance (AC-4.1.2)
@@ -90,6 +93,14 @@ export class CameraRig {
       : new THREE.Vector3();
 
     this.camera.position.copy(this._pos).add(this._impulse).add(jitter);
+
+    // FOV punch decay (same max-then-decay shape as shake)
+    this._fovPunch = Math.max(0, this._fovPunch - 6 * dt * this._fovPunch - 0.02);
+    const wantFov = this._baseFov + this._fovPunch;
+    if (Math.abs(this.camera.fov - wantFov) > 0.01) {
+      this.camera.fov = wantFov;
+      this.camera.updateProjectionMatrix();
+    }
 
     // look: midpoint-weighted when locked so both fighters stay in frame
     const lookAt = this.lockTarget

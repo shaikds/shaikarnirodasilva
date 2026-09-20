@@ -9,6 +9,7 @@ import { buildFightState, QUESTIONS, VOICE_LINES, JevBackend, noulYesProbability
 import { PlayerBot } from './bots.js';
 import { CHARGE, ENERGY } from '../combat/attacks.js';
 import { AI } from '../core/tuning.js';
+import { driveRouteUppercut, inRouteUppercutChainWindow } from './comboMoves.js';
 
 const STALE_S = 1.4;          // max directive age before a fresh judgment
 const DIRECTIVE_MAX_S = 1.8;  // hard cap per directive execution
@@ -173,7 +174,11 @@ export class JevPlayerDriver {
       return;
     }
     if (f.state === 'charge') return;      // committed: autoRelease owns it
-    if (f.busy) { if (f.state === 'stagger' || f.state === 'hitstun') d.interrupted = true; return; }
+    // FR-13.1: route_uppercut's chain link only exists during the recover
+    // phase of the attack that opened it, which is also when f.busy is
+    // still true — let the gate through specifically for that window.
+    const chainWindow = d.move === 'route_uppercut' && inRouteUppercutChainWindow(f);
+    if (f.busy && !chainWindow) { if (f.state === 'stagger' || f.state === 'hitstun') d.interrupted = true; return; }
 
     const advance = () => { f.intent.move.x = dirX; f.intent.move.z = dirZ; };
     const finish = () => { d.t = DIRECTIVE_MAX_S + 1; };
@@ -184,10 +189,7 @@ export class JevPlayerDriver {
         if (f.canStart('light')) f.startAttack('light');
         break;
       case 'route_uppercut':
-        if (dist > AI.meleeRange * 1.1) { advance(); break; }
-        // light, light, then the heavy ROUTE; canStart gates each link
-        if (f.state === 'attack' && f.attackType === 'light2' && f.canStart('heavy')) f.startAttack('heavy');
-        else if (f.canStart('light')) f.startAttack('light');
+        driveRouteUppercut(f, dist, AI.meleeRange, advance);
         break;
       case 'charge_blast': {
         if (dist > 2.4) { advance(); break; }

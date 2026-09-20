@@ -789,6 +789,85 @@ system.
   this exact matchup — a known, explicitly-flagged limit of the mock's
   fidelity, not evidence against the throttle mechanism itself.
 
+## 8.11 M13 — Combat feel: killing-blow VFX, camera FOV punch (developer-requested, descoped from a new combo route)
+
+The developer's ask: "add More Effects and combos, with Camera effects."
+Planned first (plan-mode; see `/root/.claude/plans/i-want-the-combat-delightful-garden.md`
+if still present in this session's environment, or `logs/2026-09-20.md`
+for the full record) as a new `skySpike` finisher chained off the
+existing `uppercut` launcher, plus new VFX and a camera FOV-punch
+primitive tied to it.
+
+**The combo route was implemented, then reverted** after rigorous
+empirical S-3 fairness-band testing (many dozens of runs across the
+implementation session, documented in full in `logs/2026-09-20.md`)
+found a genuine, non-tunable-away balance problem: making `uppercut`
+chainable at all (regardless of what it chains INTO, or that target's
+damage) removes uppercut's own recovery punish-window, because
+`Fighter.canStart('light')` becomes true during that recovery once
+`uppercut.chain` is set — something a raw-input bot (`PlayerBot`, which
+the S-3 acceptance test itself uses) can exploit unconditionally, while
+`RivalAgent` (GOAP) structurally cannot reach the same window at all (the
+identical busy-gate limitation that blocks it from ever continuing ANY
+light string). Every damage value tried for the new finisher — 9, 5, 3,
+2, 1 — still skewed the band, confirming the problem was never really
+about numbers. A first attempt to give GOAP an equivalent opportunistic
+follow-up was ALSO reverted after it produced a **20/20 double shutout**
+in testing on one run — a real correctness risk, not just a balance
+nuance, and out of proportion to what this milestone's scope justified
+fixing under time pressure. `ai/rivalAgent.js` and `combat/fighter.js`
+are confirmed byte-identical to their pre-M13 state (`git diff` against
+the milestone's base commit returns nothing for `rivalAgent.js`);
+`combat/attacks.js` differs by exactly one line (the new `FEEL.fovPunch`
+constant, unused by any damage/combat math).
+
+### FR-13.1 (descoped) — no new combo route shipped
+No new attack, no `chain` field changes, no GOAP behavior changes.
+`route_uppercut` (FR-8.4, pre-existing) is otherwise unaffected. A
+genuinely separate, low-risk finding surfaced while building this
+milestone: both Jev drivers' own executors for `route_uppercut` had a
+latent bug — a generic "busy? bail" gate (present before this session)
+blocked them from ever completing their OWN documented light-light-heavy
+sequence at all, silently re-starting `light1` forever instead. Fixed via
+`ai/comboMoves.js`'s `inRouteUppercutChainWindow()`, shared by both
+drivers, which lets that gate through specifically during the recover
+window of a chain-having attack — verified end-to-end for both drivers.
+
+### FR-13.2 New VFX, triggered on the killing blow
+- **AC-13.2.1** `Resolver.strike()`'s `killed` field (`!def.alive`,
+  already computed, previously unused for VFX) now triggers
+  `VFX.spawnFinisherImpact()` — a new method built on the existing
+  `_spawn()` primitive and existing textures, no new assets — exactly
+  once per killing blow, never on an ordinary hit. Chosen over the
+  reverted combo route specifically because it needs no balance tuning:
+  the duel is already deciding its outcome at that moment.
+- **AC-13.2.2** The killing blow also leaves a distinctly-tinted ground
+  decal via the already-existing `addDecal()`.
+
+### FR-13.3 Camera FOV punch
+- **AC-13.3.1** `CameraRig` gains `fovPunch(amount)`, mirroring the
+  exact max-then-decay shape `shake()` already uses, applied to
+  `camera.fov` + `updateProjectionMatrix()` (guarded so it isn't called
+  every idle frame). Triggered from `Resolver.strike()` on exactly two
+  moments — a charged blast (pre-existing) and the killing blow (new) —
+  co-located with the existing `shake`/`impulse` calls for the same
+  moments.
+- **AC-13.3.2** Verified to decay back to baseline afterward, and to stay
+  flat on an ordinary hit, both via direct unit checks and a real
+  killing-blow-through-`strike()` end-to-end check.
+
+### Verification methodology note
+Given the scope reduction, the S-3 band check in
+`tests/p15_combat_feel.spec.mjs` is a **plain regression check** (nothing
+in this milestone touches the attack table's damage/chain fields) rather
+than new balance-verification surface. Its own observed variance during
+implementation (several individual runs landing 15-18/20 even against
+the confirmed-unmodified GOAP/attack-table combination) matches this
+exact matchup's inherent character — this session's very first sanity
+check of `PlayerBot('aggressive')` vs. GOAP, taken before any M13 code
+existed, already measured 14/20, right at the band's edge — not anything
+introduced by this milestone.
+
 ## 9. Post-MVP (explicitly deferred, kept from PRD)
 
 
@@ -878,5 +957,8 @@ leads, code follows.
 | FR-11.3 Mobile-aware onboarding | P13 | **done** (p13: touch key-map rows, `?` reopen button, tutorial's own prompt strings also branch — AC-11.3.2) |
 | FR-12.1 Player tendencies surfaced to Jev as state | P14 | **done** (p14: `foe.tendencies` off the live PlayerProfile, shared `next_move` instruction, player-side state unchanged) |
 | FR-12.2 Skill-scaled execution throttle | P14 | **done** (p14: nemesis-only reuse of `AI.mistakeRate`/`rivalAgent.skill`, statistically verified) |
+| FR-13.1 New combo route | P15 | **descoped** (p15: implemented then reverted — genuine, non-tunable S-3 balance problem; see §8.11. A related latent bug in both Jev drivers' `route_uppercut` executor was found and fixed instead) |
+| FR-13.2 Killing-blow VFX | P15 | **done** (p15: new `spawnFinisherImpact`, ground decal, triggered off the existing `killed` field) |
+| FR-13.3 Camera FOV punch | P15 | **done** (p15: `CameraRig.fovPunch()`, triggered on blast + killing blow) |
 | NFR-1..5 | P0/P7 | **done** (NFR-5 degraded mode at P7; NFR-1 amended at P0) |
 | S-1..S-4 success criteria | P8 | **done** — S-1 journey scripted + on video; S-2 canonical taunt live on video; S-3 20-duel band (amended, 1 resample); S-4 systems verified, 60fps pending developer hardware |
