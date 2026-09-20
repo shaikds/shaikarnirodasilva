@@ -216,9 +216,12 @@ green; p8 band ×3 after the rival-charge retune (see 2026-07-08 log).
   the repo or the bundle.
 - **Documented limitation:** TypeSafe's live docs (docs.typesafe.ai) were
   unreachable from the build environment (network egress policy), so the
-  exact wire format is a defensive assumption confined to one adapter
-  (`JevBackend.send`/`_normalize`) and verified against a mock backend,
-  not the live service. See the 2026-09-18 log.
+  wire format was corroborated against convergent independent public
+  SDKs (2026-09-18) rather than read directly, confined to one adapter
+  (`JevBackend.send`/`_normalize`). That corroboration missed one
+  structural detail — `questions` must be a dictionary keyed by ID, not
+  an array — caught via a live 422 from the developer's own proxy and
+  fixed 2026-09-20. See both logs.
 
 **Exit criteria:** all FR-9 ACs pass; earlier suites keep passing; no key
 ever appears in the repo or the published bundle.

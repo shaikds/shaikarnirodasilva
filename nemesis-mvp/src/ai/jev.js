@@ -184,6 +184,14 @@ export class JevBackend {
   // surfaces it on screen (FR-9.2.3 visibility), since dev tools are not
   // always reachable (keyboard shortcuts collide with game hotkeys,
   // artifacts render in an iframe, etc.)
+  //
+  // AC-9.3.2 correction (2026-09-20): a real 422 from the developer's own
+  // proxy — `{"detail":[{"loc":["body","questions"],"msg":"Input should
+  // be a valid dictionary"...}]}` — proved `questions` must be a
+  // dictionary KEYED BY QUESTION ID (`{next_move: {...}, ...}`), not the
+  // array this code was sending. The internal question bank/tests stay
+  // array-shaped (an `id` field per entry is more ergonomic to iterate
+  // and assert on) — only the wire boundary converts, right here.
   async send(state, questions) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
@@ -196,7 +204,7 @@ export class JevBackend {
             'content-type': 'application/json',
             ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
           },
-          body: JSON.stringify({ model: this.model, state, questions }),
+          body: JSON.stringify({ model: this.model, state, questions: this._toQuestionsDict(questions) }),
           signal: ctrl.signal,
         });
       } catch (e) {
@@ -214,6 +222,17 @@ export class JevBackend {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  // array-of-{id,...} (internal, easy to iterate/test) -> {id: {...}}
+  // (the real wire shape TypeSafe validates against)
+  _toQuestionsDict(questions) {
+    const dict = {};
+    for (const q of questions) {
+      const { id, ...rest } = q;
+      dict[id] = rest;
+    }
+    return dict;
   }
 
   // Defensive normalization to {id: {answer, p, distribution}} — accepts

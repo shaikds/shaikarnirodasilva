@@ -591,6 +591,22 @@ as they observe a human, so the nemesis adapts to Jev's style.
   bug was caught and fixed in the same pass (a real `noul` field is a
   direct yes-probability and must NOT be inverted the way a
   confidence-of-the-stated-answer shape is).
+  **Correction (2026-09-20):** a live `422 Unprocessable Entity` from the
+  developer's own running proxy (`{"detail":[{"type":"dict_type",
+  "loc":["body","questions"],"msg":"Input should be a valid
+  dictionary"}]}`) proved the corroborated SDK evidence above was
+  incomplete on one point: `questions` must be sent as a **dictionary
+  keyed by question ID** (`{next_move: {...}, danger_now: {...}, ...}`),
+  not a JSON array of `{id, ...}` objects. Fixed with one conversion
+  method, `JevBackend._toQuestionsDict()`, called only at the wire
+  boundary inside `send()`; the internal question bank and every other
+  call site keep the array-of-`{id,...}` shape (easier to iterate/assert
+  on) untouched. `tests/p11_jev.spec.mjs`'s wire-contract check now
+  asserts the dictionary shape directly instead of the old (wrong) array
+  assertion. This is the actual root cause of "Jev offline" reports up to
+  this point — the on-screen error text (AC-9.2.3) is what made the real
+  server response visible without dev tools and let this get caught at
+  all.
 
 ## 8.8 M10 — Jev as the nemesis (developer-requested, follows M9)
 
@@ -774,7 +790,7 @@ leads, code follows.
 | FR-8.5 Key map at start | P10 | **done** (p10: boot overlay explains charge; H toggles) |
 | FR-9.1 Decision brain: state and questions, separated | P11 | **done** (p11: named-field state, 4-question typed bank, typed consumption) |
 | FR-9.2 Executor and liveness | P11 | **done** (p11: shared Fighter API, staleness+salience cadence, in-flight persistence, offline fallback) |
-| FR-9.3 Configuration and credential safety | P11 | **done** (p11: local proxy default, dev-only direct key; wire format corroborated against convergent independent public SDKs since docs.typesafe.ai stayed unreachable — see 2026-09-18 log) |
+| FR-9.3 Configuration and credential safety | P11 | **done** (p11: local proxy default, dev-only direct key; wire format corroborated against convergent independent public SDKs since docs.typesafe.ai stayed unreachable — see 2026-09-18 log; `questions` dict-vs-array shape corrected 2026-09-20 against a live 422 from the developer's own proxy — see log) |
 | FR-10.1 Shared vocabulary, nemesis framing | P12 | **done** (p12: reused Choice/Noul bank via `buildQuestions(persona)`, rival's-own-eye state incl. name/level/power/hate/ledger memory) |
 | FR-10.2 Executor: augments the tested brain | P12 | **done** (p12: shared Fighter API, `RivalAgent.enabled` gate, GOAP fallback on any failure — mocked and real-unreachable-proxy safe, cadence/freshness parity with M9) |
 | FR-10.3 Independent activation and credentials | P12 | **done** (p12: separate toggle + namespaced backend config per side, verified no cross-talk) |

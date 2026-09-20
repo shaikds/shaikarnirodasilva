@@ -88,8 +88,13 @@ const wireNoKey = await page.evaluate(async () => {
 });
 check('AC-9.1.3 the wire body carries `state` and `questions` as separate top-level fields',
   wireNoKey && 'state' in wireNoKey.body && 'questions' in wireNoKey.body &&
-  wireNoKey.body.state.foo === 1 && Array.isArray(wireNoKey.body.questions) && !!wireNoKey.body.model,
-  JSON.stringify(wireNoKey));
+  wireNoKey.body.state.foo === 1 && !!wireNoKey.body.model, JSON.stringify(wireNoKey));
+check('AC-9.3.2 (real wire shape, confirmed by a live 422 on 2026-09-20) `questions` is a dictionary keyed by id, not an array',
+  wireNoKey && !Array.isArray(wireNoKey.body.questions) &&
+  typeof wireNoKey.body.questions === 'object' &&
+  Object.keys(wireNoKey.body.questions).join(',') === 'x' &&
+  !('id' in wireNoKey.body.questions.x),
+  JSON.stringify(wireNoKey?.body.questions));
 check('proxy path: no Authorization header when no key is configured',
   !('authorization' in wireNoKey.headers), JSON.stringify(wireNoKey.headers));
 
