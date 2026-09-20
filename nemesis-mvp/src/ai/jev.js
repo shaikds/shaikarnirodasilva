@@ -95,7 +95,12 @@ export function buildQuestions(persona) {
       instructions: persona +
         ' Choose the single best next move for JEV (`me`) against `foe` ' +
         'right now, judging from `foe.state`, `foe.phase`, ' +
-        '`foe.distanceMeters`, `me.energy`, and the momentum in `recent`.',
+        '`foe.distanceMeters`, `me.energy`, and the momentum in `recent`. ' +
+        'If `foe.tendencies` is present and its `confidence` is not low, ' +
+        'weight the choice toward exploiting the foe\'s known habits: ' +
+        'favor `guard`/`evade` when their `heavyPref` or `specialPref` is ' +
+        'high, press the attack where their `defenseRate` is low, and use ' +
+        'their `attackDist`/`reactionMs` to time a `charge_blast`.',
       criteria: {
         press_attack: 'In melee range (under ~2.5m) with no immediate threat: throw the fast jab-cross string and keep the pressure on.',
         route_uppercut: 'In melee range and `foe` is passive, blocking-shy, or mid-recovery: commit to the full combo route ending in the rising uppercut that launches them airborne.',

@@ -20,6 +20,25 @@ const PERSONA =
 
 export const NEMESIS_QUESTIONS = buildQuestions(PERSONA);
 
+// FR-12.1: the player's already-live style model (PlayerProfile, updated
+// every tick/action by Profiler — the same instance RivalAgent's GOAP
+// brain already mirrors off) surfaced as observed facts, not baked into
+// persona text. Every field is an existing PlayerProfile getter; no new
+// tracking. `confidence` reuses the existing (previously-unused) `sync`
+// getter so JEV's own judgment, not code, decides how much to trust a
+// thin sample — always present (never omitted/gated), since the getters
+// already carry sane neutral defaults at zero data.
+function summarizeTendencies(p) {
+  return {
+    lightShare: +p.lightShare.toFixed(2), heavyPref: +p.heavyPref.toFixed(2),
+    dodgePref: +p.dodgePref.toFixed(2), defenseRate: +p.defenseRate.toFixed(2),
+    accuracy: +p.accuracy.toFixed(2), specialPref: +p.specialPref.toFixed(2),
+    aggression: +p.aggression.toFixed(2), attackDist: +p.attackDist.toFixed(1),
+    reactionMs: Math.round(p.reaction), airPref: +p.airPref.toFixed(2),
+    comboFollowup: +p.comboFollowup.toFixed(2), confidence: +p.sync.toFixed(2),
+  };
+}
+
 // ---- STATE: named fields, observed facts, the nemesis's own memory ----
 export function buildNemesisState(ctx) {
   const me = ctx.rival, foe = ctx.player;
@@ -45,6 +64,7 @@ export function buildNemesisState(ctx) {
       distanceMeters: +dist.toFixed(1),
       altitudeGapMeters: +(foe.pos.y - me.pos.y).toFixed(1),
       nearWall,
+      tendencies: summarizeTendencies(ctx.manager.playerProfile),
     },
     duel: {
       phase: ctx.flow.state,

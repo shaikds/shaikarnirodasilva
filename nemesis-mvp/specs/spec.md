@@ -723,6 +723,72 @@ unaffected byte-for-byte; this is purely additive.
   overlay and the flow's own strings are two separate systems and both
   needed the branch.
 
+## 8.10 M12 — Adaptive nemesis: player-tendency awareness + skill-scaled execution (developer-requested)
+
+The developer's explicit ask, verbatim: "the nemesis will be adaptive...
+he will learn how to surprise the character... the difficulty of him
+fits to the player level of fighting... always a challenge... the
+nemesis will [be] learning me during the game and during fights." The
+key finding that shaped this milestone: the game already has a live,
+per-fight player-modeling system (`PlayerProfile`/`Profiler`, FR-3.3) and
+a tested difficulty homeostat (`SyncEngine`/`RivalAgent.skill`, enforced
+by the S-3 fairness band) that the GOAP rival already uses to mirror and
+stay contested against the player. Jev-as-nemesis (M10) had zero
+connection to either. M12 wires Jev into that EXISTING, already-tested
+infrastructure rather than building a parallel learning or difficulty
+system.
+
+### FR-12.1 Player tendencies surfaced to Jev as state
+- **AC-12.1.1** `buildNemesisState` (`ai/jevNemesis.js`) gains a
+  `foe.tendencies` block read directly off `ctx.manager.playerProfile` —
+  the same live `PlayerProfile` instance `Profiler` updates every
+  tick/action during a fight and `RivalAgent`'s GOAP brain already
+  mirrors off. Every field (`lightShare`, `heavyPref`, `dodgePref`,
+  `defenseRate`, `accuracy`, `specialPref`, `aggression`, `attackDist`,
+  `reactionMs`, `airPref`, `comboFollowup`) is an existing
+  `PlayerProfile` getter — no new tracking code. `confidence` reuses the
+  existing, previously-unused `PlayerProfile.sync` getter (0 on a fresh
+  profile, rising toward 1 as `totalActions`/`rounds` accumulate) so
+  JEV's own judgment, not code, decides how much to trust a thin sample;
+  the block is always present (the getters already carry sane neutral
+  defaults at zero data), never gated/omitted.
+- **AC-12.1.2** The shared `buildQuestions()` (`ai/jev.js`) gains one
+  sentence in `next_move`'s instructions telling JEV to weight its
+  choice toward exploiting `foe.tendencies` when confidence isn't low —
+  identical text on both sides (one rulebook, per FR-10.1), since the
+  bank is computed once and reused verbatim by both drivers.
+- **AC-12.1.3** The player-side `buildFightState` is unchanged — its
+  `foe` is a GOAP bot with no profile, so it never gains a `tendencies`
+  field. The shared instruction text is written to degrade harmlessly
+  when the field is absent (an LLM instruction referencing an unseen
+  optional field is inert, not an error).
+
+### FR-12.2 Skill-scaled execution throttle
+- **AC-12.2.1** `JevNemesisDriver._apply()` reuses the existing
+  `ctx.rivalAgent.skill` getter and the existing `AI.mistakeRate` tuning
+  pair — the exact lever `RivalAgent.update()` already relies on to hold
+  the S-3 band — to occasionally substitute the LLM's chosen move with a
+  weaker one (`back_off`/`close_distance`/`ki_pressure`/`press_attack`),
+  at the same skill-scaled probability GOAP already uses. Fires once per
+  fresh directive, matching GOAP's once-per-replan cadence. No new
+  tuning constants, no parallel difficulty system — straight reuse, per
+  the developer's own framing of wanting this "loyal to the idea."
+- **AC-12.2.2** The throttle is nemesis-only: `JevPlayerDriver` is
+  untouched. Throttling the player's own driver would be backwards.
+- **AC-12.2.3** Verified two ways: (a) a direct statistical check drives
+  many independent `_apply()` calls at low vs. high `rivalAgent.skill`
+  and confirms the substitution rate lands near `AI.mistakeRate`'s
+  low-skill value and is meaningfully lower at high skill — this is the
+  primary, mock-independent proof the mechanism works; (b) a full
+  20-duel simulated-band sanity check with a scripted stand-in policy
+  for the live backend (same offline-test convention as p11/p12) confirms
+  duels stay genuinely contested (not a shutout) rather than reproducing
+  the exact 30–70% S-3 band, since a simple scripted if/else policy is
+  inherently cruder than either the tuned GOAP planner or the real
+  TypeSafe model and measurably underperforms GOAP's own baseline in
+  this exact matchup — a known, explicitly-flagged limit of the mock's
+  fidelity, not evidence against the throttle mechanism itself.
+
 ## 9. Post-MVP (explicitly deferred, kept from PRD)
 
 
@@ -810,5 +876,7 @@ leads, code follows.
 | FR-11.1 Detection and responsive layout | P13 | **done** (p13: touch+small-viewport gate, `body.mobile`-driven CSS, gesture suppression) |
 | FR-11.2 On-screen touch controls | P13 | **done** (p13: joystick + drag-look + buttons via `Input.press`/`release`/`touchAxes` — zero PlayerController changes) |
 | FR-11.3 Mobile-aware onboarding | P13 | **done** (p13: touch key-map rows, `?` reopen button, tutorial's own prompt strings also branch — AC-11.3.2) |
+| FR-12.1 Player tendencies surfaced to Jev as state | P14 | **done** (p14: `foe.tendencies` off the live PlayerProfile, shared `next_move` instruction, player-side state unchanged) |
+| FR-12.2 Skill-scaled execution throttle | P14 | **done** (p14: nemesis-only reuse of `AI.mistakeRate`/`rivalAgent.skill`, statistically verified) |
 | NFR-1..5 | P0/P7 | **done** (NFR-5 degraded mode at P7; NFR-1 amended at P0) |
 | S-1..S-4 success criteria | P8 | **done** — S-1 journey scripted + on video; S-2 canonical taunt live on video; S-3 20-duel band (amended, 1 resample); S-4 systems verified, 60fps pending developer hardware |

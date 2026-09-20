@@ -17,6 +17,13 @@ const STALE_S = 1.4;
 const DIRECTIVE_MAX_S = 1.8;
 const VOICE_COOLDOWN_S = 6;
 
+// FR-12.2: nemesis-only skill throttle on EXECUTION (not just judgment),
+// reusing the same AI.mistakeRate lever RivalAgent's GOAP brain already
+// relies on to hold the S-3 fairness band — not a parallel system. Never
+// applied to JevPlayerDriver: throttling the player's own driver would
+// be backwards.
+const MISTAKE_MOVES = ['back_off', 'close_distance', 'ki_pressure', 'press_attack'];
+
 export class JevNemesisDriver {
   constructor(ctx) {
     // ctx: {rival, player, manager, flow, macroAgent, hud, rig, loop,
@@ -126,6 +133,12 @@ export class JevNemesisDriver {
     const move = ans.next_move?.answer;
     if (typeof move === 'string' && move.length) {
       this.directive = { move, t: 0, hits: 0, taken: 0 };
+      const skill = this.ctx.rivalAgent.skill;
+      const mistakeP = AI.mistakeRate[0] + (AI.mistakeRate[1] - AI.mistakeRate[0]) * skill;
+      if (Math.random() < mistakeP) {
+        this.directive.move = MISTAKE_MOVES[(Math.random() * MISTAKE_MOVES.length) | 0];
+        this.directive.mistake = true;
+      }
     }
     const v = ans.voice?.answer;
     if (v && v !== 'stay_silent') this._say(v);
