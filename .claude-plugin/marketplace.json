@@ -1,0 +1,6 @@
+{
+  "name": "shaikds-mods",
+  "owner": { "name": "shaikds" },
+  "description": "Claude Code mods by shaikds.",
+  "plugins": [{ "name": "prompt-inspector", "source": "./prompt-inspector" }]
+}

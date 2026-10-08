@@ -1,0 +1,7 @@
+{
+  "name": "prompt-inspector",
+  "version": "0.1.0",
+  "description": "Shows every rule, skill and system-prompt section injected into the prompt, where it sits by token offset, and lets you remove any of them to test their effect.",
+  "author": { "name": "shaikds" },
+  "types": "./types/index.d.ts"
+}
