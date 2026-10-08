@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import type { Engine } from 'claude-code/testing'
+import type { Engine, MockClock } from 'claude-code/testing'
 
 import { cutSpans, filterListing, parseListing, spansOfFiles } from '../hooks/model'
 
@@ -44,7 +44,8 @@ const LISTING = [
 /** The engine beneath the plugin: each prompt event answered as core would; the log kept. */
 function engine(on: On): string[] {
   const logs: string[] = []
-  mock.clock(on)
+  clock = mock.clock(on)
+  on('ui.open', () => ({ value: { isPlaced: false, reason: 'no panes on this surface' } }))
   on('ui.log', ($, e) => {
     logs.push(e.text)
 
@@ -65,13 +66,18 @@ function engine(on: On): string[] {
   return logs
 }
 
-function inspect($: Engine, args: string) {
-  return $.command.run({
+let clock: MockClock | undefined
+
+/** Runs `/inspect <args>` as typed, on a wide terminal or a phone-width screen; answers its output. */
+async function inspect($: Engine, args: string, columns = 120): Promise<string> {
+  const ran = await $.command.run({
     command: 'inspect',
     args,
     origin: { kind: 'composer' },
-    presentation: { isFullscreen: true, columns: 120 },
+    presentation: { isFullscreen: false, columns },
   })
+
+  return ran.text ?? ''
 }
 
 describe('model', () => {
@@ -96,11 +102,10 @@ describe('model', () => {
 
 describe('plugin', () => {
   test('lists system sections with token ranges and drops a removed one', async ($, on) => {
-    const logs = engine(on)
+    engine(on)
     expect((await $.prompt.compose(COMPOSE)).sections).toHaveLength(2)
 
-    await inspect($, 'list')
-    const listed = logs.join('\n')
+    const listed = await inspect($, 'list')
     expect(listed).toMatch(/✓\s+1 0–5\s+≈5 system\s+t0\s+intro/)
     expect(listed).toMatch(/✓\s+2 5–10\s+≈5 system\s+t0\s+memory/)
 
@@ -112,15 +117,14 @@ describe('plugin', () => {
   })
 
   test('lists each CLAUDE.md file inside claudeMd and removes one file by name', async ($, on) => {
-    const logs = engine(on)
+    engine(on)
     await $.prompt.compose(COMPOSE)
     await $.prompt.context(CONTEXT)
-    await inspect($, 'list focus')
-    const listed = logs.join('\n')
+    const listed = await inspect($, 'list focus')
     expect(listed).toContain(`└ ${RULE_A}`)
     expect(listed).toContain(`└ ${RULE_B}`)
 
-    await inspect($, 'rm tests.md')
+    expect(await inspect($, 'rm tests.md')).toBe(`Removed rule:${RULE_B} from the next request on.`)
     const out = await $.prompt.context(CONTEXT)
     expect(out.instructionFiles?.map(f => f.path)).toEqual([RULE_A])
     expect(out.blocks.map(b => b.name)).toEqual(['claudeMd', 'currentDate'])
@@ -159,6 +163,29 @@ describe('plugin', () => {
     await inspect($, 'rm skill:commit')
     expect((await $.skill.prompt(skill)).text).toContain('removed the commit skill')
     expect(logs.filter(line => line.includes('+skill commit'))).toHaveLength(2)
+  })
+
+  test('answers in text a phone shows: rules first, then what is new since the last look', async ($, on) => {
+    engine(on)
+    await $.prompt.compose(COMPOSE)
+    await $.prompt.context(CONTEXT)
+    await $.prompt.attachment({ type: 'skill_listing', text: LISTING, origin: { kind: 'engine' } })
+
+    const first = await inspect($, '', 40)
+    expect(first).toStartWith('Prompt inspector is on.')
+    expect(first).toMatch(/#\d+ ✓ rule · [\d.k]+–[\d.k]+ · ≈\d+ tok · t0\n    └ \/repo\/CLAUDE\.md/)
+    expect(first).toContain('The skill listing names 3 skills')
+    expect(first).toContain('Also injected: 2 system, 1 context.')
+    expect(first).not.toContain('New since')
+
+    await clock?.advance(1000)
+    await $.skill.prompt({ skill: 'commit', text: 'Write a conventional commit.' })
+    const second = await inspect($, '', 40)
+    expect(second).toMatch(/New since you last looked:\n#\d+ ✓ skill · [^\n]+\n    commit/)
+
+    await clock?.advance(1000)
+    expect(await inspect($, '', 40)).not.toContain('New since')
+    expect(await inspect($, 'help', 40)).toContain('/inspect rm 12')
   })
 
   test('the pane lists the rows and a press removes one, on every surface', async ($, on) => {

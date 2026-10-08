@@ -17,6 +17,7 @@ import {
   parseListing,
   preview,
   rangeOf,
+  compactRow,
   row,
   spansOfFiles,
 } from './model'
@@ -36,6 +37,7 @@ const lastRequestAtom = atom({ plugin: 'prompt-inspector', key: 'lastRequest' } 
 const toolsAtom = atom({ plugin: 'prompt-inspector', key: 'toolsTokens' } as const, null)
 const cptAtom = atom({ plugin: 'prompt-inspector', key: 'charsPerToken' } as const, DEFAULT_CHARS_PER_TOKEN)
 const filterAtom = atom({ plugin: 'prompt-inspector', key: 'filter' } as const, 'all')
+const lastLookAtom = atom({ plugin: 'prompt-inspector', key: 'lastLookAt' } as const, -1)
 
 /** Each segment's full text, by key: what `show` prints and `count` measures. */
 const texts = new Map<string, string>()
@@ -153,8 +155,8 @@ async function refreshTools($: Engine): Promise<void> {
   }
 }
 
-/** Takes the keys out of the prompt, or puts them back, from the next request on. */
-async function setRemoved($: Engine, targets: readonly string[], isRemoving: boolean): Promise<void> {
+/** Takes the keys out of the prompt, or puts them back, from the next request on; says what it did. */
+async function setRemoved($: Engine, targets: readonly string[], isRemoving: boolean): Promise<string> {
   await update($, removedAtom, list =>
     isRemoving ? [...new Set([...list, ...targets])] : list.filter(k => !targets.includes(k)),
   )
@@ -162,15 +164,16 @@ async function setRemoved($: Engine, targets: readonly string[], isRemoving: boo
   $.ui.invalidate('prompt.context')
   $.ui.invalidate('prompt.attachment')
   await refreshStatus($)
-  const verb = isRemoving ? 'removed' : 'restored'
+  const verb = isRemoving ? 'Removed' : 'Restored'
   const isSkill = targets.some(k => k.startsWith('skill:'))
   const note = isSkill ? ' A skill body already in the conversation stays; its next invocation follows this.' : ''
-  $.ui.log(`${TAG} ${verb} ${targets.join(', ')} from the next request on.${note}`)
+
+  return `${verb} ${targets.join(', ')} from the next request on.${note}`
 }
 
 async function toggle($: Engine, key: string): Promise<void> {
   const isRemoved = (await read($, removedAtom)).includes(key)
-  await setRemoved($, [key], !isRemoved)
+  $.ui.log(`${TAG} ${await setRemoved($, [key], !isRemoved)}`)
 }
 
 /** `3`, `3,7`, `sys:memory`, `type:todo_reminder`, a label or the end of a path. */
@@ -198,21 +201,6 @@ async function resolve($: Engine, target: string): Promise<string[]> {
   return [...found]
 }
 
-function chunks(lines: readonly string[], size = 1900): string[] {
-  const out: string[] = []
-  let current = ''
-  for (const one of lines) {
-    if (current.length > 0 && current.length + one.length + 1 > size) {
-      out.push(current)
-      current = ''
-    }
-    current = current.length === 0 ? one : `${current}\n${one}`
-  }
-  if (current.length > 0) out.push(current)
-
-  return out
-}
-
 async function summary($: Engine): Promise<string> {
   const rows = await placed($)
   const sent = rows.filter(p => p.parent === null && p.start !== null).reduce((sum, p) => sum + p.tokens, 0)
@@ -225,30 +213,72 @@ async function summary($: Engine): Promise<string> {
   return `≈${fmt(sent)} tok mapped · tools ≈${tools === null ? '?' : fmt(tools)} · ${lastText} · ${removed} removed · ${cpt} chars/tok`
 }
 
-async function logList($: Engine, filter: 'all' | 'focus'): Promise<void> {
-  const rows = (await placed($)).filter(p => filter === 'all' || isFocus(p))
-  const head = `${TAG} ${await summary($)}`
-  const columns = '    #  range         tokens kind     when    name'
-  const body = rows.length === 0 ? ['(nothing injected yet: send a prompt first)'] : rows.map(p => row(p, 120))
-  for (const text of chunks([head, columns, ...body])) $.ui.log(text)
+/** Notes the moment the person looked, for the next look's "new since". */
+async function looked($: Engine): Promise<number> {
+  const previous = await read($, lastLookAtom)
+  const now = await $.clock.now()
+  await update($, lastLookAtom, () => now)
+
+  return previous
 }
 
-async function show($: Engine, target: string): Promise<void> {
-  const targets = await resolve($, target)
-  if (targets.length === 0) {
-    $.ui.log(`${TAG} nothing matches "${target}". /inspect list numbers the rows.`)
+/** What arrived after `since` (-1 before the first look): first seen then, or a skill invoked again. */
+function isNewSince(p: Placed, since: number): boolean {
+  return since >= 0 && (p.firstSeenAt > since || (p.kind === 'skill' && p.lastSeenAt > since))
+}
 
-    return
+function countsByKind(rows: readonly Placed[]): string {
+  const counts = new Map<string, number>()
+  for (const p of rows) counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1)
+
+  return [...counts].map(([kind, n]) => `${n} ${kind}`).join(', ')
+}
+
+/** What `/inspect` answers: what is new, the rules and skills, and the rest in a line. */
+async function overview($: Engine, isNarrow: boolean, isPaneShown: boolean): Promise<string> {
+  const rows = await placed($)
+  const since = await looked($)
+  const fresh = rows.filter(p => isNewSince(p, since))
+  // The listing's entries show one by one only once one is removed.
+  const focus = rows.filter(p => isFocus(p) && !(p.kind === 'listing' && p.parent !== null && !p.isRemoved))
+  const entries = rows.filter(p => p.kind === 'listing' && p.parent !== null).length
+  const others = rows.filter(p => !isFocus(p))
+  const lines = [`Prompt inspector is on${isPaneShown ? ', pane open' : ''}.`, await summary($)]
+  if (fresh.length > 0) {
+    lines.push('', 'New since you last looked:', ...fresh.slice(0, 15).map(p => compactRow(p, isNarrow)))
+    if (fresh.length > 15) lines.push(`…and ${fresh.length - 15} more (/inspect list)`)
   }
-  for (const key of targets.slice(0, 3)) {
+  lines.push('', 'Rules and skills:')
+  lines.push(...(focus.length === 0 ? ['(none yet: send a prompt first)'] : focus.map(p => compactRow(p, isNarrow))))
+  if (entries > 0) lines.push(`The skill listing names ${entries} skills: /inspect list focus shows each.`)
+  if (others.length > 0) lines.push('', `Also injected: ${countsByKind(others)}. /inspect list shows every row.`)
+  lines.push('', 'Remove a row with /inspect rm N, put it back with /inspect restore N. /inspect help for more.')
+
+  return lines.join('\n')
+}
+
+async function listText($: Engine, filter: 'all' | 'focus', isNarrow: boolean): Promise<string> {
+  await looked($)
+  const rows = (await placed($)).filter(p => filter === 'all' || isFocus(p))
+  const columns = isNarrow ? [] : ['    #  range         tokens kind     when    name']
+  const body = rows.length === 0 ? ['(nothing injected yet: send a prompt first)'] : rows.map(p => compactRow(p, isNarrow))
+
+  return [await summary($), ...columns, ...body].join('\n')
+}
+
+async function showText($: Engine, target: string): Promise<string> {
+  const targets = await resolve($, target)
+  if (targets.length === 0) return `Nothing matches "${target}". /inspect list numbers the rows.`
+  const parts = targets.slice(0, 3).map(key => {
     const text = texts.get(key)
-    if (text === undefined) {
-      $.ui.log(`${TAG} ${key}: its text was not captured since the mod reloaded; it is on the next request.`)
-      continue
-    }
-    const lines = [`${TAG} ${key} (${text.length} chars):`, ...text.slice(0, 18000).split('\n')]
-    for (const piece of chunks(lines)) $.ui.log(piece)
-  }
+    if (text === undefined) return `${key}: not captured since the mod reloaded; the next request captures it again.`
+    const cut = text.length > 18000 ? '\n…' : ''
+
+    return `${key} (${text.length} chars):\n${text.slice(0, 18000)}${cut}`
+  })
+  parts.push('The model can read this output too: a removed rule shown here is back in its context.')
+
+  return parts.join('\n\n')
 }
 
 /**
@@ -256,13 +286,9 @@ async function show($: Engine, target: string): Promise<void> {
  * one-token completion per segment, less a baseline. It spends input tokens,
  * so it runs only when asked; it also calibrates the estimate for the rest.
  */
-async function countExact($: Engine): Promise<void> {
+async function countExact($: Engine): Promise<string> {
   const todo = (await read($, segmentsAtom)).filter(s => s.exactTokens === null && texts.has(s.key))
-  if (todo.length === 0) {
-    $.ui.log(`${TAG} nothing left to count.`)
-
-    return
-  }
+  if (todo.length === 0) return 'Nothing left to count.'
   const model = (await read($, lastRequestAtom))?.model ?? (await $.session.model())
   const measure = async (prompt: string): Promise<number> => {
     try {
@@ -274,14 +300,7 @@ async function countExact($: Engine): Promise<void> {
     }
   }
   const baseline = await measure('.')
-  if (baseline <= 0) {
-    $.ui.log(`${TAG} counting failed: ${model} did not answer a one-token request.`)
-
-    return
-  }
-  const cpt = await read($, cptAtom)
-  const total = todo.reduce((sum, s) => sum + s.chars, 0)
-  $.ui.log(`${TAG} counting ${todo.length} segments with ${model} (≈${fmt(estimate(total, cpt))} input tokens)…`)
+  if (baseline <= 0) return `Counting failed: ${model} did not answer a one-token request.`
   const counted = new Map<string, number>()
   for (let i = 0; i < todo.length; i += 4) {
     await Promise.all(
@@ -304,25 +323,73 @@ async function countExact($: Engine): Promise<void> {
     const calibrated = Math.round((exact.reduce((sum, s) => sum + s.chars, 0) / tokens) * 100) / 100
     await update($, cptAtom, () => calibrated)
   }
-  $.ui.log(`${TAG} counted ${counted.size} of ${todo.length}; estimates now use ${await read($, cptAtom)} chars/tok.`)
+  const spent = todo.reduce((sum, s) => sum + (counted.get(s.key) ?? 0), 0) + baseline * (todo.length + 1)
+
+  return `Counted ${counted.size} of ${todo.length} with ${model} (≈${fmt(spent)} input tokens spent); estimates now use ${await read($, cptAtom)} chars/tok.`
 }
 
-async function openPane($: Engine): Promise<void> {
+/** Opens the pane where the surface draws panes; answers whether one is shown. */
+async function openPane($: Engine): Promise<boolean> {
   const opened = await $.ui.open({ id: PANE, title: 'Prompt inspector' })
-  if (!opened.isPlaced) $.ui.toast('The inspector pane is waiting for room; /inspect list prints the same rows.')
+
+  return opened.isPlaced
 }
 
 const HELP = [
-  `${TAG} /inspect            open the pane and turn the mode on (each injection is logged here)`,
-  '  /inspect on | off     log injections in the transcript, or stop (removals stay)',
-  '  /inspect list [focus] print every segment: # · token range · tokens · kind · turn · name',
-  '  /inspect show 12      print what segment 12 injected, in full',
-  '  /inspect rm 12        take it out of the prompt from the next request on (also: rm 3,7 · rm sys:memory',
-  '                        · rm type:todo_reminder · rm CLAUDE.md)',
-  '  /inspect restore 12   put it back · /inspect restore all (or /inspect reset)',
-  '  /inspect count        count tokens exactly with the session model (spends input tokens)',
-  'Rows: ✓ sent / ✗ removed; "≈" marks an estimate; t0 is before the first prompt.',
+  '/inspect — what is new, then the rules and skills with their token ranges',
+  '/inspect list — every row · /inspect list focus — rules and skills only',
+  '/inspect show 12 — what row 12 injected, in full',
+  '/inspect rm 12 — take it out of the prompt from the next request on',
+  '   also: rm 3,7 · rm CLAUDE.md · rm sys:memory · rm listing:commit · rm type:todo_reminder',
+  '/inspect restore 12 — put it back · /inspect restore all',
+  '/inspect count — exact token counts from the session model (spends input tokens)',
+  '/inspect on | off — a transcript line per new injection (terminal and desktop)',
+  '',
+  'Rows: ✓ sent, ✗ removed. ≈ marks an estimate. t0 is before the first prompt.',
+  'The model reads these outputs too, as it reads any command output.',
 ]
+
+async function answer($: Engine, verb: string, target: string, isNarrow: boolean): Promise<string> {
+  switch (verb) {
+    case '': {
+      await update($, liveAtom, () => true)
+      await refreshTools($)
+
+      return overview($, isNarrow, await openPane($))
+    }
+    case 'on':
+    case 'off':
+      await update($, liveAtom, () => verb === 'on')
+
+      return verb === 'on'
+        ? 'Logging on: each new injection gets a transcript line on terminal and desktop. On mobile, /inspect shows what is new.'
+        : 'Logging off. Removals stay in force.'
+    case 'list':
+      await refreshTools($)
+
+      return listText($, target === 'focus' ? 'focus' : 'all', isNarrow)
+    case 'show':
+      return showText($, target)
+    case 'rm':
+    case 'remove':
+    case 'restore': {
+      const isRemoving = verb !== 'restore'
+      const targets = target === 'all' && !isRemoving ? await read($, removedAtom) : await resolve($, target)
+      if (targets.length === 0) return isRemoving || target !== 'all' ? `Nothing matches "${target}". /inspect list numbers the rows.` : 'Nothing is removed.'
+
+      return setRemoved($, targets, isRemoving)
+    }
+    case 'reset': {
+      const all = await read($, removedAtom)
+
+      return all.length === 0 ? 'Nothing is removed.' : setRemoved($, all, false)
+    }
+    case 'count':
+      return countExact($)
+    default:
+      return HELP.join('\n')
+  }
+}
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -457,16 +524,16 @@ export const register: Register = on => {
     const agent = e.agentId ?? null
     const anchor = (await read($, anchorsAtom))[agent ?? 'main'] ?? null
     const common = { zone: 'conversation', agent, anchor, order: at.at } as const
+    const entries = e.type === 'skill_listing' ? parseListing(result.text) : []
     const fields: Fields = {
       ...common,
       key,
       kind: kindOfAttachment(e.type),
-      label: labelOfAttachment(e.type, result.text),
+      label: e.type === 'skill_listing' ? `skill listing (${entries.length} skills)` : labelOfAttachment(e.type, result.text),
       detail: originOf(e.origin, e.type),
       attachment: e.type,
     }
     const seen = [make(fields, result.text, at)]
-    const entries = e.type === 'skill_listing' ? parseListing(result.text) : []
     for (const span of entries) {
       const entry: Fields = {
         ...common,
@@ -512,48 +579,11 @@ export const register: Register = on => {
 
   on('command.run', { command: 'inspect' }, async ($, e) => {
     const [verb = '', ...rest] = e.args.trim().split(/\s+/).filter(Boolean)
-    const target = rest.join(' ')
-    switch (verb) {
-      case '':
-        await update($, liveAtom, () => true)
-        await refreshTools($)
-        await openPane($)
-        $.ui.log(`${TAG} on. ${await summary($)}`)
-        break
-      case 'on':
-      case 'off':
-        await update($, liveAtom, () => verb === 'on')
-        $.ui.log(`${TAG} logging ${verb}.`)
-        break
-      case 'list':
-        await refreshTools($)
-        await logList($, target === 'focus' ? 'focus' : 'all')
-        break
-      case 'show':
-        await show($, target)
-        break
-      case 'rm':
-      case 'remove':
-      case 'restore': {
-        const isRemoving = verb !== 'restore'
-        const targets = target === 'all' && !isRemoving ? await read($, removedAtom) : await resolve($, target)
-        if (targets.length === 0) $.ui.log(`${TAG} nothing matches "${target}". /inspect list numbers the rows.`)
-        else await setRemoved($, targets, isRemoving)
-        break
-      }
-      case 'reset':
-        await setRemoved($, await read($, removedAtom), false)
-        break
-      case 'count':
-        await countExact($)
-        break
-      default:
-        for (const text of chunks(HELP)) $.ui.log(text)
-    }
+    const text = await answer($, verb, rest.join(' '), e.presentation.columns < 100)
     await refreshStatus($)
 
-    // No text: the inspector's own output stays out of what the model reads.
-    return {}
+    // Shown as the command's output on every surface, mobile included.
+    return { text }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -588,9 +618,14 @@ export const register: Register = on => {
             label={filter === 'all' ? 'Showing all' : 'Showing rules + skills'}
             onPress={() => update($, filterAtom, f => (f === 'all' ? 'focus' : 'all'))}
           />
-          <Button key="count" hotkey="c" label="Count exact" onPress={() => countExact($)} />
+          <Button key="count" hotkey="c" label="Count exact" onPress={async () => $.ui.log(`${TAG} ${await countExact($)}`)} />
           {removed.length > 0 && (
-            <Button key="restore" hotkey="r" label={`Restore ${removed.length}`} onPress={() => setRemoved($, removed, false)} />
+            <Button
+              key="restore"
+              hotkey="r"
+              label={`Restore ${removed.length}`}
+              onPress={async () => $.ui.log(`${TAG} ${await setRemoved($, removed, false)}`)}
+            />
           )}
         </Box>
         <Text dimColor wrap="truncate-end">

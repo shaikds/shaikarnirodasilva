@@ -25,17 +25,20 @@ claude --plugin-dir ./prompt-inspector
 
 | Command | What it does |
 |---|---|
-| `/inspect` | Turns the mode on and opens the pane. Pressing a row removes it or puts it back. |
+| `/inspect` | Shows what's new since you last looked, then every rule and skill with its token range. Also opens a pane where the app can show panes (terminal, desktop), where pressing a row removes it or puts it back. |
 | `/inspect list` / `list focus` | Prints every row, or rules and skills only |
 | `/inspect show 27` | Prints exactly what row 27 injected |
 | `/inspect rm 27` | Removes row 27 from the next request on. Also takes `rm 3,7`, `rm CLAUDE.md`, `rm sys:memory`, `rm listing:commit`, `rm type:todo_reminder` |
 | `/inspect restore 27` / `restore all` | Puts it back |
 | `/inspect count` | Replaces the estimates with exact counts from the session model (spends input tokens) |
-| `/inspect on` / `off` | Starts or stops the transcript lines that mark each new injection |
+| `/inspect on` / `off` | Starts or stops a transcript line for each new injection (terminal and desktop only) |
+| `/inspect help` | Lists the commands |
 
-None of the inspector's output is sent to the model.
+Every command prints its result as normal command output, so it works on mobile too. The model
+can read that output, as it can any command output. Note that `/inspect show` puts the shown text
+back into the model's context.
 
-A row reads: `✓ #  range  tokens  kind  turn  name`. `✓` means sent and `✗` means removed. `≈` marks
+A row reads: `✓ #  range  tokens  kind  turn  name`, split over two lines on a narrow screen. `✓` means sent and `✗` means removed. `≈` marks
 an estimate, and `t0` means before the first prompt.
 
 ## What to know

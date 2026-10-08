@@ -257,3 +257,14 @@ export function row(p: Placed, width: number): string {
 
   return `${head}${indent}${label}`
 }
+
+/** A row for a command's output: `row` where it fits, two short lines on a narrow screen. */
+export function compactRow(p: Placed, isNarrow: boolean): string {
+  if (!isNarrow) return row(p, 120)
+  const mark = p.isRemoved ? '✗' : '✓'
+  const tok = `${p.exactTokens === null ? '≈' : ''}${fmt(p.tokens)} tok`
+  const where = p.agent === null ? `t${p.turn}` : `t${p.turn} subagent`
+  const indent = p.parent === null ? '' : '└ '
+
+  return `#${p.n} ${mark} ${p.kind} · ${rangeOf(p)} · ${tok} · ${where}\n    ${indent}${p.label}`
+}

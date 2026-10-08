@@ -67,6 +67,7 @@ declare module 'claude-code' {
       toolsTokens: number | null
       charsPerToken: number
       filter: Filter
+      lastLookAt: number
     }
   }
 }
