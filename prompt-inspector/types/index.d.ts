@@ -39,7 +39,10 @@ export type Segment = {
   chars: number
   /** Counted with the model's tokenizer by `/inspect count`; null = estimated. */
   exactTokens: number | null
-  /** The main turn it was first injected in; 0 = before the first prompt. */
+  /**
+   * The main turn it was first injected in; 0 = before the first prompt,
+   * -1 = already in the conversation when recording began.
+   */
   turn: number
   firstSeenAt: number
   lastSeenAt: number
@@ -68,6 +71,7 @@ declare module 'claude-code' {
       charsPerToken: number
       filter: Filter
       lastLookAt: number
+      isCatchingUp: boolean
     }
   }
 }

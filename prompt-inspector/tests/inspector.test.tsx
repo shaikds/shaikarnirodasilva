@@ -188,6 +188,34 @@ describe('plugin', () => {
     expect(await inspect($, 'help', 40)).toContain('/inspect rm 12')
   })
 
+  test('marks what was already in the conversation when it loaded, then places what comes after', async ($, on) => {
+    engine(on)
+    on('session.messages', () => ({ value: [{ role: 'user', text: 'earlier prompt', toolUses: [] }] }))
+    on('command.register', ($, e) => ({ value: { command: e.name } }))
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('turn.step', async function* ($, e) {
+      const usage = { input_tokens: 9000, output_tokens: 1000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+
+      return { ...e, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: { ...usage, model: 'm' } }
+    })
+    await $.session.start({ cwd: '/repo', surface: null, isInteractive: true })
+
+    await $.prompt.attachment({ type: 'todo_reminder', text: 'Use the todo list.', origin: { kind: 'engine' } })
+    expect(await inspect($, 'list')).toMatch(/✓\s+1 earlier\s+≈\d+ reminder t\?\s+Use the todo list\./)
+    expect(await inspect($, '')).not.toContain('claudeMd')
+
+    // The first request ends the catch-up: what arrives next sits after its 9000 + 1000 tokens.
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: 3 })) void chunk
+    await $.prompt.attachment({ type: 'nested_memory', text: 'Contents of /repo/src/CLAUDE.md:\nUse tabs.', origin: { kind: 'engine' } })
+    expect(await inspect($, 'list')).toMatch(/✓\s+2 10\.0k–10\.0k\s+≈\d+ rule\s+t0\s+\/repo\/src\/CLAUDE\.md/)
+
+    // Forgetting records afresh: the rule is back as already in the conversation.
+    expect(await inspect($, 'forget')).toStartWith('Forgot every recorded row')
+    expect(await inspect($, 'list')).toContain('(nothing injected yet')
+    await $.prompt.attachment({ type: 'nested_memory', text: 'Contents of /repo/src/CLAUDE.md:\nUse tabs.', origin: { kind: 'engine' } })
+    expect(await inspect($, 'list')).toMatch(/✓\s+1 earlier\s+≈\d+ rule\s+t\?\s+\/repo\/src\/CLAUDE\.md/)
+  })
+
   test('the pane lists the rows and a press removes one, on every surface', async ($, on) => {
     engine(on)
     await $.prompt.compose(COMPOSE)

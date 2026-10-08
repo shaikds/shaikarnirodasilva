@@ -32,6 +32,7 @@ claude --plugin-dir ./prompt-inspector
 | `/inspect restore 27` / `restore all` | Puts it back |
 | `/inspect count` | Replaces the estimates with exact counts from the session model (spends input tokens) |
 | `/inspect on` / `off` | Starts or stops a transcript line for each new injection (terminal and desktop only) |
+| `/inspect forget` | Clears what was recorded (removals stay) and records afresh from the next request |
 | `/inspect help` | Lists the commands |
 
 Every command prints its result as normal command output, so it works on mobile too. The model
@@ -39,7 +40,9 @@ can read that output, as it can any command output. Note that `/inspect show` pu
 back into the model's context.
 
 A row reads: `✓ #  range  tokens  kind  turn  name`, split over two lines on a narrow screen. `✓` means sent and `✗` means removed. `≈` marks
-an estimate, and `t0` means before the first prompt.
+an estimate, and `t0` means before the first prompt. `t?` with the range `earlier` means the
+piece was already in the conversation when recording began (the mod loaded mid-conversation,
+or after `/inspect forget`), so its turn and place are unknown.
 
 ## What to know
 

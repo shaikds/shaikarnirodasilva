@@ -223,9 +223,15 @@ export function layout(
     for (const s of list.filter(s => !s.isPresent)) place(s, null)
   }
   const prefixEnd = cursor
-  for (const s of top('conversation')) place(s, s.anchor ?? prefixEnd)
+  // What was in the conversation before the inspector loaded has no known place.
+  for (const s of top('conversation')) place(s, s.turn < 0 ? null : (s.anchor ?? prefixEnd))
 
   return out.map((p, i) => ({ ...p, n: i + 1 }))
+}
+
+/** The turn it arrived in: `t3`, or `t?` when it was in the conversation before recording began. */
+export function whenOf(p: Segment): string {
+  return p.turn < 0 ? 't?' : `t${p.turn}`
 }
 
 /** `12`, `950`, `1.2k`, `41.7k`. */
@@ -235,7 +241,7 @@ export function fmt(n: number): string {
 
 export function rangeOf(p: Placed): string {
   if (p.isRemoved) return 'removed'
-  if (p.start === null || p.end === null) return 'not sent'
+  if (p.start === null || p.end === null) return p.zone === 'conversation' && p.turn < 0 ? 'earlier' : 'not sent'
 
   return `${fmt(p.start)}–${fmt(p.end)}`
 }
@@ -249,7 +255,7 @@ export function isFocus(p: Placed): boolean {
 export function row(p: Placed, width: number): string {
   const mark = p.isRemoved ? '✗' : '✓'
   const tok = `${p.exactTokens === null ? '≈' : ''}${fmt(p.tokens)}`
-  const where = p.agent === null ? `t${p.turn}` : `t${p.turn}·sub`
+  const where = `${whenOf(p)}${p.agent === null ? '' : '·sub'}`
   const head = `${mark} ${String(p.n).padStart(3)} ${rangeOf(p).padEnd(13)} ${tok.padStart(6)} ${p.kind.padEnd(8)} ${where.padEnd(7)} `
   const indent = p.parent === null ? '' : '  └ '
   const room = Math.max(10, width - head.length - indent.length)
@@ -263,7 +269,7 @@ export function compactRow(p: Placed, isNarrow: boolean): string {
   if (!isNarrow) return row(p, 120)
   const mark = p.isRemoved ? '✗' : '✓'
   const tok = `${p.exactTokens === null ? '≈' : ''}${fmt(p.tokens)} tok`
-  const where = p.agent === null ? `t${p.turn}` : `t${p.turn} subagent`
+  const where = `${whenOf(p)}${p.agent === null ? '' : ' subagent'}`
   const indent = p.parent === null ? '' : '└ '
 
   return `#${p.n} ${mark} ${p.kind} · ${rangeOf(p)} · ${tok} · ${where}\n    ${indent}${p.label}`

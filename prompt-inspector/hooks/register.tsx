@@ -38,6 +38,7 @@ const toolsAtom = atom({ plugin: 'prompt-inspector', key: 'toolsTokens' } as con
 const cptAtom = atom({ plugin: 'prompt-inspector', key: 'charsPerToken' } as const, DEFAULT_CHARS_PER_TOKEN)
 const filterAtom = atom({ plugin: 'prompt-inspector', key: 'filter' } as const, 'all')
 const lastLookAtom = atom({ plugin: 'prompt-inspector', key: 'lastLookAt' } as const, -1)
+const catchingUpAtom = atom({ plugin: 'prompt-inspector', key: 'isCatchingUp' } as const, false)
 
 /** Each segment's full text, by key: what `show` prints and `count` measures. */
 const texts = new Map<string, string>()
@@ -70,6 +71,18 @@ function make(fields: Fields, text: string, stamp: Stamp): Segment {
 
 async function stamp($: Engine): Promise<Stamp> {
   return { turn: await read($, turnAtom), at: await $.clock.now() }
+}
+
+/**
+ * The stamp for a render while recording catches up on a conversation that
+ * began before it: the system prompt and first message are at its start
+ * (turn 0); a later injection's turn and place are unknown (-1).
+ */
+async function stampFor($: Engine, zone: Segment['zone']): Promise<Stamp> {
+  const now = await stamp($)
+  if (!(await read($, catchingUpAtom))) return now
+
+  return { ...now, turn: zone === 'conversation' ? -1 : 0 }
 }
 
 async function placed($: Engine): Promise<Placed[]> {
@@ -235,15 +248,16 @@ function countsByKind(rows: readonly Placed[]): string {
 }
 
 /** What `/inspect` answers: what is new, the rules and skills, and the rest in a line. */
-async function overview($: Engine, isNarrow: boolean, isPaneShown: boolean): Promise<string> {
+async function overview($: Engine, isNarrow: boolean): Promise<string> {
   const rows = await placed($)
   const since = await looked($)
   const fresh = rows.filter(p => isNewSince(p, since))
   // The listing's entries show one by one only once one is removed.
-  const focus = rows.filter(p => isFocus(p) && !(p.kind === 'listing' && p.parent !== null && !p.isRemoved))
+  const isEntry = (p: Placed) => p.kind === 'listing' && p.parent !== null && !p.isRemoved
+  const focus = rows.filter(p => isFocus(p) && p.chars > 0 && !isEntry(p))
   const entries = rows.filter(p => p.kind === 'listing' && p.parent !== null).length
   const others = rows.filter(p => !isFocus(p))
-  const lines = [`Prompt inspector is on${isPaneShown ? ', pane open' : ''}.`, await summary($)]
+  const lines = ['Prompt inspector is on.', await summary($)]
   if (fresh.length > 0) {
     lines.push('', 'New since you last looked:', ...fresh.slice(0, 15).map(p => compactRow(p, isNarrow)))
     if (fresh.length > 15) lines.push(`…and ${fresh.length - 15} more (/inspect list)`)
@@ -328,11 +342,9 @@ async function countExact($: Engine): Promise<string> {
   return `Counted ${counted.size} of ${todo.length} with ${model} (≈${fmt(spent)} input tokens spent); estimates now use ${await read($, cptAtom)} chars/tok.`
 }
 
-/** Opens the pane where the surface draws panes; answers whether one is shown. */
-async function openPane($: Engine): Promise<boolean> {
-  const opened = await $.ui.open({ id: PANE, title: 'Prompt inspector' })
-
-  return opened.isPlaced
+/** Opens the pane where the surface draws panes (a phone draws none). */
+async function openPane($: Engine): Promise<void> {
+  await $.ui.open({ id: PANE, title: 'Prompt inspector' })
 }
 
 const HELP = [
@@ -344,8 +356,10 @@ const HELP = [
   '/inspect restore 12 — put it back · /inspect restore all',
   '/inspect count — exact token counts from the session model (spends input tokens)',
   '/inspect on | off — a transcript line per new injection (terminal and desktop)',
+  '/inspect forget — clear what was recorded and record afresh from the next request',
   '',
-  'Rows: ✓ sent, ✗ removed. ≈ marks an estimate. t0 is before the first prompt.',
+  'Rows: ✓ sent, ✗ removed. ≈ marks an estimate. t0 is before the first prompt;',
+  't? was already in the conversation when recording began; its place is unknown.',
   'The model reads these outputs too, as it reads any command output.',
 ]
 
@@ -355,7 +369,9 @@ async function answer($: Engine, verb: string, target: string, isNarrow: boolean
       await update($, liveAtom, () => true)
       await refreshTools($)
 
-      return overview($, isNarrow, await openPane($))
+      await openPane($)
+
+      return overview($, isNarrow)
     }
     case 'on':
     case 'off':
@@ -386,6 +402,17 @@ async function answer($: Engine, verb: string, target: string, isNarrow: boolean
     }
     case 'count':
       return countExact($)
+    case 'forget': {
+      texts.clear()
+      await update($, segmentsAtom, () => [])
+      await update($, lastLookAtom, () => -1)
+      await update($, catchingUpAtom, () => true)
+      // Ask for the cached renders again, so the next request records them.
+      $.ui.invalidate('prompt.context')
+      $.ui.invalidate('prompt.attachment')
+
+      return 'Forgot every recorded row; removals stay. The next request records them again: what is already in the conversation comes back as t?, its place unknown.'
+    }
     default:
       return HELP.join('\n')
   }
@@ -396,9 +423,17 @@ export const register: Register = on => {
     await $.command.register({
       name: 'inspect',
       description: 'Prompt inspector: which rules and skills are injected, at which token range; remove them to test',
-      argumentHint: '[on|off|list|show N|rm N|restore N|count|help]',
+      argumentHint: '[on|off|list|show N|rm N|restore N|count|forget|help]',
       immediate: true,
     })
+    // Loaded mid-conversation: the next request re-asks every attachment already
+    // in it, and their place and turn are unknown.
+    try {
+      const history = await $.session.messages()
+      await update($, catchingUpAtom, () => history.length > 0)
+    } catch {
+      // No session bound: nothing to catch up on.
+    }
     await refreshStatus($)
 
     return next(e)
@@ -418,6 +453,7 @@ export const register: Register = on => {
       await update($, anchorsAtom, anchors => ({ ...anchors, [e.agentId ?? 'main']: input + usage.output_tokens }))
       if (e.agentId === undefined) {
         await update($, lastRequestAtom, () => ({ input, output: usage.output_tokens, model: usage.model }))
+        if (await read($, catchingUpAtom)) await update($, catchingUpAtom, () => false)
       }
     }
 
@@ -446,7 +482,7 @@ export const register: Register = on => {
   on('prompt.compose', async ($, e, next) => {
     const result = await next(e)
     if (!e.traits.includes('analysis')) {
-      const at = await stamp($)
+      const at = await stampFor($, 'system')
       const seen = result.sections.map((s, i) =>
         make({ key: keys.system(s.id), kind: 'system', zone: 'system', label: s.id, detail: s.scope, order: i }, s.text, at),
       )
@@ -464,7 +500,7 @@ export const register: Register = on => {
     const files = result.instructionFiles ?? e.instructionFiles ?? []
     const memory = result.blocks.find(b => b.name === 'claudeMd')
     const spans = memory === undefined ? [] : spansOfFiles(memory.text, files)
-    const at = await stamp($)
+    const at = await stampFor($, 'context')
     const seen: Segment[] = []
     result.blocks.forEach((block, i) => {
       const isMemory = block === memory
@@ -520,9 +556,9 @@ export const register: Register = on => {
     const result = await next(e)
     if (result.text === null) return result
     const key = keys.attachment(e.type, e.text)
-    const at = await stamp($)
+    const at = await stampFor($, 'conversation')
     const agent = e.agentId ?? null
-    const anchor = (await read($, anchorsAtom))[agent ?? 'main'] ?? null
+    const anchor = at.turn < 0 ? null : ((await read($, anchorsAtom))[agent ?? 'main'] ?? null)
     const common = { zone: 'conversation', agent, anchor, order: at.at } as const
     const entries = e.type === 'skill_listing' ? parseListing(result.text) : []
     const fields: Fields = {
