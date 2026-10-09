@@ -1,0 +1,7 @@
+{
+  "name": "prompt-inspector",
+  "version": "0.3.0",
+  "description": "Shows where each of your rules and skills sits in the prompt, by exact token position, and lets you delete or re-inject it from a card on any device.",
+  "author": { "name": "shaikds" },
+  "types": "./types/index.d.ts"
+}

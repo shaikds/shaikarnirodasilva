@@ -1,0 +1,4 @@
+# prompt-inspector: debug mode switch and its report, and the types the engine lays beside a mod
+.claude/prompt-inspector.debug
+.claude/prompt-inspector.report.json
+.claude/skills/*/.claude-plugin/types/
