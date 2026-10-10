@@ -76,6 +76,14 @@ function engine(on: On) {
   on('session.root', () => ({ value: '/repo' }))
   on('session.id', () => ({ value: 's1' }))
   on('session.model', () => ({ value: 'm' }))
+  // The count_tokens endpoint: 1 character is 1 token, 50 for the rest of the message.
+  on('http.fetch', ($, e) => {
+    const body = JSON.parse(String(e.init?.body ?? '{}')) as { messages?: { content: { content?: string }[] }[] }
+    const last = body.messages?.[body.messages.length - 1]?.content[0]
+    const content = typeof last?.content === 'string' ? last.content : ''
+
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ input_tokens: 50 + content.length }) } } as never
+  })
   on('fs.exists', () => ({ value: world.isDebug }))
   on('fs.list', ($, e) => {
     const dir = String(e.path ?? '/repo').replace(/\/$/, '')
@@ -503,6 +511,27 @@ describe('plugin', () => {
     const labels = await everyLabel($, world)
     expect(labels).toContain('docs/CLAUDE.md [not measured]')
     expect(labels.some(l => l.startsWith('other/CLAUDE.md'))).toBe(false)
+  })
+
+  test('a rule joined into a tool result is placed exactly from the API counts: its tags and blank lines, up to where its block ends', async ($, on) => {
+    const world = engine(on)
+    world.isDebug = true
+    on('tool.register', ($, e) => ({ value: { tool: `mcp__prompt-inspector__${e.name}` } }))
+    await startSession($, on)
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Read it', turnId: 't2' })
+    await $.prompt.attachment(NESTED)
+    const body = '1\tyo\n2'
+    const rule = `\n\n<system-reminder>\n${NESTED.text}\n</system-reminder>`
+    const tail = '\n\n<system-reminder>\nTotal tokens left.\n</system-reminder>'
+    const content = body + rule + tail
+    world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
+    world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
+    const end = SYSTEM + chars(world.api)
+    const labels = await everyLabel($, world)
+    // From the end of the body (the blank lines are the rule's), to where its closing tag ends.
+    expect(labels).toContain(`src/CLAUDE.md [${int(end - (rule.length + tail.length))} - ${int(end - tail.length)}]`)
   })
 
   test('a skill you made: its list line and its text when used; 🗑 stops later uses and the text already sent keeps its place', async ($, on) => {

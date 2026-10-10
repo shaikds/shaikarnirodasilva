@@ -46,6 +46,7 @@ context.
 - Claude Code sends some of its own reminders reworded; those are found by their lines and placed
   as the whole block they were sent in (the card says so). A few are added only as a request is
   sent, outside the messages: those read `not found in its request as sent`.
+- A rule Claude Code joins into a file read's result (a nested `CLAUDE.md`) sits inside a tool result, which the text counter can't reach. Its place comes from the API's own `count_tokens` through the session's credential: a tool result ends where its content ends (checked against the prompt cache), the tokens after the rule are the whole content's minus those up to it, and each cut is proven to fall between two tokens. The range takes in the reminder's tags and the blank lines before it. It is placed only when its tool result is the request's last block.
 - What can't be proven says `not measured` and why (compaction, a block that isn't text, text sent
   before the inspector started), never a guess. Sizes are always exact. System-prompt sections show
   their size; their position inside tools + system prompt is not reported by the API.
