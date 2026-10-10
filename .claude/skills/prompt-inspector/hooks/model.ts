@@ -99,11 +99,28 @@ export function spansOfFiles(block: string, files: readonly { path: string; cont
   })
 }
 
-/** A text's opening, what finds the block a reminder was sent in when Claude Code rewords it; null when too short to be sure. */
-export function headOf(text: string): string | null {
-  const head = text.trim().slice(0, 48)
+/**
+ * The block a reminder was sent in when Claude Code rewords it: the one that
+ * holds the most of its distinctive lines (24 characters or more, the first
+ * 40 checked); -1 when none holds any.
+ */
+export function blockOf(blocks: readonly string[], text: string): number {
+  const lines = text
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length >= 24)
+    .slice(0, 40)
+  let best = -1
+  let most = 0
+  for (const [i, b] of blocks.entries()) {
+    const n = lines.filter(l => b.includes(l)).length
+    if (n > most) {
+      best = i
+      most = n
+    }
+  }
 
-  return head.length >= 24 ? head : null
+  return best
 }
 
 /** Where a piece's text lies in a request's last message: the block, and the offset in it. */
@@ -438,6 +455,8 @@ export type Row = {
   /** Moved by 🔄 to ride with a later message. */
   isMoved: boolean
   isCopy: boolean
+  /** Its range is the whole block it was sent in (Claude Code sent it reworded). */
+  isWholeBlock: boolean
   /** Where it was in the last request that carried it, once taken out. */
   was: { start: number; end: number } | null
   /** Why there is no range. */
@@ -487,6 +506,7 @@ export function layout(pieces: readonly Piece[], steps: readonly Step[], removed
       isDeleted,
       isMoved,
       isCopy,
+      isWholeBlock: p.at?.isWholeBlock === true,
       was: p.was,
       note,
       isActionable: true,
@@ -520,6 +540,7 @@ export function withFillers(rows: readonly Row[], total: number | null, systemEn
     isDeleted: false,
     isMoved: false,
     isCopy: false,
+    isWholeBlock: false,
     was: null,
     note: null,
     isActionable: false,
@@ -553,7 +574,7 @@ export function describe(r: Row): string {
   if (r.isDeleted && r.kind === 'skill') return `${range ?? r.note ?? 'not measured'} · later uses stopped · ${size}${from}`
   if (r.isDeleted) return range === null ? `deleted${was} · ${size}${from}` : `${range} · deleted from your next message · ${size}${from}`
   if (r.isMoved) return range === null ? `moved to the end${was} · ${size}${from}` : `${range} · moves to the end with your next message · ${size}${from}`
-  if (range !== null) return `${range} · ${size}${from}`
+  if (range !== null) return `${range} · ${size}${from}${r.isWholeBlock ? ' · the whole block it was sent in (reworded)' : ''}`
 
   return `${r.note ?? 'not measured'} · ${size}${from}`
 }

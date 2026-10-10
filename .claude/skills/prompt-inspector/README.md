@@ -41,8 +41,9 @@ context.
   block by block and every block that changed before it is counted whole, as sent.
 - Counts only ever cover text that runs to the end of its block: a text counted alone loses its
   trailing whitespace, so a piece's start is taken from the piece with the rest of its block.
-- Claude Code sends some of its own reminders reworded; those are found by their opening and placed
-  as the whole block they were sent in.
+- Claude Code sends some of its own reminders reworded; those are found by their lines and placed
+  as the whole block they were sent in (the card says so). A few are added only as a request is
+  sent, outside the messages: those read `not found in its request as sent`.
 - What can't be proven says `not measured` and why (compaction, a block that isn't text, text sent
   before the inspector started), never a guess. Sizes are always exact. System-prompt sections show
   their size; their position inside tools + system prompt is not reported by the API.
