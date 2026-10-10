@@ -268,8 +268,8 @@ describe('plugin', () => {
     world.taps = ['CLAUDE.md', '🗑 Delete', 'Yes, delete', 'Done']
     await inspect($)
     expect(world.cards.map(c => c.header)).toEqual(['Inspect', 'Piece', 'Confirm', 'Inspect'])
-    expect(world.cards[1]?.question).toStartWith(`CLAUDE.md: ${int(wasA.start)} → ${int(wasA.end)} · ${int(wasA.end - wasA.start)} tok · message 1. `)
-    expect(world.cards[3]?.question).toStartWith('Deleted CLAUDE.md: it is taken out of the prompt. ')
+    expect(world.cards[1]?.question).toBe(`CLAUDE.md [${int(wasA.start)} - ${int(wasA.end)}] · ${int(wasA.end - wasA.start)} tok`)
+    expect(world.cards[3]?.question).toStartWith('Deleted CLAUDE.md. ')
     const answer = await $.prompt.context(CONTEXT)
     expect(answer.instructionFiles?.map(f => f.path)).toEqual([RULE_B])
     // The engine renders claudeMd again from the shorter list; the first message changes, so the cache reads up to it only.
@@ -294,7 +294,7 @@ describe('plugin', () => {
     const nested = where(world, NESTED.text)
     expect(await everyLabel($, world)).toContain(`src/CLAUDE.md [${range(nested)}]`)
     const cards = await open($, world, nested.start, ['Back'])
-    expect(cards[1]?.question).toStartWith(`src/CLAUDE.md: ${int(nested.start)} → ${int(nested.end)} · 42 tok · message 2. `)
+    expect(cards[1]?.question).toBe(`src/CLAUDE.md [${int(nested.start)} - ${int(nested.end)}] · 42 tok`)
   })
 
   test('deleting a reminder takes its block out; a later piece moves by exactly that block', async ($, on) => {
@@ -350,7 +350,7 @@ describe('plugin', () => {
     const wasA = where(world, ruleText(a))
     world.taps = ['CLAUDE.md', '🔄 Re-inject at end', 'Done']
     await inspect($)
-    expect(world.cards[2]?.question).toStartWith('CLAUDE.md will ride at the end. ')
+    expect(world.cards[2]?.question).toStartWith('CLAUDE.md moved to the end. ')
     const submitted = await $.prompt.submit({ text: 'Again', wait: false, origin: { kind: 'composer' } })
     const copy = submitted.context?.[0] ?? ''
     expect(copy).toBe(ruleText(a))
@@ -379,7 +379,7 @@ describe('plugin', () => {
     const b = where(world, ruleText(FILES[1]))
     world.taps = [String(b.start + 3).replace(/\B(?=(\d{3})+(?!\d))/g, '.'), 'Back', '5', 'Done']
     await inspect($, 'all')
-    expect(world.cards[1]?.question).toStartWith('.claude/rules/tests.md: ')
+    expect(world.cards[1]?.question).toStartWith('.claude/rules/tests.md [')
     expect(world.cards[3]?.question).toStartWith(`The tools + system prompt (0 → ${int(SYSTEM)} · ${int(SYSTEM)} tok) can't be deleted. `)
   })
 
@@ -489,7 +489,7 @@ describe('plugin', () => {
     const card = labels(world.cards[0]) ?? []
     expect(card[0]).toStartWith("skill list: commit [")
     expect(card[1]).toBe(`skill: commit [${range(text)}]`)
-    expect(world.cards[3]?.question).toStartWith('Later uses of skill: commit stopped; its text already sent stays. ')
+    expect(world.cards[3]?.question).toStartWith('Stopped skill: commit. ')
     expect((await $.skill.prompt({ skill: 'commit', text: 'Write a conventional commit.' })).text).toBe("(prompt-inspector deleted the commit skill's instructions.)")
     await $.turn.start({ text: 'Next', turnId: 't2' })
     await request($, world, ['Next'])
