@@ -99,6 +99,13 @@ export function spansOfFiles(block: string, files: readonly { path: string; cont
   })
 }
 
+/** A text's opening, what finds the block a reminder was sent in when Claude Code rewords it; null when too short to be sure. */
+export function headOf(text: string): string | null {
+  const head = text.trim().slice(0, 48)
+
+  return head.length >= 24 ? head : null
+}
+
 /** Where a piece's text lies in a request's last message: the block, and the offset in it. */
 export type Located = { block: number; offset: number }
 
@@ -321,6 +328,7 @@ export function carry(
     let block = pos.block
     let offset = pos.offset
     let key = pos.key
+    let isOwnDone = false
     for (const c of change.blocks) {
       if (c.at > pos.block) break
       const before = c.before === null ? null : texts[c.before]
@@ -340,6 +348,16 @@ export function carry(
       }
       // Its own block: taken out, or changed (find the same occurrence of its text in the new one).
       if (after === null || before === null) return { kind: 'gone', was: { start: pos.start, end: pos.end }, step }
+      if (pos.isWholeBlock === true) {
+        // The piece is the block as sent: it is the new block.
+        const size = count(after)
+        if (size === null || !isCounted) return { kind: 'lost', reason: LOST.text, step }
+        const start = pos.start + shift
+        pos = { start, end: start + size, block, offset: 0, key: c.after ?? pos.key, isWholeBlock: true }
+        step = s.id
+        isOwnDone = true
+        break
+      }
       const newOffset = nthIndex(after, text, occurrencesBefore(before, text, pos.offset))
       if (newOffset < 0) return { kind: 'gone', was: { start: pos.start, end: pos.end }, step }
       // From the block's start: its whole text less the text from the piece to its end (only texts that end the block are counted).
@@ -350,9 +368,10 @@ export function carry(
       offset = newOffset
       key = c.after ?? key
     }
+    if (isOwnDone) continue
     if (!isCounted) return { kind: 'lost', reason: LOST.text, step }
     const start = pos.start + shift
-    pos = { start, end: start + tokens, block, offset, key }
+    pos = pos.isWholeBlock === true ? { ...pos, start, end: start + (pos.end - pos.start), block } : { start, end: start + tokens, block, offset, key }
     step = s.id
   }
 
@@ -463,7 +482,7 @@ export function layout(pieces: readonly Piece[], steps: readonly Step[], removed
       isYours: p.isYours,
       start: isHere && p.at !== null ? p.at.start : null,
       end: isHere && p.at !== null ? p.at.end : null,
-      tokens: p.tokens,
+      tokens: p.at !== null ? p.at.end - p.at.start : p.tokens,
       message: p.zone === 'system' ? null : p.message,
       isDeleted,
       isMoved,
