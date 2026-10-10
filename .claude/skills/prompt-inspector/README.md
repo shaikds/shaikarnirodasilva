@@ -36,7 +36,17 @@ context.
   guess: the system prompt's sections sit inside the tools + system prompt block, whose split the
   API does not report.
 - Exact positions need the inspector running from a session's first message. In this repository it
-  loads by itself in every session, from `.claude/skills/prompt-inspector`.
+  turns on by itself in every session; see below.
+
+## How it turns on
+
+- **Cloud sessions** (web and phone): Claude Code loads a plugin under the project's
+  `.claude/skills` only once the workspace is trusted, and a cloud session never asks. So the
+  repository's `SessionStart` hook (`.claude/hooks/load-prompt-inspector.sh`, set in
+  `.claude/settings.json`) copies the inspector to `~/.claude/skills/prompt-inspector` as the session
+  starts. A copy there loads without asking, before the first message.
+- **On your computer**: accept the trust dialog for the folder, and `.claude/skills/prompt-inspector`
+  loads by itself. The hook does nothing outside cloud sessions.
 
 ## Limits
 
