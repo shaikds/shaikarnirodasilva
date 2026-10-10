@@ -52,6 +52,10 @@ function engine(on: On) {
     taps: [] as string[],
     cards: [] as Card[],
     counted: 0,
+    /** Every counting request's prompt, and the most that were in flight at once. */
+    prompts: [] as string[],
+    inFlight: 0,
+    most: 0,
     /** The conversation's rows before this point (non-empty: the inspector joined late). */
     history: [] as unknown[],
   }
@@ -61,8 +65,13 @@ function engine(on: On) {
   on('session.root', () => ({ value: '/repo' }))
   on('session.model', () => ({ value: 'm' }))
   on('session.messages', ($, e) => ({ value: e.as === 'api' ? [{ role: 'user', content: world.tail.map(text => ({ type: 'text', text })) }] : world.history }) as never)
-  on('model.complete', ($, e) => {
+  on('model.complete', async ($, e) => {
     world.counted += 1
+    world.prompts.push(e.prompt)
+    world.inFlight += 1
+    world.most = Math.max(world.most, world.inFlight)
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    world.inFlight -= 1
     const usage = { input_tokens: 8 + e.prompt.length, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
 
     return { value: { isAnswered: true, text: '', usage } } as never
@@ -257,6 +266,24 @@ describe('plugin', () => {
     world.taps = ['Done']
     await inspect($)
     expect(world.counted).toBe(first)
+  })
+
+  test('/inspect counts only your pieces; /inspect all counts the rest, at most 8 requests at once', async ($, on) => {
+    const world = engine(on)
+    await firstMessage($, world)
+    const reminders = Array.from({ length: 12 }, (_, i) => ({ type: 'todo_reminder', text: `Reminder number ${i}.`, origin: { kind: 'engine' } }) as const)
+    await $.turn.start({ text: 'Next', turnId: 't2' })
+    for (const r of reminders) await $.prompt.attachment(r)
+    await request($, world, [...reminders.map(r => `<system-reminder>\n${r.text}\n</system-reminder>`), 'Next'], 12_000, 3)
+    world.taps = ['Done']
+    await inspect($)
+    expect(world.prompts.some(p => p.includes('You are Claude Code.') || p.includes('Reminder number'))).toBe(false)
+    world.taps = ['Done']
+    await inspect($, 'all')
+    expect(world.prompts.some(p => p.includes('Reminder number 11.'))).toBe(true)
+    expect(world.most).toBeGreaterThan(1)
+    expect(world.most).toBeLessThanOrEqual(8)
+    expect(labels(world.cards[1])?.some(l => l.startsWith('▒ tools + system prompt · 0–'))).toBe(true)
   })
 
   test('marks what was in the conversation before the inspector started as not measured', async ($, on) => {

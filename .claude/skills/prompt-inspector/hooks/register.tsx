@@ -158,77 +158,121 @@ async function tokensOf($: Engine, model: string, text: string): Promise<number 
   }
 }
 
+/** Counting requests sent at once: a fresh session holds about a hundred pieces, and one at a time takes minutes. */
+const PARALLEL = 8
+
+/** Counts each distinct text once, several at once; answers a lookup by text, null where counting failed. */
+async function countAll($: Engine, model: string, texts: readonly string[]): Promise<(text: string) => number | null> {
+  const unique = [...new Map(texts.map(text => [textKey(text), text])).values()]
+  const counts = new Map<string, number | null>()
+  const [first, ...rest] = unique
+  // The first count also stores the one-character base, which the rest then share.
+  if (first !== undefined) counts.set(textKey(first), await tokensOf($, model, first))
+  let next = 0
+  const worker = async () => {
+    for (let text = rest[next++]; text !== undefined; text = rest[next++]) counts.set(textKey(text), await tokensOf($, model, text))
+  }
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, rest.length) }, worker))
+
+  return text => counts.get(textKey(text)) ?? null
+}
+
+/** What places one piece in the request that first carried it: the blocks after it and the rest of its own block. */
+type Placement = { end: number; after: string[]; suffix: string; own: string }
+
 /**
- * Measures every piece not measured yet. A piece's request ended at an exact
+ * Measures the pieces a view shows (`yours`: your pieces; `all`: every piece,
+ * and where tools + system prompt end). A piece's request ended at an exact
  * token (cache read + cache write); the piece ends where the blocks after it
- * begin, and starts its own exact size before that.
+ * begin, and starts its own exact size before that. Every text that takes is
+ * counted first, several at once, then the ranges follow.
  */
-async function measure($: Engine): Promise<void> {
+async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   const pieces = await read($, piecesAtom)
   const steps = await read($, stepsAtom)
   const texts = await read($, textsAtom)
   const stepById = new Map(steps.map(s => [s.id, s]))
   const fallbackModel = steps[steps.length - 1]?.model ?? (await $.session.model())
-  const done = new Map<string, Partial<Piece>>()
-  let systemEnd: number | null = await read($, systemEndAtom)
+  const blocksOf = (tail: readonly string[]) => tail.map(key => (key === '-' ? null : (texts[key] ?? null)))
 
+  // 1. What each piece needs counted.
+  const plans: { p: Piece; model: string; text: string; place: Placement | null }[] = []
+  const need = new Map<string, string[]>()
+  const ask = (model: string, ...more: string[]) => need.set(model, [...(need.get(model) ?? []), ...more])
   for (const p of pieces) {
+    if (scope === 'yours' && !p.isYours) continue
     const text = texts[p.hash]
     if (text === undefined) continue
     const step = p.step === null ? undefined : stepById.get(p.step)
     const model = step?.model ?? fallbackModel
-    const tokens = p.tokens ?? (await tokensOf($, model, text))
+    if (p.tokens === null) ask(model, text)
+    if (p.zone === 'system') {
+      if (p.removalTokens === null) ask(model, `${text}\n\n`)
+      plans.push({ p, model, text, place: null })
+      continue
+    }
+    let place: Placement | null = null
+    if (step !== undefined && step.isAnchor && p.start === null) {
+      const blocks = blocksOf(step.tail)
+      const at = locate(
+        blocks.map(b => b ?? ''),
+        text,
+      )
+      if (at !== null && !blocks.slice(at.block + 1).some(b => b === null)) {
+        const { after, suffix } = textsToCount(
+          blocks.map(b => b ?? ''),
+          at,
+          text,
+        )
+        place = { end: step.end, after, suffix, own: blocks[at.block] ?? '' }
+        ask(model, ...after, suffix, ...(p.attachment !== null && p.parent === null ? [place.own] : []))
+      }
+    }
+    plans.push({ p, model, text, place })
+  }
+  // The first request's last message is the first message: what precedes it is tools + system prompt.
+  const first = steps.find(s => s.messageCount === 1 && s.isAnchor)
+  const firstBlocks = first === undefined ? [] : blocksOf(first.tail)
+  const isSystemEndWanted = scope === 'all' && (await read($, systemEndAtom)) === null && first !== undefined && !firstBlocks.some(b => b === null)
+  if (isSystemEndWanted && first !== undefined) ask(first.model, ...firstBlocks.map(b => b ?? ''))
+
+  // 2. Count, several at once.
+  const counters = new Map<string, (text: string) => number | null>()
+  for (const [model, list] of need) counters.set(model, await countAll($, model, list))
+  const count = (model: string, text: string) => (text.length === 0 ? 0 : (counters.get(model)?.(text) ?? null))
+  const sum = (model: string, list: readonly string[]) => list.reduce<number | null>((n, text) => (n === null ? null : (c => (c === null ? null : n + c))(count(model, text))), 0)
+
+  // 3. Place.
+  const done = new Map<string, Partial<Piece>>()
+  for (const { p, model, text, place } of plans) {
+    const tokens = p.tokens ?? count(model, text)
     if (tokens === null) continue
     const result: Partial<Piece> = { tokens }
     done.set(p.key, result)
     if (p.zone === 'system') {
-      if (p.removalTokens === null) result.removalTokens = await tokensOf($, model, `${text}\n\n`)
+      if (p.removalTokens === null) result.removalTokens = count(model, `${text}\n\n`)
       continue
     }
-    if (step === undefined || !step.isAnchor || p.start !== null) continue
-    const blocks = step.tail.map(key => (key === '-' ? null : (texts[key] ?? null)))
-    const at = locate(
-      blocks.map(b => b ?? ''),
-      text,
-    )
-    if (at === null || blocks.slice(at.block + 1).some(b => b === null)) continue
-    const { after, suffix } = textsToCount(blocks.map(b => b ?? ''), at, text)
-    let afterTokens = 0
-    for (const block of after) {
-      const n = await tokensOf($, model, block)
-      if (n === null) {
-        afterTokens = Number.NaN
-        break
-      }
-      afterTokens += n
-    }
-    const suffixTokens = await tokensOf($, model, suffix)
-    if (Number.isNaN(afterTokens) || suffixTokens === null) continue
-    const range = rangeFromEnd(step.end, afterTokens, suffixTokens, tokens)
+    if (place === null) continue
+    const afterTokens = sum(model, place.after)
+    const suffixTokens = count(model, place.suffix)
+    if (afterTokens === null || suffixTokens === null) continue
+    const range = rangeFromEnd(place.end, afterTokens, suffixTokens, tokens)
     result.start = range.start
     result.end = range.end
     // Deleting an attachment takes its whole block out, its framing included.
-    const own = blocks[at.block] ?? ''
-    result.removalTokens = p.attachment !== null && p.parent === null ? await tokensOf($, model, own) : tokens
-
-    // The first request's last message is the first message: what precedes it is tools + system prompt.
-    if (systemEnd === null && step.messageCount === 1) {
-      let all = 0
-      for (const block of blocks) {
-        const n = block === null ? null : await tokensOf($, model, block)
-        if (n === null) {
-          all = Number.NaN
-          break
-        }
-        all += n
-      }
-      if (!Number.isNaN(all)) systemEnd = step.end - all
-    }
+    result.removalTokens = p.attachment !== null && p.parent === null ? count(model, place.own) : tokens
   }
   if (done.size > 0) {
     await update($, piecesAtom, list => list.map(p => ({ ...p, ...(done.get(p.key) ?? {}) })))
   }
-  if (systemEnd !== null) await update($, systemEndAtom, () => systemEnd)
+  if (isSystemEndWanted && first !== undefined) {
+    const all = sum(
+      first.model,
+      firstBlocks.map(b => b ?? ''),
+    )
+    if (all !== null) await update($, systemEndAtom, () => first.end - all)
+  }
 }
 
 /** Context blocks and attachments are cached answers: ask for them again with the next request. */
@@ -323,7 +367,7 @@ async function act($: Engine, row: Row): Promise<string> {
 
 /** The inspector: a paged list card, then a card for the piece tapped. */
 async function inspect($: Engine, scope: 'yours' | 'all'): Promise<string> {
-  await measure($)
+  await measure($, scope)
   let page = 0
   let said = ''
   for (let round = 0; round < 100; round++) {
@@ -345,7 +389,7 @@ async function inspect($: Engine, scope: 'yours' | 'all'): Promise<string> {
       continue
     }
     if (answer === 'Refresh') {
-      await measure($)
+      await measure($, scope)
       continue
     }
     const index = labels.indexOf(answer)
@@ -398,8 +442,10 @@ async function selfTest($: Engine, model: string): Promise<Record<string, number
  */
 async function debugReport($: Engine): Promise<void> {
   const root = await $.session.root()
-  if (!(await $.fs.exists(`${root}/.claude/prompt-inspector.debug`))) return
-  await measure($)
+  const isOn = await $.fs.exists(`${root}/.claude/prompt-inspector.debug`)
+  await trace($, 'turn end', isOn ? `debug on in ${root}` : `debug off in ${root}`)
+  if (!isOn) return
+  await measure($, 'all')
   const steps = await read($, stepsAtom)
   const model = steps[steps.length - 1]?.model ?? (await $.session.model())
   const done = (await $.store.get(`selftest:${model}`)) as Record<string, number | string> | undefined
@@ -409,12 +455,50 @@ async function debugReport($: Engine): Promise<void> {
   const all = await rowsFor($, 'all')
   const report = {
     selfTest: test,
+    boundaries: await boundaries($, model),
     systemEnd: await read($, systemEndAtom),
     steps: steps.slice(-8).map(({ tail, ...step }) => ({ ...step, tailBlocks: tail.length })),
     yours: yours.rows.map(r => cardLabel(r)),
     all: all.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
   }
   await $.fs.write(`${root}/.claude/prompt-inspector.report.json`, JSON.stringify(report, null, 2))
+  await trace($, 'report written', `${root}/.claude/prompt-inspector.report.json`)
+}
+
+/**
+ * Checks the one assumption placing a piece inside a block rests on: the
+ * block's tokens are the tokens before the piece, the piece's, and the rest's,
+ * so no token spans a piece's edge. For up to 12 placed pieces of the requests
+ * recorded, each `exact` when the parts add up to the whole.
+ */
+async function boundaries($: Engine, model: string): Promise<string[]> {
+  const pieces = await read($, piecesAtom)
+  const steps = await read($, stepsAtom)
+  const texts = await read($, textsAtom)
+  const stepById = new Map(steps.map(s => [s.id, s]))
+  const out: string[] = []
+  for (const p of pieces) {
+    if (out.length >= 12) break
+    const step = p.step === null ? undefined : stepById.get(p.step)
+    const text = texts[p.hash]
+    if (step === undefined || text === undefined || p.start === null) continue
+    const block = step.tail.map(key => texts[key] ?? '').find(b => b.includes(text))
+    if (block === undefined) continue
+    const at = block.lastIndexOf(text)
+    const parts = [block.slice(0, at), text, block.slice(at + text.length)]
+    const count = await countAll($, model, [block, ...parts])
+    const whole = count(block)
+    const sum = parts.reduce<number | null>((n, part) => (n === null ? null : (c => (c === null ? null : n + c))(part.length === 0 ? 0 : count(part))), 0)
+    out.push(`${p.label}: ${whole === sum ? 'exact' : `MISMATCH block ${whole} vs parts ${sum}`}`)
+  }
+
+  return out
+}
+
+/** The last few debug events, kept in the store (a file on disk) where a failing report can still be read. */
+async function trace($: Engine, what: string, detail: string): Promise<void> {
+  const log = ((await $.store.get('debug:trace')) as string[] | undefined) ?? []
+  await $.store.set('debug:trace', [...log, `${what}: ${detail}`].slice(-20))
 }
 
 function originOf(origin: PromptAttachmentOrigin, type: string): string {
@@ -426,6 +510,7 @@ function originOf(origin: PromptAttachmentOrigin, type: string): string {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    await trace($, 'loaded', `cwd ${e.cwd}, interactive ${e.isInteractive}`)
     await $.command.register({
       name: 'inspect',
       description: 'Your rules and skills in the prompt, at exact token positions: delete or re-inject them',
@@ -493,8 +578,9 @@ export const register: Register = on => {
     const result = await next(e)
     try {
       await debugReport($)
-    } catch {
-      // Debug mode only: a failed report changes nothing.
+    } catch (err) {
+      // Debug mode only: a failed report changes nothing but its trace.
+      await trace($, 'report failed', err instanceof Error ? `${err.name}: ${err.message}` : String(err))
     }
 
     return result
