@@ -19,7 +19,6 @@ import {
   locate,
   parseListing,
   pathOfAttachment,
-  rangeFromEnd,
   rowAt,
   spansOfFiles,
   systemChange,
@@ -252,9 +251,8 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
       text,
     )
     const own = blocks[at.block] ?? ''
-    // The rest of its block can't be counted alone when it is whitespace: count the block and what precedes the piece.
-    const isBlank = suffix !== '' && suffix.trim() === ''
-    need.push(...after, ...(isBlank ? [own, own.slice(0, at.offset)] : [suffix]))
+    // Only texts that run to the block's end are counted: a text's trailing whitespace is dropped when it is counted alone.
+    need.push(...after, suffix, text + suffix)
     toPlace.push({ p, text, s, block: s.blocks - s.tail.length + at.block, offset: at.offset, after, suffix, own })
   }
   let count = await countAll($, model, need)
@@ -263,20 +261,17 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
     if (n !== null && p.tokens === null) patch(p, { tokens: n })
   }
   for (const x of toPlace) {
-    const tokens = x.p.tokens ?? count(x.text)
     const afterTokens = sumOf(count, x.after)
-    const isBlank = x.suffix !== '' && x.suffix.trim() === ''
-    const ownTokens = isBlank ? count(x.own) : 0
-    const prefixTokens = isBlank ? count(x.own.slice(0, x.offset)) : 0
-    const suffixTokens = isBlank ? null : count(x.suffix)
-    if (tokens === null || afterTokens === null || ownTokens === null || prefixTokens === null || (!isBlank && suffixTokens === null)) {
+    const suffixTokens = count(x.suffix)
+    const toEnd = count(x.text + x.suffix)
+    if (afterTokens === null || suffixTokens === null || toEnd === null) {
       patch(x.p, { lost: `counting failed${countErrors.length > 0 ? ` (${countErrors[countErrors.length - 1]})` : ''}; Refresh tries again` })
       continue
     }
-    const range = isBlank
-      ? (start => ({ start, end: start + tokens }))(x.s.end - afterTokens - ownTokens + prefixTokens)
-      : rangeFromEnd(x.s.end, afterTokens, suffixTokens ?? 0, tokens)
-    patch(x.p, { tokens, at: { ...range, block: x.block, offset: x.offset, key: x.s.tail[x.block - (x.s.blocks - x.s.tail.length)] ?? '' } })
+    // Its block ends where the blocks after it begin; it starts where the text from it to its block's end begins.
+    const blockEnd = x.s.end - afterTokens
+    const range = { start: blockEnd - toEnd, end: blockEnd - suffixTokens }
+    patch(x.p, { tokens: range.end - range.start, at: { ...range, block: x.block, offset: x.offset, key: x.s.tail[x.block - (x.s.blocks - x.s.tail.length)] ?? '' } })
   }
 
   // 2. Carry each placed piece to the last request, and where the first message begins.
@@ -562,15 +557,14 @@ async function boundaries($: Engine, model: string): Promise<string[]> {
     const text = texts[p.hash]
     const block = p.at === null ? undefined : texts[p.at.key]
     if (text === undefined || block === undefined || p.at === null) continue
-    const parts = [block.slice(0, p.at.offset), text, block.slice(p.at.offset + text.length)]
-    const count = await countAll($, model, [block, ...parts])
-    const whole = count(block)
-    const sum = parts.reduce<number | null>((n, part) => {
-      const c = count(part)
-
-      return n === null || c === null ? null : n + c
-    }, 0)
-    out.push(`${p.label}: ${whole === sum ? 'exact' : `MISMATCH block ${whole} vs parts ${sum}`}`)
+    const rest = block.slice(p.at.offset + text.length)
+    if (/\s$/.test(text)) {
+      out.push(`${p.label}: ends in whitespace, size taken in place`)
+      continue
+    }
+    const count = await countAll($, model, [text, rest, text + rest])
+    const inPlace = (c => (c === null ? null : c - (count(rest) ?? 0)))(count(text + rest))
+    out.push(`${p.label}: ${inPlace === count(text) ? 'exact' : `MISMATCH in place ${inPlace} vs alone ${count(text)}`}`)
   }
 
   return out
@@ -592,8 +586,16 @@ async function report($: Engine): Promise<Record<string, unknown>> {
   const yours = await rowsFor($, 'yours')
   const all = await rowsFor($, 'all')
 
+  // How text edges count: whether a line break at a counted text's start or end is kept.
+  const raw = async (text: string) => usageTotal((await $.model.complete({ model, prompt: [{ text: '.' }, { text }], maxTokens: 1 })).usage)
+  const edgeTexts = ['abc', 'abc\n', '\nabc', 'abc\n\n', 'abc\ndef', '\ndef', '|\nabc|', '|abc|', '||', 'abc ', ' abc']
+  const edges: Record<string, number> = {}
+  for (const t of edgeTexts) edges[JSON.stringify(t)] = await raw(t)
+  edges['"."alone'] = usageTotal((await $.model.complete({ model, prompt: '.', maxTokens: 1 })).usage)
+
   return {
     selfTest: test,
+    edges,
     boundaries: await boundaries($, model),
     promptStart: await read($, promptStartAtom),
     requests: steps.slice(-8).map(({ tail, change, ...step }) => ({
@@ -964,7 +966,12 @@ export const register: Register = on => {
       const path = pathOfAttachment(result.text)
       const isRule = e.type === 'nested_memory' || e.type === 'instructions'
       const kind: PieceKind = isRule ? 'rule' : 'reminder'
-      const label = e.type === 'skill_listing' ? `skill list (${entries.length} skills)` : path !== null ? await shortPath($, path) : attachmentLabel(originOf(e.origin, e.type), result.text)
+      const label =
+        e.type === 'skill_listing'
+          ? `skill list (${entries.length} skills)`
+          : path !== null
+            ? `${await shortPath($, path)}${isRule ? '' : ` (${e.type.replace(/_/g, ' ')})`}`
+            : attachmentLabel(originOf(e.origin, e.type), result.text)
       const seen = [{ piece: piece({ key, kind, zone: 'conversation', label, attachment: e.type, isYours: isRule }, result.text, message), text: result.text }]
       for (const span of entries) {
         const text = result.text.slice(span.offset, span.offset + span.chars)

@@ -342,8 +342,11 @@ export function carry(
       if (after === null || before === null) return { kind: 'gone', was: { start: pos.start, end: pos.end }, step }
       const newOffset = nthIndex(after, text, occurrencesBefore(before, text, pos.offset))
       if (newOffset < 0) return { kind: 'gone', was: { start: pos.start, end: pos.end }, step }
-      add(after.slice(0, newOffset), 1)
-      add(before.slice(0, pos.offset), -1)
+      // From the block's start: its whole text less the text from the piece to its end (only texts that end the block are counted).
+      add(after, 1)
+      add(after.slice(newOffset), -1)
+      add(before, -1)
+      add(before.slice(pos.offset), 1)
       offset = newOffset
       key = c.after ?? key
     }
@@ -435,7 +438,8 @@ export function layout(pieces: readonly Piece[], steps: readonly Step[], removed
     const isCopy = p.copyOf !== null
     const isDeleted = isCopy ? removed.has(p.group) : isGone(p, removed, byKey)
     const isMoved = !isCopy && !isDeleted && moved.has(p.group)
-    const isHere = last !== undefined && p.at !== null && p.step === last.id
+    const at = p.at
+    const isHere = last !== undefined && at !== null && p.step !== null && steps.every(s => s.id <= (p.step ?? 0) || s.cacheRead >= at.end)
     const note =
       p.zone === 'system'
         ? 'inside tools + system prompt (position not measured)'
@@ -469,8 +473,8 @@ export function layout(pieces: readonly Piece[], steps: readonly Step[], removed
       isActionable: true,
     }
   })
-  const at = (r: Row) => r.start ?? r.was?.start ?? -1
-  rows.sort((a, b) => at(a) - at(b))
+  const startOf = (r: Row) => r.start ?? r.was?.start ?? -1
+  rows.sort((a, b) => startOf(a) - startOf(b))
 
   return { rows, total: last === undefined ? null : last.total }
 }
