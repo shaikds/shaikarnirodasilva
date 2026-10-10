@@ -79,12 +79,12 @@ function engine(on: On) {
   on('fs.exists', () => ({ value: world.isDebug }))
   on('fs.list', ($, e) => {
     const dir = String(e.path ?? '/repo').replace(/\/$/, '')
-    const names = new Map<string, 'file' | 'directory'>()
+    const names = new Map<string, 'file' | 'dir'>()
     for (const p of Object.keys(world.disk)) {
       if (!p.startsWith(`${dir}/`)) continue
       const rest = p.slice(dir.length + 1)
       const [first] = rest.split('/')
-      names.set(first ?? rest, rest.includes('/') ? 'directory' : 'file')
+      names.set(first ?? rest, rest.includes('/') ? 'dir' : 'file')
     }
 
     return { value: [...names].map(([name, kind]) => ({ name, kind, size: 1, mtimeMs: 0, isLink: false })) } as never
