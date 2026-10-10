@@ -414,23 +414,18 @@ async function act($: Engine, row: Row): Promise<string> {
       : row.isDeleted
         ? [move1, 'Back']
         : [remove1, move1, 'Back']
-  const help = isSkill
-    ? '🗑 stops its later uses (the text already sent stays); 🔄 sends a copy with your next message.'
-    : row.isCopy || row.isMoved
-      ? '🗑 takes it out of the prompt altogether.'
-      : '🗑 takes it out from your next message on; 🔄 moves it to ride at the end.'
-  const choice = await ask($, `${row.label}: ${describe(row)}. ${help}`, 'Piece', choices)
+  const choice = await ask($, cardLabel(row) + (row.tokens === null ? '' : ` · ${int(row.tokens)} tok`), 'Piece', choices)
   if (choice === remove1 || choice === '🗑 Delete') {
-    const confirm = await ask($, `${isSkill ? 'Stop later uses of' : 'Delete'} ${row.label} (${describe(row)})?`, 'Confirm', [isSkill ? 'Yes, stop them' : 'Yes, delete', 'No'])
+    const confirm = await ask($, `${isSkill ? 'Stop later uses of' : 'Delete'} ${row.label}?`, 'Confirm', [isSkill ? 'Yes, stop them' : 'Yes, delete', 'No'])
     if (confirm === null || confirm === 'No') return ''
     await remove($, row.group)
 
-    return isSkill ? `Later uses of ${row.label} stopped; its text already sent stays. ` : `Deleted ${row.label}: it is taken out of the prompt. `
+    return `${isSkill ? 'Stopped' : 'Deleted'} ${row.label}. `
   }
   if (choice === move1) {
     const isMoved = await moveToEnd($, row)
 
-    return isMoved ? `${row.label} will ride at the end. ` : `${row.label}: its text is not kept, so it can't be re-injected. `
+    return isMoved ? `${row.label} moved to the end. ` : `${row.label}: can't be re-injected. `
   }
 
   return ''
