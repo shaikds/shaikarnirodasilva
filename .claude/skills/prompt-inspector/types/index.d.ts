@@ -19,6 +19,8 @@ export type Position = {
   offset: number
   /** Its own block's text key (in `texts`). */
   key: string
+  /** It is its whole block, as sent: Claude Code sends some reminders reworded, found by their opening. */
+  isWholeBlock?: boolean
 }
 
 /** One injected piece of the prompt, and where it is. */

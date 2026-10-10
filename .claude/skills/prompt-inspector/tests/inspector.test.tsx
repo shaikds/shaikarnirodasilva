@@ -412,6 +412,17 @@ describe('plugin', () => {
     expect(world.most).toBeLessThanOrEqual(8)
   })
 
+  test('a reminder Claude Code sends reworded is found by its opening and placed as its whole block, as sent', async ($, on) => {
+    const world = engine(on)
+    await firstMessage($, world)
+    const note = { type: 'session_note', text: 'Remember to keep every answer short and friendly, always.', origin: { kind: 'engine' } } as const
+    const sent = wrap('Remember to keep every answer short and friendly, always!')
+    await $.turn.start({ text: 'Hi', turnId: 't2' })
+    await $.prompt.attachment(note)
+    await request($, world, ['Hi', sent])
+    expect(await everyLabel($, world, 'all')).toContain(`session note: Remember to keep every an… · ${range(where(world, sent))}`)
+  })
+
   test('the same reminder arriving with two messages is two pieces, each at its own place', async ($, on) => {
     const world = engine(on)
     await firstMessage($, world)

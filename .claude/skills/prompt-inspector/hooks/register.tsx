@@ -13,6 +13,7 @@ import {
   exactSteps,
   filterListing,
   flatKeys,
+  headOf,
   int,
   keys,
   layout,
@@ -218,13 +219,13 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   const patch = (p: Piece, more: Partial<Piece>) => patches.set(p.key, { ...(patches.get(p.key) ?? {}), ...more })
 
   // 1. Sizes, and a place for each piece waiting in the request that first carried it.
-  const toPlace: { p: Piece; text: string; s: Step; block: number; offset: number; after: string[]; suffix: string; own: string }[] = []
+  const toPlace: { p: Piece; text: string; s: Step; block: number; offset: number; after: string[]; suffix: string; own: string; isWholeBlock: boolean }[] = []
   const need: string[] = []
   for (const p of wanted) {
     const text = texts[p.hash]
     if (text === undefined) continue
     if (p.tokens === null) need.push(text)
-    const isRetry = p.lost?.startsWith('counting failed') ?? false
+    const isRetry = (p.lost?.startsWith('counting failed') ?? false) || (p.lost?.startsWith('sent outside') ?? false)
     if (p.zone === 'system' || p.step === null || p.at !== null || p.was !== null || (p.lost !== null && !isRetry)) continue
     if (isRetry) patch(p, { lost: null })
     const s = stepById.get(p.step)
@@ -237,23 +238,22 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
       continue
     }
     const blocks = s.tail.map(k => (k === '-' ? null : (texts[k] ?? null)))
-    const at = locate(
-      blocks.map(b => b ?? ''),
-      text,
-    )
+    const plain = blocks.map(b => b ?? '')
+    const head = p.parent === null ? headOf(text) : null
+    const found = locate(plain, text)
+    // Sent reworded (Claude Code rewrites some reminders): the block its opening is in, whole.
+    const wholeAt = found === null && head !== null ? plain.findIndex(b => b.includes(head)) : -1
+    const at = found ?? (wholeAt >= 0 ? { block: wholeAt, offset: 0 } : null)
     if (at === null || blocks.slice(at.block + 1).some(b => b === null)) {
-      patch(p, { lost: at === null ? 'not found in its request' : 'a block after it is not text' })
+      patch(p, { lost: at === null ? 'not found in its request as sent' : 'a block after it is not text' })
       continue
     }
-    const { after, suffix } = textsToCount(
-      blocks.map(b => b ?? ''),
-      at,
-      text,
-    )
     const own = blocks[at.block] ?? ''
+    const placed = found === null ? own : text
+    const { after, suffix } = textsToCount(plain, at, placed)
     // Only texts that run to the block's end are counted: a text's trailing whitespace is dropped when it is counted alone.
-    need.push(...after, suffix, text + suffix)
-    toPlace.push({ p, text, s, block: s.blocks - s.tail.length + at.block, offset: at.offset, after, suffix, own })
+    need.push(...after, suffix, placed + suffix)
+    toPlace.push({ p, text: placed, s, block: s.blocks - s.tail.length + at.block, offset: at.offset, after, suffix, own, isWholeBlock: found === null })
   }
   let count = await countAll($, model, need)
   for (const p of wanted) {
@@ -271,7 +271,8 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
     // Its block ends where the blocks after it begin; it starts where the text from it to its block's end begins.
     const blockEnd = x.s.end - afterTokens
     const range = { start: blockEnd - toEnd, end: blockEnd - suffixTokens }
-    patch(x.p, { tokens: range.end - range.start, at: { ...range, block: x.block, offset: x.offset, key: x.s.tail[x.block - (x.s.blocks - x.s.tail.length)] ?? '' } })
+    const key = x.s.tail[x.block - (x.s.blocks - x.s.tail.length)] ?? ''
+    patch(x.p, { tokens: range.end - range.start, at: { ...range, block: x.block, offset: x.offset, key, ...(x.isWholeBlock ? { isWholeBlock: true } : {}) } })
   }
 
   // 2. Carry each placed piece to the last request, and where the first message begins.
@@ -394,9 +395,9 @@ async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]
   const { rows, total } = layout(await read($, injectionsAtom), steps, new Set(await read($, removedAtom)), new Set(Object.keys(await read($, movedAtom))))
   if (scope === 'yours') return { rows: rows.filter(r => r.isYours), total }
   const start = await read($, promptStartAtom)
-  const last = steps[steps.length - 1]
+  const isProven = start !== null && steps.every(s => s.id <= start.step || s.cacheRead >= start.at)
 
-  return { rows: withFillers(rows, total, start !== null && last !== undefined && start.step === last.id ? start.at : null), total }
+  return { rows: withFillers(rows, total, isProven && start !== null ? start.at : null), total }
 }
 
 /** The card for one piece: 🗑 (with a confirmation) or 🔄; answers what to say on the list card. */
@@ -440,7 +441,13 @@ async function inspect($: Engine, scope: 'yours' | 'all'): Promise<string> {
   await measure($, scope)
   let page = 0
   let said = ''
+  let measuredAt = (await read($, requestsAtom)).length
   for (let round = 0; round < 200; round++) {
+    const seen = (await read($, requestsAtom)).length
+    if (seen !== measuredAt) {
+      await measure($, scope)
+      measuredAt = seen
+    }
     const { rows, total } = await rowsFor($, scope)
     const pages = Math.max(1, Math.ceil(rows.length / PAGE))
     page = page % pages
@@ -586,16 +593,8 @@ async function report($: Engine): Promise<Record<string, unknown>> {
   const yours = await rowsFor($, 'yours')
   const all = await rowsFor($, 'all')
 
-  // How text edges count: whether a line break at a counted text's start or end is kept.
-  const raw = async (text: string) => usageTotal((await $.model.complete({ model, prompt: [{ text: '.' }, { text }], maxTokens: 1 })).usage)
-  const edgeTexts = ['abc', 'abc\n', '\nabc', 'abc\n\n', 'abc\ndef', '\ndef', '|\nabc|', '|abc|', '||', 'abc ', ' abc']
-  const edges: Record<string, number> = {}
-  for (const t of edgeTexts) edges[JSON.stringify(t)] = await raw(t)
-  edges['"."alone'] = usageTotal((await $.model.complete({ model, prompt: '.', maxTokens: 1 })).usage)
-
   return {
     selfTest: test,
-    edges,
     boundaries: await boundaries($, model),
     promptStart: await read($, promptStartAtom),
     requests: steps.slice(-8).map(({ tail, change, ...step }) => ({
@@ -774,9 +773,10 @@ export const register: Register = on => {
       list.map(p => {
         if (p.step === null && waiting.has(p.key)) {
           const text = texts[p.hash] ?? ''
-          if (text !== '' && tailNow.some(t => t.includes(text))) return { ...p, step: id, isEarlier: false }
-          // Not in the messages: sent before the inspector started, or sent as a system turn, whose place the API does not report.
-          return isJoinedLate && before === undefined ? { ...p, isEarlier: true } : { ...p, step: id, lost: 'sent outside the messages (a system turn); the API reports no place for it' }
+          const head = p.parent === null ? headOf(text) : null
+          if (text !== '' && tailNow.some(t => t.includes(text) || (head !== null && t.includes(head)))) return { ...p, step: id, isEarlier: false }
+          // Not in this request's last message: sent before the inspector started, or not found as sent.
+          return isJoinedLate && before === undefined ? { ...p, isEarlier: true } : { ...p, step: id, lost: 'not found in its request as sent' }
         }
         // The cache proves everything up to its end unchanged: the same place in this request.
         if (p.at !== null && p.step === prior && usage.cache_read_input_tokens >= p.at.end) return { ...p, step: id }

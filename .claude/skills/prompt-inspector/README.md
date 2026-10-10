@@ -39,6 +39,10 @@ context.
 - From then on a position is carried to each new request only by proof: the cache read proves
   everything before it unchanged; or, after a change (your 🗑 or 🔄), the two requests are compared
   block by block and every block that changed before it is counted whole, as sent.
+- Counts only ever cover text that runs to the end of its block: a text counted alone loses its
+  trailing whitespace, so a piece's start is taken from the piece with the rest of its block.
+- Claude Code sends some of its own reminders reworded; those are found by their opening and placed
+  as the whole block they were sent in.
 - What can't be proven says `not measured` and why (compaction, a block that isn't text, text sent
   before the inspector started), never a guess. Sizes are always exact. System-prompt sections show
   their size; their position inside tools + system prompt is not reported by the API.
