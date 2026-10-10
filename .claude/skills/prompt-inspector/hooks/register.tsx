@@ -52,6 +52,12 @@ const PERSON_WORDS = new Set(['queued_command'])
 /** The blocks of the last main request, to tell what the next one changed (kept by this module only). */
 let previous: { keys: string[]; system: SystemSnapshot | null } | null = null
 
+/** The session began before this module was loaded: what came before its first request is not placed. */
+let isJoinedLate = false
+
+/** The last counting failures, for debug mode's report. */
+let countErrors: string[] = []
+
 type Fields = Pick<Piece, 'key' | 'kind' | 'zone' | 'label'> & Partial<Piece>
 
 function piece(fields: Fields, text: string, message: number): Piece {
@@ -130,6 +136,8 @@ const usageTotal = (u: ModelUsage) => u.input_tokens + u.cache_read_input_tokens
  */
 async function tokensOf($: Engine, model: string, text: string): Promise<number | null> {
   if (text.length === 0) return 0
+  // The API refuses a block of whitespace alone: such a text is never counted on its own.
+  if (text.trim() === '') return null
   const cacheKey = `n:${model}:${textKey(text)}`
   try {
     const cached = await $.store.get(cacheKey)
@@ -137,16 +145,28 @@ async function tokensOf($: Engine, model: string, text: string): Promise<number 
     const stored = await $.store.get(`base:${model}`)
     let base = typeof stored === 'number' ? stored : 0
     if (base <= 0) {
-      base = usageTotal((await $.model.complete({ model, prompt: '.', maxTokens: 1 })).usage)
-      if (base <= 0) return null
+      const one = await $.model.complete({ model, prompt: '.', maxTokens: 1 })
+      base = usageTotal(one.usage)
+      if (base <= 0) {
+        countErrors = [...countErrors, `base: ${one.isAnswered ? 'no usage' : `${one.reason} ${'status' in one ? String(one.status) : ''}`}`].slice(-10)
+
+        return null
+      }
       await $.store.set(`base:${model}`, base)
     }
-    const total = usageTotal((await $.model.complete({ model, prompt: [{ text: '.' }, { text }], maxTokens: 1 })).usage)
-    if (total <= 0) return null
+    const counted = await $.model.complete({ model, prompt: [{ text: '.' }, { text }], maxTokens: 1 })
+    const total = usageTotal(counted.usage)
+    if (total <= 0) {
+      countErrors = [...countErrors, `${text.length} chars: ${counted.isAnswered ? 'no usage' : `${counted.reason} ${'status' in counted ? String(counted.status) : ''}`}`].slice(-10)
+
+      return null
+    }
     await $.store.set(cacheKey, total - base)
 
     return total - base
-  } catch {
+  } catch (err) {
+    countErrors = [...countErrors, `${text.length} chars: ${err instanceof Error ? err.message : String(err)}`].slice(-10)
+
     return null
   }
 }
@@ -166,6 +186,8 @@ async function countAll($: Engine, model: string, texts: readonly string[]): Pro
     for (let text = rest[next++]; text !== undefined; text = rest[next++]) counts.set(textKey(text), await tokensOf($, model, text))
   }
   await Promise.all(Array.from({ length: Math.min(PARALLEL, rest.length) }, worker))
+  // A failure may be the API being busy: each one is tried once more, alone.
+  for (const text of unique) if (counts.get(textKey(text)) === null && text.trim() !== '') counts.set(textKey(text), await tokensOf($, model, text))
 
   return text => (text.length === 0 ? 0 : (counts.get(textKey(text)) ?? null))
 }
@@ -197,13 +219,15 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   const patch = (p: Piece, more: Partial<Piece>) => patches.set(p.key, { ...(patches.get(p.key) ?? {}), ...more })
 
   // 1. Sizes, and a place for each piece waiting in the request that first carried it.
-  const toPlace: { p: Piece; text: string; s: Step; block: number; offset: number; after: string[]; suffix: string }[] = []
+  const toPlace: { p: Piece; text: string; s: Step; block: number; offset: number; after: string[]; suffix: string; own: string }[] = []
   const need: string[] = []
   for (const p of wanted) {
     const text = texts[p.hash]
     if (text === undefined) continue
     if (p.tokens === null) need.push(text)
-    if (p.zone === 'system' || p.step === null || p.at !== null || p.was !== null || p.lost !== null) continue
+    const isRetry = p.lost?.startsWith('counting failed') ?? false
+    if (p.zone === 'system' || p.step === null || p.at !== null || p.was !== null || (p.lost !== null && !isRetry)) continue
+    if (isRetry) patch(p, { lost: null })
     const s = stepById.get(p.step)
     if (s === undefined) {
       patch(p, { lost: 'its request was not kept' })
@@ -227,8 +251,11 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
       at,
       text,
     )
-    need.push(...after, suffix)
-    toPlace.push({ p, text, s, block: s.blocks - s.tail.length + at.block, offset: at.offset, after, suffix })
+    const own = blocks[at.block] ?? ''
+    // The rest of its block can't be counted alone when it is whitespace: count the block and what precedes the piece.
+    const isBlank = suffix !== '' && suffix.trim() === ''
+    need.push(...after, ...(isBlank ? [own, own.slice(0, at.offset)] : [suffix]))
+    toPlace.push({ p, text, s, block: s.blocks - s.tail.length + at.block, offset: at.offset, after, suffix, own })
   }
   let count = await countAll($, model, need)
   for (const p of wanted) {
@@ -238,9 +265,17 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   for (const x of toPlace) {
     const tokens = x.p.tokens ?? count(x.text)
     const afterTokens = sumOf(count, x.after)
-    const suffixTokens = count(x.suffix)
-    if (tokens === null || afterTokens === null || suffixTokens === null) continue
-    const range = rangeFromEnd(x.s.end, afterTokens, suffixTokens, tokens)
+    const isBlank = x.suffix !== '' && x.suffix.trim() === ''
+    const ownTokens = isBlank ? count(x.own) : 0
+    const prefixTokens = isBlank ? count(x.own.slice(0, x.offset)) : 0
+    const suffixTokens = isBlank ? null : count(x.suffix)
+    if (tokens === null || afterTokens === null || ownTokens === null || prefixTokens === null || (!isBlank && suffixTokens === null)) {
+      patch(x.p, { lost: `counting failed${countErrors.length > 0 ? ` (${countErrors[countErrors.length - 1]})` : ''}; Refresh tries again` })
+      continue
+    }
+    const range = isBlank
+      ? (start => ({ start, end: start + tokens }))(x.s.end - afterTokens - ownTokens + prefixTokens)
+      : rangeFromEnd(x.s.end, afterTokens, suffixTokens ?? 0, tokens)
     patch(x.p, { tokens, at: { ...range, block: x.block, offset: x.offset, key: x.s.tail[x.block - (x.s.blocks - x.s.tail.length)] ?? '' } })
   }
 
@@ -567,6 +602,7 @@ async function report($: Engine): Promise<Record<string, unknown>> {
       tailBlocks: tail.length,
       change: change.kind === 'unknown' ? 'unknown' : { blocks: change.blocks.length, brokenAt: change.brokenAt, system: typeof change.system === 'string' ? change.system : 'changed' },
     })),
+    countErrors,
     yours: yours.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
     all: all.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
   }
@@ -629,6 +665,11 @@ export const register: Register = on => {
       immediate: true,
     })
     previous = null
+    try {
+      isJoinedLate = (await $.session.messages()).length > 0 && (await read($, requestsAtom)).length === 0
+    } catch {
+      isJoinedLate = false
+    }
     // Debug mode only: a tool that returns the report, so a session can check the inspector mid-turn.
     if (await isDebug($)) {
       await $.tool.register({
@@ -692,6 +733,8 @@ export const register: Register = on => {
       if (fresh.length > 0) await update($, injectionsAtom, list => [...list, ...fresh])
     }
 
+    // Only what waited before this request was sent: a skill used while the answer streams belongs to the next one.
+    const waiting = new Set((await read($, injectionsAtom)).filter(p => p.step === null && p.zone !== 'system').map(p => p.key))
     const result = yield* next(e)
     const usage = result.usage
     previous = { keys: flat.keys, system }
@@ -706,7 +749,8 @@ export const register: Register = on => {
         id,
         message,
         index: e.index,
-        messageCount: e.messageCount,
+        // The API messages it carried (the engine's own count includes rows the API never sees).
+        messageCount: api.length,
         total: usageTotal(usage),
         end,
         cacheRead: usage.cache_read_input_tokens,
@@ -726,11 +770,11 @@ export const register: Register = on => {
     const prior = before?.id
     await update($, injectionsAtom, list =>
       list.map(p => {
-        if (p.step === null && p.zone !== 'system') {
+        if (p.step === null && waiting.has(p.key)) {
           const text = texts[p.hash] ?? ''
-          const isHere = text !== '' && tailNow.some(t => t.includes(text))
-
-          return isHere ? { ...p, step: id, isEarlier: false } : p.isEarlier ? p : { ...p, isEarlier: true }
+          if (text !== '' && tailNow.some(t => t.includes(text))) return { ...p, step: id, isEarlier: false }
+          // Not in the messages: sent before the inspector started, or sent as a system turn, whose place the API does not report.
+          return isJoinedLate && before === undefined ? { ...p, isEarlier: true } : { ...p, step: id, lost: 'sent outside the messages (a system turn); the API reports no place for it' }
         }
         // The cache proves everything up to its end unchanged: the same place in this request.
         if (p.at !== null && p.step === prior && usage.cache_read_input_tokens >= p.at.end) return { ...p, step: id }
