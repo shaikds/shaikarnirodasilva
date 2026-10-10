@@ -394,7 +394,13 @@ async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]
   const steps = await read($, requestsAtom)
   const { rows, total } = layout(await read($, injectionsAtom), steps, new Set(await read($, removedAtom)), new Set(Object.keys(await read($, movedAtom))))
   // Yours: only what is in the context now; each at its exact place, or says why not. What has not been sent yet is not listed.
-  if (scope === 'yours') return { rows: rows.filter(r => r.isYours && ((r.start !== null && r.end !== null) || (r.was === null && r.note !== null && !r.note.startsWith('arrives')))), total }
+  if (scope === 'yours') {
+    // A file already listed at its exact place is not listed again by a copy that could not be placed.
+    const placed = new Set(rows.filter(r => r.isYours && r.start !== null).map(r => r.label))
+    const shown = rows.filter(r => r.isYours && r.kind !== 'context' && (r.start !== null || (r.was === null && r.note !== null && !r.note.startsWith('arrives') && !placed.has(r.label))))
+
+    return { rows: shown, total }
+  }
   const start = await read($, promptStartAtom)
   const isProven = start !== null && steps.every(s => s.id <= start.step || s.cacheRead >= start.at)
 
