@@ -15,6 +15,7 @@ import {
   isInContext,
   blockOf,
   flatKeys,
+  hash,
   type ApiBlock,
   int,
   keys,
@@ -465,7 +466,7 @@ async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]
     const placed = new Set(rows.filter(r => r.isYours && r.start !== null).map(r => r.label))
     const shown = rows.filter(r => r.isYours && r.kind !== 'context' && (r.start !== null || (r.was === null && r.note !== null && !r.note.startsWith('arrives') && !placed.has(r.label))))
 
-    const extra = await filesInContext($, new Set(rows.filter(x => x.isYours).map(x => x.label)))
+    const extra = await filesInContext($, new Set(shown.map(x => x.label)))
 
     return { rows: [...shown, ...extra], total }
   }
@@ -667,6 +668,96 @@ function summarise(messages: readonly { role: string; content: readonly ApiBlock
   }))
 }
 
+/** Experiment: the API itself, through the session's credential. */
+async function apiCall($: Engine, path: string, body: unknown): Promise<{ status: number; json: Record<string, any> | null; text: string }> {
+  // An engine without `authorize` is asked without a credential (the API refuses it, and nothing is placed).
+  let auth: { handle: string | undefined; kind: 'bearer' | 'api-key' } | null
+  try {
+    auth = await $.session.authorize()
+  } catch {
+    auth = { handle: undefined, kind: 'api-key' }
+  }
+  if (auth === null) return { status: 0, json: null, text: 'no credential' }
+  const headers: Record<string, string> = { 'content-type': 'application/json', 'anthropic-version': '2023-06-01' }
+  if (auth.kind === 'bearer') headers['anthropic-beta'] = 'oauth-2025-04-20'
+  const r = await $.http.fetch(`https://api.anthropic.com${path}`, { method: 'POST', headers, body: JSON.stringify(body), auth: auth.handle })
+  let json: Record<string, any> | null = null
+  try {
+    json = JSON.parse(r.text)
+  } catch {
+    json = null
+  }
+
+  return { status: r.status, json, text: r.text.slice(0, 300) }
+}
+
+/**
+ * Tokens of a tool result's content as the API counts it (the same message shape
+ * as the request, so the closing and framing are the same), through the session's
+ * own credential. The count is cached. Null when the API can't be reached.
+ */
+async function toolResultTokens($: Engine, model: string, content: string): Promise<number | null> {
+  const key = `tr:${model}:${hash(content)}`
+  const stored = await $.store.get(key)
+  if (typeof stored === 'number') return stored
+  const messages = [
+    { role: 'user', content: [{ type: 'text', text: '.' }] },
+    { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_01', name: 'Bash', input: { command: 'ls' } }] },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_01', content }] },
+  ]
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await apiCall($, '/v1/messages/count_tokens', { model, messages })
+      const n = r.json?.input_tokens
+      if (typeof n === 'number') {
+        await $.store.set(key, n)
+
+        return n
+      }
+    } catch {
+      // Tried once more, then not measured.
+    }
+  }
+
+  return null
+}
+
+/**
+ * Where a reminder lies inside the last tool result of a request, exactly: its
+ * block ends where its content ends (the API puts nothing after the content),
+ * the content's tokens after it are the whole content's minus those up to it,
+ * and each cut is proven to fall between two tokens (the text before it plus
+ * the text after it, counted alone, equal the whole). The range takes in the
+ * reminder's tags and the blank lines before it. Null when any of it fails.
+ */
+async function placeInResult($: Engine, model: string, content: string, text: string, blockEnd: number): Promise<{ start: number; end: number } | string> {
+  const at = content.indexOf(text)
+  if (at < 0 || text.trim() === '') return 'text not in content'
+  let from = at
+  let to = at + text.length
+  const open = content.lastIndexOf('<system-reminder>', at)
+  if (open >= 0 && at - open <= 24) from = open
+  const closing = '</system-reminder>'
+  const close = content.indexOf(closing, to)
+  if (close >= 0 && close - to <= 8) to = close + closing.length
+  from = content.slice(0, from).trimEnd().length
+  if (from === 0) return 'nothing before it'
+  const [whole, before, upTo, none, afterBefore, afterTo] = await Promise.all([
+    toolResultTokens($, model, content),
+    toolResultTokens($, model, content.slice(0, from)),
+    toolResultTokens($, model, content.slice(0, to)),
+    toolResultTokens($, model, '.'),
+    toolResultTokens($, model, content.slice(from)),
+    to < content.length ? toolResultTokens($, model, content.slice(to)) : Promise.resolve(null),
+  ])
+  if (whole === null || before === null || upTo === null || none === null || afterBefore === null) return `API count failed ${[whole, before, upTo, none, afterBefore].join('/')}`
+  // Between two tokens: the parts counted alone add up to the whole.
+  if (before + (afterBefore - none + 1) !== whole) return `cut before not between tokens ${before}+${afterBefore}-${none}+1!=${whole}`
+  if (to < content.length && (afterTo === null || upTo + (afterTo - none + 1) !== whole)) return `cut after not between tokens ${upTo}+${afterTo}-${none}+1!=${whole}`
+
+  return { start: blockEnd - (whole - before), end: blockEnd - (whole - upTo) }
+}
+
 async function report($: Engine): Promise<Record<string, unknown>> {
   await measure($, 'all')
   const steps = await read($, requestsAtom)
@@ -691,7 +782,7 @@ async function report($: Engine): Promise<Record<string, unknown>> {
     countErrors,
     lastMessages: summarise(((await $.session.messages({ as: 'api' })) as readonly { role: string; content: readonly ApiBlock[] }[]).slice(-3)),
     yours: yours.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
-    all: all.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
+    all: all.rows.slice(0, (await $.fs.exists(`${await $.session.root()}/.claude/prompt-inspector.brief`)) ? 3 : undefined).map(r => `${cardLabel(r)}  [${describe(r)}]`),
   }
 }
 
@@ -852,21 +943,26 @@ export const register: Register = on => {
 
       return [...steps, step]
     })
+    // Some reminders are joined into the last message only as it is sent: read it again, now.
+    const sentLast = ((await $.session.messages({ as: 'api' })) as readonly { role: string; content: readonly ApiBlock[] }[])[api.length - 1] ?? api[api.length - 1]
     // Waiting pieces this request carries in its last message are placed in it; the others were sent before (or elsewhere).
     const tailNow = tail.map(k => texts[k] ?? '')
     const prior = before?.id
     await update($, injectionsAtom, list =>
       list.map(p => {
-        if (p.step === null && waiting.has(p.key)) {
+        if (p.step === null) {
           const text = texts[p.hash] ?? ''
+          const escaped = JSON.stringify(text).slice(1, -1)
+          const isInTool = text !== '' && (sentLast?.content ?? []).some(b => b.type !== 'text' && JSON.stringify(b).includes(escaped))
+          // Recorded while this request was being built (after the snapshot): it belongs here only if this request carries it.
+          if (!waiting.has(p.key)) return isInTool || (text !== '' && tailNow.some(t => t.includes(text))) ? { ...p, step: id, isEarlier: false, lost: isInTool && !tailNow.some(t => t.includes(text)) ? 'sent inside a tool result' : null } : p
           if (text !== '' && (tailNow.some(t => t.includes(text)) || (p.parent === null && blockOf(tailNow, text) >= 0))) return { ...p, step: id, isEarlier: false }
           // Not in this request's last message: sent before the inspector started, or not found as sent.
           if (isJoinedLate && before === undefined) return { ...p, isEarlier: true }
           // Claude Code joins some reminders (a nested CLAUDE.md after a file read) into the tool result: inside a block that has no text parts.
-          const escaped = JSON.stringify(text).slice(1, -1)
-          const isInTool = (api[api.length - 1]?.content ?? []).some(b => b.type !== 'text' && JSON.stringify(b).includes(escaped))
 
-          return { ...p, step: id, lost: isInTool ? 'sent inside a tool result' : 'not found in its request as sent' }
+          // Maybe it was announced after the request that carried it: looked for again, in the messages, below.
+          return isInTool ? { ...p, step: id, lost: 'sent inside a tool result' } : p
         }
         // The cache proves everything up to its end unchanged: the same place in this request.
         if (p.at !== null && p.step === prior && usage.cache_read_input_tokens >= p.at.end) return { ...p, step: id }
@@ -874,6 +970,74 @@ export const register: Register = on => {
         return p
       }),
     )
+    // A reminder joined into the last tool result: its place from the API's own counts.
+    const lastApi = sentLast
+    const lastApiBlock = lastApi?.content[lastApi.content.length - 1]
+    if (lastApiBlock?.type === 'tool_result' && usage.input_tokens === 2) {
+      const raw = lastApiBlock.content
+      const content = typeof raw === 'string' ? raw : Array.isArray(raw) && raw.every(c => (c as ApiBlock).type === 'text') ? (raw as ApiBlock[]).map(c => String(c.text)).join('') : null
+      const inTool = (await read($, injectionsAtom)).filter(p => p.step === id && p.lost === 'sent inside a tool result')
+      if (content !== null && inTool.length > 0) {
+        const placed = await Promise.all(inTool.map(async p => { const r = await placeInResult($, usage.model, content, texts[p.hash] ?? '', end); return { key: p.key, at: typeof r === 'string' ? null : r, why: typeof r === 'string' ? r : '' } }))
+        await update($, injectionsAtom, list =>
+          list.map(p => {
+            const hit = placed.find(x => x.key === p.key)
+            if (hit === undefined) return p
+            if (hit.at === null) return { ...p, lost: `sent inside a tool result: ${hit.why}` }
+            const block = flat.keys.length - 1
+
+            return { ...p, lost: null, at: { start: hit.at.start, end: hit.at.end, block, offset: 0, key: 'tool:result', isWholeBlock: false }, tokens: hit.at.end - hit.at.start }
+          }),
+        )
+      }
+    }
+    // Claude Code can announce a reminder only after the request that carries it was sent: find, in the messages, the one
+    // that holds it, and the request whose last message that was.
+    const lateWaiting = (await read($, injectionsAtom)).filter(p => p.step === null && p.zone !== 'system' && !p.isEarlier)
+    if (lateWaiting.length > 0) {
+      const apiNow = (await $.session.messages({ as: 'api' })) as readonly { role: string; content: readonly ApiBlock[] }[]
+      const known = await read($, requestsAtom)
+      const freshTexts = await read($, textsAtom)
+      const found = await Promise.all(
+        lateWaiting.map(async p => {
+          const text = freshTexts[p.hash] ?? ''
+          if (text === '') return null
+          const escaped = JSON.stringify(text).slice(1, -1)
+          for (let m = apiNow.length - 1; m >= Math.max(0, apiNow.length - 8); m--) {
+            const message = apiNow[m]
+            if (message === undefined || message.role !== 'user') continue
+            const index = message.content.findIndex(b => b.type !== 'text' && JSON.stringify(b).includes(escaped))
+            if (index < 0) continue
+            const carrying = known.find(k => k.messageCount === m + 1)
+            if (carrying === undefined) return { key: p.key, step: null as number | null, at: null }
+            const block = message.content[index]
+            const raw = block?.content
+            const content = typeof raw === 'string' ? raw : Array.isArray(raw) && raw.every(c => (c as ApiBlock).type === 'text') ? (raw as ApiBlock[]).map(c => String(c.text)).join('') : null
+            const isLast = index === message.content.length - 1 && block?.type === 'tool_result'
+            const placed = isLast && content !== null && carrying.uncached === 2 ? await placeInResult($, carrying.model, content, text, carrying.end) : 'not the last block of an exact request'
+            const at = typeof placed === 'string' ? null : placed
+
+            return { key: p.key, step: carrying.id, at, why: typeof placed === 'string' ? placed : '', block: index }
+          }
+
+          return null
+        }),
+      )
+      // What was waiting before this request and is in no message: not found as sent.
+      const missing = new Set(lateWaiting.filter(p => waiting.has(p.key) && found.find(f => f !== null && f.key === p.key) === undefined).map(p => p.key))
+      if (missing.size > 0) await update($, injectionsAtom, list => list.map(p => (missing.has(p.key) ? { ...p, step: id, lost: 'not found in its request as sent' } : p)))
+      if (found.some(f => f !== null && f.step !== null)) {
+        await update($, injectionsAtom, list =>
+          list.map(p => {
+            const hit = found.find(f => f !== null && f.key === p.key)
+            if (hit === null || hit === undefined || hit.step === null) return p
+            if (hit.at === null) return { ...p, step: hit.step, isEarlier: false, lost: `sent inside a tool result: ${(hit as { why?: string }).why ?? ''}` }
+
+            return { ...p, step: hit.step, isEarlier: false, lost: null, at: { start: hit.at.start, end: hit.at.end, block: 0, offset: 0, key: 'tool:result', isWholeBlock: false }, tokens: hit.at.end - hit.at.start }
+          }),
+        )
+      }
+    }
     const start = await read($, promptStartAtom)
     if (start !== null && start.step === prior && usage.cache_read_input_tokens >= start.at) await update($, promptStartAtom, () => ({ at: start.at, step: id }))
     await prune($)

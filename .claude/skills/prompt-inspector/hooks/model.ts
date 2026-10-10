@@ -322,6 +322,8 @@ export function carry(
       step = s.id
       continue
     }
+    // Inside a tool result: only the cache can carry it (its block has no text of its own to count again).
+    if (pos.key === 'tool:result') return { kind: 'lost', reason: LOST.broken, step }
     const change = s.change
     if (change.kind === 'unknown') return { kind: 'lost', reason: LOST.unseen, step }
     if (change.system === 'tools') return { kind: 'lost', reason: LOST.tools, step }
