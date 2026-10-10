@@ -11,6 +11,8 @@ end of the context. Then you can send the same message again and compare the ans
 | `/inspect` | Only what is in the context right now, listed as `Name [start - end]` (a count says how many more are in context but not measured; nothing waiting or planned is listed). Your pieces: your `CLAUDE.md` files, `.claude/rules` files, CLAUDE.md files picked up later from subfolders, and the skills you made (their line in the skill list, and their text each time it is used). |
 | `/inspect all` | Every injected piece, Claude Code's own included, plus unnamed lines for what lies between them (tools + system prompt, the conversation), so the ranges run without gaps from 0 to the last token. Never your own messages. |
 
+`/inspect` also lists any of your CLAUDE.md or `.claude/rules` files whose content is in the context, even when it arrived as plain tool output (for example `head` in Bash); a file not in the context is not listed. Those read `path [not measured]`.
+
 Both open a card, on any device including the phone:
 
 1. The list: two pieces per card, each with its exact range (`CLAUDE.md [76,489 - 77,102]`), then

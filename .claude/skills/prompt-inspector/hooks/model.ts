@@ -438,6 +438,19 @@ export function isGone(p: Piece, gone: ReadonlySet<string>, byKey: ReadonlyMap<s
   return parent !== undefined && isGone(parent, gone, byKey)
 }
 
+/**
+ * Whether a file's content is in the context: the share of its lines (12
+ * characters or more) that appear in `haystack` as they are. Read in pieces
+ * (head and tail) it still counts; a file with no such line never does.
+ */
+export function isInContext(text: string, haystack: string, share = 0.8): boolean {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length >= 12)
+  if (lines.length === 0) return false
+  const found = lines.filter(l => haystack.includes(JSON.stringify(l).slice(1, -1))).length
+
+  return found / lines.length >= share
+}
+
 /** One line of the inspector: a piece, or a stretch of the prompt that is no piece. */
 export type Row = {
   key: string

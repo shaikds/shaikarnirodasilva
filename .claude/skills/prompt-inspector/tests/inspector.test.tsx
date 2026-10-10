@@ -67,6 +67,8 @@ function engine(on: On) {
     tools: [] as string[],
     /** The conversation's rows before the inspector started (non-empty: it joined late). */
     history: [] as unknown[],
+    /** Files on disk by absolute path. */
+    disk: {} as Record<string, string>,
   }
   mock.clock(on)
   mock.store(on)
@@ -75,6 +77,19 @@ function engine(on: On) {
   on('session.id', () => ({ value: 's1' }))
   on('session.model', () => ({ value: 'm' }))
   on('fs.exists', () => ({ value: world.isDebug }))
+  on('fs.list', ($, e) => {
+    const dir = String(e.path ?? '/repo').replace(/\/$/, '')
+    const names = new Map<string, 'file' | 'directory'>()
+    for (const p of Object.keys(world.disk)) {
+      if (!p.startsWith(`${dir}/`)) continue
+      const rest = p.slice(dir.length + 1)
+      const [first] = rest.split('/')
+      names.set(first ?? rest, rest.includes('/') ? 'directory' : 'file')
+    }
+
+    return { value: [...names].map(([name, kind]) => ({ name, kind, size: 1, mtimeMs: 0, isLink: false })) } as never
+  })
+  on('fs.read', ($, e) => ({ value: world.disk[String(e.path)] ?? '' }) as never)
   on('session.messages', ($, e) => ({ value: e.as === 'api' ? world.api : world.history }) as never)
   on('model.complete', async ($, e) => {
     world.counted += 1
@@ -474,6 +489,20 @@ describe('plugin', () => {
     world.taps = ['src/CLAUDE.md', 'Back', 'Done']
     await inspect($)
     expect(labels(world.cards[0]).some(l => l.startsWith("src/CLAUDE.md [not measured"))).toBe(true)
+  })
+
+  test('a file of yours whose content is in the context is listed, even when it came by a command; one that is not is ignored', async ($, on) => {
+    const world = engine(on)
+    world.disk['/repo/docs/CLAUDE.md'] = '# Docs rule\nAlways link the source of every claim.\nNever invent a section number.\n'
+    world.disk['/repo/other/CLAUDE.md'] = '# Other rule\nSomething nobody has printed into the conversation.\nStill nothing here.\n'
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Read docs', turnId: 't2' })
+    world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
+    world.api.push({ role: 'user', content: [{ type: 'tool_result', text: '', content: '==> docs/CLAUDE.md <==\n# Docs rule\nAlways link the source of every claim.\nNever invent a section number.\n' } as never] })
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
+    const labels = await everyLabel($, world)
+    expect(labels).toContain('docs/CLAUDE.md [not measured]')
+    expect(labels.some(l => l.startsWith('other/CLAUDE.md'))).toBe(false)
   })
 
   test('a skill you made: its list line and its text when used; 🗑 stops later uses and the text already sent keeps its place', async ($, on) => {

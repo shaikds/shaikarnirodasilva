@@ -12,6 +12,7 @@ import {
   diffBlocks,
   exactSteps,
   filterListing,
+  isInContext,
   blockOf,
   flatKeys,
   type ApiBlock,
@@ -390,6 +391,71 @@ function uniqueLabels(rows: readonly Row[]): string[] {
   })
 }
 
+/** Your instruction files on disk: every CLAUDE.md and `.claude/rules` file under the project, and the home CLAUDE.md. */
+async function yourFiles($: Engine): Promise<string[]> {
+  const root = await $.session.root()
+  const out: string[] = []
+  const walk = async (dir: string, depth: number, isRules: boolean): Promise<void> => {
+    let entries: Awaited<ReturnType<typeof $.fs.list>> = []
+    try {
+      entries = await $.fs.list(dir)
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      const path = `${dir}/${e.name}`
+      if (e.kind === 'file' && (isRules ? e.name.endsWith('.md') : e.name === 'CLAUDE.md')) out.push(path)
+      if (e.kind !== 'directory' || depth >= 4 || e.name === 'node_modules' || e.name === '.git') continue
+      if (e.name === '.claude') await walk(`${path}/rules`, depth + 1, true)
+      else if (!e.name.startsWith('.')) await walk(path, depth + 1, isRules)
+      else if (isRules) await walk(path, depth + 1, true)
+    }
+  }
+  await walk(root, 0, false)
+  const home = /^\/(?:root|home\/[^/]+)\//.exec(root)?.[0]
+  if (home !== undefined && (await $.fs.exists(`${home}.claude/CLAUDE.md`).catch(() => false))) out.push(`${home}.claude/CLAUDE.md`)
+
+  return out
+}
+
+/** Rows for your files whose content is in the context now, wherever it came from (a read, a command's output). */
+async function filesInContext($: Engine, known: ReadonlySet<string>): Promise<Row[]> {
+  const api = await $.session.messages({ as: 'api' })
+  const haystack = JSON.stringify(api)
+  const rows: Row[] = []
+  for (const path of await yourFiles($)) {
+    const label = await shortPath($, path)
+    if (known.has(label)) continue
+    let text = ''
+    try {
+      text = (await $.fs.read(path)) as string
+    } catch {
+      continue
+    }
+    if (!isInContext(text, haystack)) continue
+    rows.push({
+      key: `file:${path}`,
+      group: `file:${path}`,
+      label,
+      kind: 'rule',
+      isYours: true,
+      start: null,
+      end: null,
+      tokens: null,
+      message: null,
+      isDeleted: false,
+      isMoved: false,
+      isCopy: false,
+      isWholeBlock: false,
+      was: null,
+      note: 'not measured',
+      isActionable: false,
+    })
+  }
+
+  return rows
+}
+
 async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]; total: number | null}> {
   const steps = await read($, requestsAtom)
   const { rows, total } = layout(await read($, injectionsAtom), steps, new Set(await read($, removedAtom)), new Set(Object.keys(await read($, movedAtom))))
@@ -399,7 +465,9 @@ async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]
     const placed = new Set(rows.filter(r => r.isYours && r.start !== null).map(r => r.label))
     const shown = rows.filter(r => r.isYours && r.kind !== 'context' && (r.start !== null || (r.was === null && r.note !== null && !r.note.startsWith('arrives') && !placed.has(r.label))))
 
-    return { rows: shown, total }
+    const extra = await filesInContext($, new Set(rows.filter(x => x.isYours).map(x => x.label)))
+
+    return { rows: [...shown, ...extra], total }
   }
   const start = await read($, promptStartAtom)
   const isProven = start !== null && steps.every(s => s.id <= start.step || s.cacheRead >= start.at)
@@ -413,7 +481,9 @@ async function act($: Engine, row: Row): Promise<string> {
   const remove1 = isSkill ? '🗑 Stop later uses' : '🗑 Delete'
   const move1 = isSkill ? '🔄 Send a copy at end' : '🔄 Re-inject at end'
   const choices =
-    row.isCopy || row.isMoved
+    row.key.startsWith('file:')
+      ? ['Back']
+      : row.isCopy || row.isMoved
       ? row.isDeleted
         ? ['Back']
         : ['🗑 Delete', 'Back']
