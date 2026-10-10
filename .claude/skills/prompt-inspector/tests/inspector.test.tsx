@@ -41,8 +41,8 @@ type Message = { role: 'user' | 'assistant'; content: { type: string; text: stri
 
 /**
  * The engine beneath the plugin. Its tokenizer counts one token per character
- * (plus a fixed 8 for every counting request) and blocks add nothing between
- * them, so a request is SYSTEM plus its texts' characters, and every exact
+ * (plus a fixed 8 for every counting request), drops a counted text's trailing
+ * whitespace as the real API does, and blocks add nothing between them, so a request is SYSTEM plus its texts' characters, and every exact
  * range is arithmetic on the strings. `world` is the conversation and what the
  * test sets for the next request.
  */
@@ -83,7 +83,9 @@ function engine(on: On) {
     world.most = Math.max(world.most, world.inFlight)
     for (let i = 0; i < 20; i++) await Promise.resolve()
     world.inFlight -= 1
-    const usage = { input_tokens: 8 + e.prompt.length, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+    // Like the real API: a text counted alone loses its trailing whitespace.
+    const blocks = e.promptBlocks ?? [{ text: e.prompt }]
+    const usage = { input_tokens: 8 + blocks.reduce((n, b) => n + b.text.trimEnd().length, 0), output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
 
     return { value: { isAnswered: true, text: '', usage } } as never
   })
