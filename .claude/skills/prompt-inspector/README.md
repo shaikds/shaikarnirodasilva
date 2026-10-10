@@ -8,20 +8,12 @@ end of the context. Then you can send the same message again and compare the ans
 
 | Command | What it shows |
 |---|---|
-<<<<<<< HEAD
-| `/inspect` | Your pieces: your `CLAUDE.md` files, `.claude/rules` files, CLAUDE.md files picked up later from subfolders, and the skills you made (their line in the skill list, and their text each time it is used). |
-=======
 | `/inspect` | Only what is in the context right now, listed as `Name [start - end]` (a count says how many more are in context but not measured; nothing waiting or planned is listed). Your pieces: your `CLAUDE.md` files, `.claude/rules` files, CLAUDE.md files picked up later from subfolders, and the skills you made (their line in the skill list, and their text each time it is used). |
->>>>>>> origin/claude/prompt-inspector
 | `/inspect all` | Every injected piece, Claude Code's own included, plus unnamed lines for what lies between them (tools + system prompt, the conversation), so the ranges run without gaps from 0 to the last token. Never your own messages. |
 
 Both open a card, on any device including the phone:
 
-<<<<<<< HEAD
-1. The list: two pieces per card, each with its exact range (`CLAUDE.md · 76,489–77,102`), then
-=======
 1. The list: two pieces per card, each with its exact range (`CLAUDE.md [76,489 - 77,102]`), then
->>>>>>> origin/claude/prompt-inspector
    **More…** (it wraps back to the first page) and **Done**. You can also type a token position
    (`58002`, `58,002` or `58.002`) to open the piece there.
 2. Tap a piece: its exact range, size and the message it came with, then:
