@@ -1,3 +1,8 @@
+---
+paths:
+  - "meow/**"
+---
+
 # Example Rule
 
 This is a sample rule used to test how long rule files are loaded and sent. Follow every section below when working in this repository.
