@@ -473,7 +473,7 @@ describe('plugin', () => {
     await request($, world, ['Now'])
     world.taps = ['src/CLAUDE.md', 'Back', 'Done']
     await inspect($)
-    expect(labels(world.cards[0]).some(l => l.startsWith('src/CLAUDE.md [sent before the inspector started'))).toBe(true)
+    expect(labels(world.cards[0]).some(l => l.startsWith("src/CLAUDE.md [not measured"))).toBe(true)
   })
 
   test('a skill you made: its list line and its text when used; 🗑 stops later uses and the text already sent keeps its place', async ($, on) => {
@@ -493,7 +493,7 @@ describe('plugin', () => {
     expect((await $.skill.prompt({ skill: 'commit', text: 'Write a conventional commit.' })).text).toBe("(prompt-inspector deleted the commit skill's instructions.)")
     await $.turn.start({ text: 'Next', turnId: 't2' })
     await request($, world, ['Next'])
-    expect(await everyLabel($, world)).toContain(`skill: commit [${range(text)}, later uses stopped]`)
+    expect(await everyLabel($, world)).toContain(`skill: commit [${range(text)}]`)
   })
 
   test('🔄 on a skill sends a copy and keeps later uses whole', async ($, on) => {
