@@ -14,6 +14,7 @@ import {
   filterListing,
   blockOf,
   flatKeys,
+  type ApiBlock,
   int,
   keys,
   layout,
@@ -389,11 +390,11 @@ function uniqueLabels(rows: readonly Row[]): string[] {
   })
 }
 
-async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]; total: number | null; unplaced?: number }> {
+async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]; total: number | null}> {
   const steps = await read($, requestsAtom)
   const { rows, total } = layout(await read($, injectionsAtom), steps, new Set(await read($, removedAtom)), new Set(Object.keys(await read($, movedAtom))))
-  // Yours: only what is in the context now, at its exact place; what is not placed yet is not listed.
-  if (scope === 'yours') return { rows: rows.filter(r => r.isYours && r.start !== null && r.end !== null), total, unplaced: rows.filter(r => r.isYours && !r.isDeleted && r.start === null && r.was === null && r.note !== null && !r.note.startsWith('arrives')).length }
+  // Yours: only what is in the context now; each at its exact place, or says why not. What has not been sent yet is not listed.
+  if (scope === 'yours') return { rows: rows.filter(r => r.isYours && ((r.start !== null && r.end !== null) || (r.was === null && r.note !== null && !r.note.startsWith('arrives')))), total }
   const start = await read($, promptStartAtom)
   const isProven = start !== null && steps.every(s => s.id <= start.step || s.cacheRead >= start.at)
 
@@ -448,7 +449,7 @@ async function inspect($: Engine, scope: 'yours' | 'all'): Promise<string> {
       await measure($, scope)
       measuredAt = seen
     }
-    const { rows, total, unplaced = 0 } = await rowsFor($, scope)
+    const { rows, total } = await rowsFor($, scope)
     const pages = Math.max(1, Math.ceil(rows.length / PAGE))
     page = page % pages
     const shown = rows.slice(page * PAGE, page * PAGE + PAGE)
@@ -456,8 +457,7 @@ async function inspect($: Engine, scope: 'yours' | 'all'): Promise<string> {
     const title = scope === 'all' ? 'Everything injected' : 'Your rules & skills'
     const size = total === null ? 'no request measured yet' : `last request ${int(total)} tokens`
     const empty = rows.length === 0 ? (scope === 'all' ? ' Nothing recorded yet.' : ' None of yours is in the context.') : ''
-    const extra = unplaced > 0 ? ` ${unplaced} more in context, position not measured.` : ''
-    const question = `${said}${title} · ${size} · ${rows.length} pieces, page ${page + 1}/${pages}.${empty}${extra} Tap one, or type a token position.`
+    const question = `${said}${title} · ${size} · ${rows.length} pieces, page ${page + 1}/${pages}.${empty} Tap one, or type a token position.`
     const choices = rows.length === 0 ? ['Refresh', DONE] : [...labels, ...(pages > 1 ? [MORE] : []), DONE]
     const answer = await ask($, question, scope === 'all' ? 'Inspect all' : 'Inspect', choices)
     said = ''
@@ -583,6 +583,19 @@ async function boundaries($: Engine, model: string): Promise<string[]> {
  * everything, runs the self-test (once per model) and the boundary check, and
  * lists the requests kept and every row of both views.
  */
+/** Debug: the shape of messages (block types, nested content parts, heads of texts). */
+function summarise(messages: readonly { role: string; content: readonly ApiBlock[] }[]): unknown[] {
+  const head = (v: unknown) => (typeof v === 'string' ? v.slice(0, 70) : v)
+  return messages.map(m => ({
+    role: m.role,
+    blocks: m.content.map(b => ({
+      type: b.type,
+      text: head(b.text),
+      parts: Array.isArray(b.content) ? (b.content as ApiBlock[]).map(c => ({ type: c.type, text: head(c.text), chars: typeof c.text === 'string' ? c.text.length : 0 })) : head(b.content),
+    })),
+  }))
+}
+
 async function report($: Engine): Promise<Record<string, unknown>> {
   await measure($, 'all')
   const steps = await read($, requestsAtom)
@@ -605,6 +618,7 @@ async function report($: Engine): Promise<Record<string, unknown>> {
       change: change.kind === 'unknown' ? 'unknown' : { blocks: change.blocks.length, brokenAt: change.brokenAt, system: typeof change.system === 'string' ? change.system : 'changed' },
     })),
     countErrors,
+    lastMessages: summarise(((await $.session.messages({ as: 'api' })) as readonly { role: string; content: readonly ApiBlock[] }[]).slice(-3)),
     yours: yours.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
     all: all.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
   }
@@ -776,7 +790,12 @@ export const register: Register = on => {
           const text = texts[p.hash] ?? ''
           if (text !== '' && (tailNow.some(t => t.includes(text)) || (p.parent === null && blockOf(tailNow, text) >= 0))) return { ...p, step: id, isEarlier: false }
           // Not in this request's last message: sent before the inspector started, or not found as sent.
-          return isJoinedLate && before === undefined ? { ...p, isEarlier: true } : { ...p, step: id, lost: 'not found in its request as sent' }
+          if (isJoinedLate && before === undefined) return { ...p, isEarlier: true }
+          // Claude Code joins some reminders (a nested CLAUDE.md after a file read) into the tool result: inside a block that has no text parts.
+          const escaped = JSON.stringify(text).slice(1, -1)
+          const isInTool = (api[api.length - 1]?.content ?? []).some(b => b.type !== 'text' && JSON.stringify(b).includes(escaped))
+
+          return { ...p, step: id, lost: isInTool ? 'sent inside a tool result' : 'not found in its request as sent' }
         }
         // The cache proves everything up to its end unchanged: the same place in this request.
         if (p.at !== null && p.step === prior && usage.cache_read_input_tokens >= p.at.end) return { ...p, step: id }

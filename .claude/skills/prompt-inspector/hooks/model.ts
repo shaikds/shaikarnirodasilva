@@ -603,7 +603,7 @@ export function cardLabel(r: Row): string {
             ? `moved${was}`
             : `${range}, being moved`
           : (range ??
-            ((r.note ?? '').startsWith('inside') ? 'in system prompt' : 'not measured'))
+            ((r.note ?? '').startsWith('inside') ? 'in system prompt' : (r.note ?? 'not measured')))
 
   return `${name} [${state}]`
 }

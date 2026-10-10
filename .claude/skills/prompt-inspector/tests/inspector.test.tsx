@@ -327,8 +327,7 @@ describe('plugin', () => {
     world.cacheRead = SYSTEM
     await $.turn.start({ text: 'Go on', turnId: 't3' })
     await request($, world, ['Go on'])
-    expect(await everyLabel($, world)).not.toContain('src/CLAUDE.md · not measured')
-    expect(world.cards[0]?.question).toContain('more in context, position not measured')
+    expect((await everyLabel($, world)).some(l => l.startsWith('src/CLAUDE.md [not measured'))).toBe(true)
     expect(world.cards[0]?.question).toContain(`last request ${int(SYSTEM + chars(world.api) + 2)} tokens`)
   })
 
@@ -339,8 +338,7 @@ describe('plugin', () => {
     await $.prompt.attachment(NESTED)
     world.uncached = 4
     await request($, world, ['Edit src/app.ts', wrap(NESTED.text)])
-    expect(await everyLabel($, world)).not.toContain('src/CLAUDE.md · not measured')
-    expect(world.cards[0]?.question).toContain('more in context, position not measured')
+    expect((await everyLabel($, world)).some(l => l.startsWith('src/CLAUDE.md [not measured'))).toBe(true)
     // The size shown is the last request's, exact even where it places nothing.
     expect(world.cards[0]?.question).toContain(`last request ${int(SYSTEM + chars(world.api) + 4)} tokens`)
   })
@@ -475,8 +473,7 @@ describe('plugin', () => {
     await request($, world, ['Now'])
     world.taps = ['src/CLAUDE.md', 'Back', 'Done']
     await inspect($)
-    expect(labels(world.cards[0])).not.toContain('src/CLAUDE.md · not measured')
-    expect(world.cards[0]?.question).toContain('more in context, position not measured')
+    expect(labels(world.cards[0]).some(l => l.startsWith('src/CLAUDE.md [sent before the inspector started'))).toBe(true)
   })
 
   test('a skill you made: its list line and its text when used; 🗑 stops later uses and the text already sent keeps its place', async ($, on) => {
