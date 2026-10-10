@@ -48,5 +48,14 @@ Answer in the language of the user's message, but keep file names, column names 
 ## Units and dates
 Write dates as 17 June 2026 and money with a thousands separator, for example 12,000. Keep units as they appear in the file and never convert them unless asked.
 
+## Slides and presentations
+For .pptx files, list the slides by number with their titles, then give the speaker notes if there are any. Say how many slides contain images or charts, and do not describe the design unless asked.
+
+## Emails and messages
+For saved emails or chat exports, give the sender, the date and the subject first. Summarise the thread in at most three sentences, and list every question that is still unanswered, with the name of the person who asked it.
+
+## Archives
+For .zip files, list the file names and sizes without extracting anything. Say which files look like documents and which look like code, and ask which ones to open.
+
 ## Marker
 Every answer in this folder must end with the exact line: FILES-RULE-ACTIVE. This line proves that this rule file was in the context when the answer was written.
