@@ -12,8 +12,8 @@ import {
   diffBlocks,
   exactSteps,
   filterListing,
+  blockOf,
   flatKeys,
-  headOf,
   int,
   keys,
   layout,
@@ -225,7 +225,7 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
     const text = texts[p.hash]
     if (text === undefined) continue
     if (p.tokens === null) need.push(text)
-    const isRetry = (p.lost?.startsWith('counting failed') ?? false) || (p.lost?.startsWith('sent outside') ?? false)
+    const isRetry = ['counting failed', 'sent outside', 'not found'].some(why => p.lost?.startsWith(why) ?? false)
     if (p.zone === 'system' || p.step === null || p.at !== null || p.was !== null || (p.lost !== null && !isRetry)) continue
     if (isRetry) patch(p, { lost: null })
     const s = stepById.get(p.step)
@@ -239,10 +239,9 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
     }
     const blocks = s.tail.map(k => (k === '-' ? null : (texts[k] ?? null)))
     const plain = blocks.map(b => b ?? '')
-    const head = p.parent === null ? headOf(text) : null
     const found = locate(plain, text)
-    // Sent reworded (Claude Code rewrites some reminders): the block its opening is in, whole.
-    const wholeAt = found === null && head !== null ? plain.findIndex(b => b.includes(head)) : -1
+    // Sent reworded (Claude Code rewrites some reminders): the block that holds its lines, whole.
+    const wholeAt = found === null && p.parent === null ? blockOf(plain, text) : -1
     const at = found ?? (wholeAt >= 0 ? { block: wholeAt, offset: 0 } : null)
     if (at === null || blocks.slice(at.block + 1).some(b => b === null)) {
       patch(p, { lost: at === null ? 'not found in its request as sent' : 'a block after it is not text' })
@@ -773,8 +772,7 @@ export const register: Register = on => {
       list.map(p => {
         if (p.step === null && waiting.has(p.key)) {
           const text = texts[p.hash] ?? ''
-          const head = p.parent === null ? headOf(text) : null
-          if (text !== '' && tailNow.some(t => t.includes(text) || (head !== null && t.includes(head)))) return { ...p, step: id, isEarlier: false }
+          if (text !== '' && (tailNow.some(t => t.includes(text)) || (p.parent === null && blockOf(tailNow, text) >= 0))) return { ...p, step: id, isEarlier: false }
           // Not in this request's last message: sent before the inspector started, or not found as sent.
           return isJoinedLate && before === undefined ? { ...p, isEarlier: true } : { ...p, step: id, lost: 'not found in its request as sent' }
         }
