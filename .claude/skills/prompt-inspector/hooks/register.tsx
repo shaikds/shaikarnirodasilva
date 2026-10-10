@@ -389,10 +389,18 @@ function uniqueLabels(rows: readonly Row[]): string[] {
   })
 }
 
+<<<<<<< HEAD
 async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]; total: number | null }> {
   const steps = await read($, requestsAtom)
   const { rows, total } = layout(await read($, injectionsAtom), steps, new Set(await read($, removedAtom)), new Set(Object.keys(await read($, movedAtom))))
   if (scope === 'yours') return { rows: rows.filter(r => r.isYours), total }
+=======
+async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]; total: number | null; unplaced?: number }> {
+  const steps = await read($, requestsAtom)
+  const { rows, total } = layout(await read($, injectionsAtom), steps, new Set(await read($, removedAtom)), new Set(Object.keys(await read($, movedAtom))))
+  // Yours: only what is in the context now, at its exact place; what is not placed yet is not listed.
+  if (scope === 'yours') return { rows: rows.filter(r => r.isYours && r.start !== null && r.end !== null), total, unplaced: rows.filter(r => r.isYours && !r.isDeleted && r.start === null && r.was === null && r.note !== null && !r.note.startsWith('arrives')).length }
+>>>>>>> origin/claude/prompt-inspector
   const start = await read($, promptStartAtom)
   const isProven = start !== null && steps.every(s => s.id <= start.step || s.cacheRead >= start.at)
 
@@ -416,19 +424,31 @@ async function act($: Engine, row: Row): Promise<string> {
     ? '🗑 stops its later uses (the text already sent stays); 🔄 sends a copy with your next message.'
     : row.isCopy || row.isMoved
       ? '🗑 takes it out of the prompt altogether.'
+<<<<<<< HEAD
       : '🗑 takes it out from your next message on; 🔄 moves it to ride with your next message, at the end.'
+=======
+      : '🗑 takes it out from your next message on; 🔄 moves it to ride at the end.'
+>>>>>>> origin/claude/prompt-inspector
   const choice = await ask($, `${row.label}: ${describe(row)}. ${help}`, 'Piece', choices)
   if (choice === remove1 || choice === '🗑 Delete') {
     const confirm = await ask($, `${isSkill ? 'Stop later uses of' : 'Delete'} ${row.label} (${describe(row)})?`, 'Confirm', [isSkill ? 'Yes, stop them' : 'Yes, delete', 'No'])
     if (confirm === null || confirm === 'No') return ''
     await remove($, row.group)
 
+<<<<<<< HEAD
     return isSkill ? `Later uses of ${row.label} stopped; its text already sent stays. ` : `Deleted ${row.label}: it leaves the prompt from your next message. `
+=======
+    return isSkill ? `Later uses of ${row.label} stopped; its text already sent stays. ` : `Deleted ${row.label}: it is taken out of the prompt. `
+>>>>>>> origin/claude/prompt-inspector
   }
   if (choice === move1) {
     const isMoved = await moveToEnd($, row)
 
+<<<<<<< HEAD
     return isMoved ? `${row.label} will ride with your next message, at the end. ` : `${row.label}: its text is not kept, so it can't be re-injected. `
+=======
+    return isMoved ? `${row.label} will ride at the end. ` : `${row.label}: its text is not kept, so it can't be re-injected. `
+>>>>>>> origin/claude/prompt-inspector
   }
 
   return ''
@@ -447,15 +467,25 @@ async function inspect($: Engine, scope: 'yours' | 'all'): Promise<string> {
       await measure($, scope)
       measuredAt = seen
     }
+<<<<<<< HEAD
     const { rows, total } = await rowsFor($, scope)
+=======
+    const { rows, total, unplaced = 0 } = await rowsFor($, scope)
+>>>>>>> origin/claude/prompt-inspector
     const pages = Math.max(1, Math.ceil(rows.length / PAGE))
     page = page % pages
     const shown = rows.slice(page * PAGE, page * PAGE + PAGE)
     const labels = uniqueLabels(shown)
     const title = scope === 'all' ? 'Everything injected' : 'Your rules & skills'
     const size = total === null ? 'no request measured yet' : `last request ${int(total)} tokens`
+<<<<<<< HEAD
     const empty = rows.length === 0 ? (scope === 'all' ? ' Nothing recorded yet.' : ' None of yours is in the prompt yet.') : ''
     const question = `${said}${title} · ${size} · ${rows.length} pieces, page ${page + 1}/${pages}.${empty} Tap one, or type a token position.`
+=======
+    const empty = rows.length === 0 ? (scope === 'all' ? ' Nothing recorded yet.' : ' None of yours is in the context.') : ''
+    const extra = unplaced > 0 ? ` ${unplaced} more in context, position not measured.` : ''
+    const question = `${said}${title} · ${size} · ${rows.length} pieces, page ${page + 1}/${pages}.${empty}${extra} Tap one, or type a token position.`
+>>>>>>> origin/claude/prompt-inspector
     const choices = rows.length === 0 ? ['Refresh', DONE] : [...labels, ...(pages > 1 ? [MORE] : []), DONE]
     const answer = await ask($, question, scope === 'all' ? 'Inspect all' : 'Inspect', choices)
     said = ''

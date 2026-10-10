@@ -114,8 +114,8 @@ function engine(on: On) {
     world.cards.push(asked)
     const tap = world.taps.shift()
     if (tap === undefined) return { deny: 'closed' } as never
-    // A tap names a choice by its name (before " · "); anything else is typed under Other.
-    const choice = asked.options.find(o => o.label === tap || o.label.startsWith(`${tap} · `))?.label ?? tap
+    // A tap names a choice by its name (before " ["); anything else is typed under Other.
+    const choice = asked.options.find(o => o.label === tap || o.label.startsWith(`${tap} [`))?.label ?? tap
 
     return { result: { questions: e.questions, answers: { [asked.question]: choice } } } as never
   })
@@ -192,7 +192,7 @@ async function open($: Engine, world: World, at: number, then: string[], args = 
 
   return world.cards.slice(from)
 }
-const range = (r: { start: number; end: number }) => `${int(r.start)}–${int(r.end)}`
+const range = (r: { start: number; end: number }) => `${int(r.start)} - ${int(r.end)}`
 
 describe('model', () => {
   test('cuts a span and the line breaks after it', () => {
@@ -257,7 +257,7 @@ describe('plugin', () => {
     const card = world.cards[0]
     const [a, b] = FILES
     expect(card?.question).toBe(`Your rules & skills · last request ${int(SYSTEM + chars(world.api) + 2)} tokens · 2 pieces, page 1/1. Tap one, or type a token position.`)
-    expect(labels(card)).toEqual([`CLAUDE.md · ${range(where(world, ruleText(a)))}`, `.claude/rules/tests.md · ${range(where(world, ruleText(b)))}`, 'Done'])
+    expect(labels(card)).toEqual([`CLAUDE.md [${range(where(world, ruleText(a)))}]`, `.claude/rules/tests.md [${range(where(world, ruleText(b)))}]`, 'Done'])
   })
 
   test('deletes a rule after confirming; the next request leaves it out, and the other rule is carried there exactly', async ($, on) => {
@@ -269,7 +269,7 @@ describe('plugin', () => {
     await inspect($)
     expect(world.cards.map(c => c.header)).toEqual(['Inspect', 'Piece', 'Confirm', 'Inspect'])
     expect(world.cards[1]?.question).toStartWith(`CLAUDE.md: ${int(wasA.start)} → ${int(wasA.end)} · ${int(wasA.end - wasA.start)} tok · message 1. `)
-    expect(world.cards[3]?.question).toStartWith('Deleted CLAUDE.md: it leaves the prompt from your next message. ')
+    expect(world.cards[3]?.question).toStartWith('Deleted CLAUDE.md: it is taken out of the prompt. ')
     const answer = await $.prompt.context(CONTEXT)
     expect(answer.instructionFiles?.map(f => f.path)).toEqual([RULE_B])
     // The engine renders claudeMd again from the shorter list; the first message changes, so the cache reads up to it only.
@@ -279,7 +279,7 @@ describe('plugin', () => {
     await request($, world, ['Again'])
     world.taps = ['Done']
     await inspect($)
-    expect(labels(world.cards[4])).toEqual([`CLAUDE.md · deleted, was ${range(wasA)}`, `.claude/rules/tests.md · ${range(where(world, ruleText(b)))}`, 'Done'])
+    expect(labels(world.cards[4])).toEqual([`.claude/rules/tests.md [${range(where(world, ruleText(b)))}]`, 'Done'])
   })
 
   test('a piece injected later is placed from the end of the request that first carries it, and stays exact while the cache proves it', async ($, on) => {
@@ -292,7 +292,7 @@ describe('plugin', () => {
     await $.turn.start({ text: 'More', turnId: 't3' })
     await request($, world, ['More'])
     const nested = where(world, NESTED.text)
-    expect(await everyLabel($, world)).toContain(`src/CLAUDE.md · ${range(nested)}`)
+    expect(await everyLabel($, world)).toContain(`src/CLAUDE.md [${range(nested)}]`)
     const cards = await open($, world, nested.start, ['Back'])
     expect(cards[1]?.question).toStartWith(`src/CLAUDE.md: ${int(nested.start)} → ${int(nested.end)} · 42 tok · message 2. `)
   })
@@ -314,7 +314,7 @@ describe('plugin', () => {
     world.cacheRead = SYSTEM + chars(world.api.slice(0, 2))
     await $.turn.start({ text: 'Third', turnId: 't4' })
     await request($, world, ['Third'])
-    expect(await everyLabel($, world)).toContain(`src/CLAUDE.md · ${range(where(world, NESTED.text))}`)
+    expect(await everyLabel($, world)).toContain(`src/CLAUDE.md [${range(where(world, NESTED.text))}]`)
   })
 
   test('after a compaction, what it summarized away reads not measured', async ($, on) => {
@@ -327,7 +327,8 @@ describe('plugin', () => {
     world.cacheRead = SYSTEM
     await $.turn.start({ text: 'Go on', turnId: 't3' })
     await request($, world, ['Go on'])
-    expect(await everyLabel($, world)).toContain('src/CLAUDE.md · not measured')
+    expect(await everyLabel($, world)).not.toContain('src/CLAUDE.md · not measured')
+    expect(world.cards[0]?.question).toContain('more in context, position not measured')
     expect(world.cards[0]?.question).toContain(`last request ${int(SYSTEM + chars(world.api) + 2)} tokens`)
   })
 
@@ -338,7 +339,8 @@ describe('plugin', () => {
     await $.prompt.attachment(NESTED)
     world.uncached = 4
     await request($, world, ['Edit src/app.ts', wrap(NESTED.text)])
-    expect(await everyLabel($, world)).toContain('src/CLAUDE.md · not measured')
+    expect(await everyLabel($, world)).not.toContain('src/CLAUDE.md · not measured')
+    expect(world.cards[0]?.question).toContain('more in context, position not measured')
     // The size shown is the last request's, exact even where it places nothing.
     expect(world.cards[0]?.question).toContain(`last request ${int(SYSTEM + chars(world.api) + 4)} tokens`)
   })
@@ -350,7 +352,7 @@ describe('plugin', () => {
     const wasA = where(world, ruleText(a))
     world.taps = ['CLAUDE.md', '🔄 Re-inject at end', 'Done']
     await inspect($)
-    expect(world.cards[2]?.question).toStartWith('CLAUDE.md will ride with your next message, at the end. ')
+    expect(world.cards[2]?.question).toStartWith('CLAUDE.md will ride at the end. ')
     const submitted = await $.prompt.submit({ text: 'Again', wait: false, origin: { kind: 'composer' } })
     const copy = submitted.context?.[0] ?? ''
     expect(copy).toBe(ruleText(a))
@@ -361,16 +363,16 @@ describe('plugin', () => {
     const riding = `prompt.submit hook additional context: ${copy}`
     await $.prompt.attachment({ type: 'hook_additional_context', text: riding, origin: { kind: 'plugin', event: 'prompt.submit' } })
     await request($, world, ['Again', wrap(riding)])
-    expect(await everyLabel($, world)).toEqual([`CLAUDE.md · moved, was ${range(wasA)}`, `.claude/rules/tests.md · ${range(where(world, ruleText(b)))}`, `🔄 CLAUDE.md · ${range(where(world, copy))}`])
+    expect(await everyLabel($, world)).toEqual([`.claude/rules/tests.md [${range(where(world, ruleText(b)))}]`, `🔄 CLAUDE.md [${range(where(world, copy))}]`])
   })
 
   test('/inspect all runs from token 0: tools + system prompt, the pieces, and the conversation between them', async ($, on) => {
     const world = engine(on)
     await firstMessage($, world)
     const all = await everyLabel($, world, 'all')
-    expect(all).toContain(`▒ tools + system prompt · 0–${int(SYSTEM)}`)
-    expect(all).toContain(`context: CLAUDE.md files · ${range(where(world, CLAUDE_MD))}`)
-    expect(all[0]).toBe('system: intro · in system prompt')
+    expect(all).toContain(`▒ tools + system prompt [0 - ${int(SYSTEM)}]`)
+    expect(all).toContain(`context: CLAUDE.md files [${range(where(world, CLAUDE_MD))}]`)
+    expect(all[0]).toBe('system: intro [in system prompt]')
   })
 
   test('a typed token position opens the piece there; a filler cannot be deleted', async ($, on) => {
@@ -420,7 +422,7 @@ describe('plugin', () => {
     await $.turn.start({ text: 'Hi', turnId: 't2' })
     await $.prompt.attachment(note)
     await request($, world, ['Hi', sent])
-    expect(await everyLabel($, world, 'all')).toContain(`session note: Notes for this session: · ${range(where(world, sent))}`)
+    expect(await everyLabel($, world, 'all')).toContain(`session note: Notes for this session: [${range(where(world, sent))}]`)
   })
 
   test('the same reminder arriving with two messages is two pieces, each at its own place', async ($, on) => {
@@ -432,8 +434,8 @@ describe('plugin', () => {
       await request($, world, [word, wrap(TODO.text)])
     }
     const all = await everyLabel($, world, 'all')
-    expect(all.filter(l => l.startsWith('todo reminder: Use the todo list. · ')).length).toBe(2)
-    expect(all).toContain(`todo reminder: Use the todo list. · ${range(where(world, TODO.text))}`)
+    expect(all.filter(l => l.startsWith('todo reminder: Use the todo list. [')).length).toBe(2)
+    expect(all).toContain(`todo reminder: Use the todo list. [${range(where(world, TODO.text))}]`)
   })
 
   test('debug mode registers a tool that returns the report, the self-test included', async ($, on) => {
@@ -452,7 +454,7 @@ describe('plugin', () => {
     const report = JSON.parse(String(ran.result)) as { selfTest: { result: string }; yours: string[] }
     // The fake tokenizer has no cache, so the self-test says so rather than guess.
     expect(report.selfTest.result).toBe('caching or counting unavailable')
-    expect(report.yours[0]).toStartWith('CLAUDE.md · ')
+    expect(report.yours[0]).toStartWith("CLAUDE.md [")
   })
 
   test('a message you typed while Claude worked is your own words: never listed, never deleted', async ($, on) => {
@@ -473,8 +475,8 @@ describe('plugin', () => {
     await request($, world, ['Now'])
     world.taps = ['src/CLAUDE.md', 'Back', 'Done']
     await inspect($)
-    expect(labels(world.cards[0])).toContain('src/CLAUDE.md · not measured')
-    expect(world.cards[1]?.question).toStartWith('src/CLAUDE.md: sent before the inspector started (not measured) · 42 tok')
+    expect(labels(world.cards[0])).not.toContain('src/CLAUDE.md · not measured')
+    expect(world.cards[0]?.question).toContain('more in context, position not measured')
   })
 
   test('a skill you made: its list line and its text when used; 🗑 stops later uses and the text already sent keeps its place', async ($, on) => {
@@ -488,13 +490,13 @@ describe('plugin', () => {
     world.taps = ['skill: commit', '🗑 Stop later uses', 'Yes, stop them', 'Done']
     await inspect($)
     const card = labels(world.cards[0]) ?? []
-    expect(card[0]).toStartWith('skill list: commit · ')
-    expect(card[1]).toBe(`skill: commit · ${range(text)}`)
+    expect(card[0]).toStartWith("skill list: commit [")
+    expect(card[1]).toBe(`skill: commit [${range(text)}]`)
     expect(world.cards[3]?.question).toStartWith('Later uses of skill: commit stopped; its text already sent stays. ')
     expect((await $.skill.prompt({ skill: 'commit', text: 'Write a conventional commit.' })).text).toBe("(prompt-inspector deleted the commit skill's instructions.)")
     await $.turn.start({ text: 'Next', turnId: 't2' })
     await request($, world, ['Next'])
-    expect(await everyLabel($, world)).toContain(`skill: commit · ${range(text)}, later uses stopped`)
+    expect(await everyLabel($, world)).toContain(`skill: commit [${range(text)}, later uses stopped]`)
   })
 
   test('🔄 on a skill sends a copy and keeps later uses whole', async ($, on) => {
