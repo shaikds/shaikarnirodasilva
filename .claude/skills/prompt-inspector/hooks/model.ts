@@ -590,20 +590,8 @@ export function shortName(label: string, width = 40): string {
 export function cardLabel(r: Row): string {
   const name = r.kind === 'filler' ? `▒ ${r.label}` : shortName(r.label)
   const range = r.start !== null && r.end !== null ? `${int(r.start)} - ${int(r.end)}` : null
-  const was = r.was === null ? '' : `, was ${int(r.was.start)} - ${int(r.was.end)}`
-  const state =
-    r.isDeleted && r.kind === 'skill'
-      ? `${range ?? 'not measured'}, later uses stopped`
-      : r.isDeleted
-        ? range === null
-          ? `deleted${was}`
-          : `${range}, being removed`
-        : r.isMoved
-          ? range === null
-            ? `moved${was}`
-            : `${range}, being moved`
-          : (range ??
-            ((r.note ?? '').startsWith('inside') ? 'in system prompt' : (r.note ?? 'not measured')))
+  // The choice is the path and the range, nothing else; the piece's card says the rest.
+  const state = range ?? ((r.note ?? '').startsWith('inside') ? 'in system prompt' : r.was !== null ? `was ${int(r.was.start)} - ${int(r.was.end)}` : 'not measured')
 
   return `${name} [${state}]`
 }
