@@ -405,7 +405,7 @@ async function yourFiles($: Engine): Promise<string[]> {
     for (const e of entries) {
       const path = `${dir}/${e.name}`
       if (e.kind === 'file' && (isRules ? e.name.endsWith('.md') : e.name === 'CLAUDE.md')) out.push(path)
-      if (e.kind !== 'directory' || depth >= 4 || e.name === 'node_modules' || e.name === '.git') continue
+      if (e.kind !== 'dir' || depth >= 4 || e.name === 'node_modules' || e.name === '.git') continue
       if (e.name === '.claude') await walk(`${path}/rules`, depth + 1, true)
       else if (!e.name.startsWith('.')) await walk(path, depth + 1, isRules)
       else if (isRules) await walk(path, depth + 1, true)
