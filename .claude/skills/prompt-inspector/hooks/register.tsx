@@ -398,7 +398,9 @@ async function selfTest($: Engine, model: string): Promise<Record<string, number
  */
 async function debugReport($: Engine): Promise<void> {
   const root = await $.session.root()
-  if (!(await $.fs.exists(`${root}/.claude/prompt-inspector.debug`))) return
+  const isOn = await $.fs.exists(`${root}/.claude/prompt-inspector.debug`)
+  await trace($, 'turn end', isOn ? `debug on in ${root}` : `debug off in ${root}`)
+  if (!isOn) return
   await measure($)
   const steps = await read($, stepsAtom)
   const model = steps[steps.length - 1]?.model ?? (await $.session.model())
@@ -415,6 +417,13 @@ async function debugReport($: Engine): Promise<void> {
     all: all.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
   }
   await $.fs.write(`${root}/.claude/prompt-inspector.report.json`, JSON.stringify(report, null, 2))
+  await trace($, 'report written', `${root}/.claude/prompt-inspector.report.json`)
+}
+
+/** The last few debug events, kept in the store (a file on disk) where a failing report can still be read. */
+async function trace($: Engine, what: string, detail: string): Promise<void> {
+  const log = ((await $.store.get('debug:trace')) as string[] | undefined) ?? []
+  await $.store.set('debug:trace', [...log, `${what}: ${detail}`].slice(-20))
 }
 
 function originOf(origin: PromptAttachmentOrigin, type: string): string {
@@ -426,6 +435,7 @@ function originOf(origin: PromptAttachmentOrigin, type: string): string {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    await trace($, 'loaded', `cwd ${e.cwd}, interactive ${e.isInteractive}`)
     await $.command.register({
       name: 'inspect',
       description: 'Your rules and skills in the prompt, at exact token positions: delete or re-inject them',
@@ -493,8 +503,9 @@ export const register: Register = on => {
     const result = await next(e)
     try {
       await debugReport($)
-    } catch {
-      // Debug mode only: a failed report changes nothing.
+    } catch (err) {
+      // Debug mode only: a failed report changes nothing but its trace.
+      await trace($, 'report failed', err instanceof Error ? `${err.name}: ${err.message}` : String(err))
     }
 
     return result
