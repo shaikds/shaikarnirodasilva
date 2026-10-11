@@ -593,6 +593,7 @@ export function describe(r: Row): string {
   if (r.kind === 'filler') return `${int(r.start ?? 0)} → ${int(r.end ?? 0)} · ${size}`
   const range = r.start !== null && r.end !== null ? `${int(r.start)} → ${int(r.end)}` : null
   if (r.isDeleted && r.kind === 'skill') return `${range ?? r.note ?? 'not measured'} · later uses stopped · ${size}${from}`
+  if (r.isDeleted && range === null && r.was === null) return `deleted · leaves with your next message · ${size}${from}`
   if (r.isDeleted) return range === null ? `deleted${was} · ${size}${from}` : `${range} · being removed · ${size}${from}`
   if (r.isMoved) return range === null ? `moved to the end${was} · ${size}${from}` : `${range} · being moved to the end · ${size}${from}`
   if (range !== null) return `${range} · ${size}${from}${r.isWholeBlock ? ' · the whole block it was sent in (reworded)' : ''}`
@@ -612,7 +613,7 @@ export function cardLabel(r: Row): string {
   const name = r.kind === 'filler' ? `▒ ${r.label}` : shortName(r.label)
   const range = r.start !== null && r.end !== null ? `${int(r.start)} - ${int(r.end)}` : null
   // The choice is the path and the range, nothing else; the piece's card says the rest.
-  const state = range ?? ((r.note ?? '').startsWith('inside') ? 'in system prompt' : r.was !== null ? `was ${int(r.was.start)} - ${int(r.was.end)}` : 'not measured')
+  const state = range ?? ((r.note ?? '').startsWith('inside') ? 'in system prompt' : r.was !== null ? `was ${int(r.was.start)} - ${int(r.was.end)}` : r.isDeleted ? 'deleted' : 'not measured')
 
   return `${name} [${state}]`
 }
