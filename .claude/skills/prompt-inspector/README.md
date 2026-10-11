@@ -19,8 +19,11 @@ Both open a card, on any device including the phone:
    **More…** (it wraps back to the first page) and **Done**. You can also type a token position
    (`58002`, `58,002` or `58.002`) to open the piece there.
 2. Tap a piece: its exact range, size and the message it came with, then:
-   - **🗑 Delete** (asks to confirm): the piece leaves the prompt from your next message on. The list
-     keeps it as `deleted, was 76,489–77,102`.
+   - **🗑 Delete** (asks to confirm): the piece leaves the prompt from your next message on (Claude
+     Code keeps its answer for an injected piece until the turn ends). The list keeps it as
+     `deleted, was 76,489–77,102`; one that had no range reads `[deleted]` until it is gone, with the
+     tokens it takes out (a `CLAUDE.md` joined into a read: its text, its tags and the blank line
+     before them).
    - **🔄 Re-inject at end**: the piece leaves its place and a copy rides with your next message, at
      the end of the context. The copy gets its own row (`🔄 CLAUDE.md · …`) and the original reads
      `moved, was …`. A piece is re-injected once; 🗑 on either row takes it out altogether.

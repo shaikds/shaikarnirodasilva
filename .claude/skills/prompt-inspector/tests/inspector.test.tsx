@@ -589,6 +589,8 @@ describe('plugin', () => {
     world.taps = ['src/CLAUDE.md', '🗑 Delete', 'Yes, delete', 'Done']
     await inspect($)
     expect((await $.prompt.attachment(NESTED)).text).toBeNull()
+    // Until Claude Code sends the read again without it, it is listed as deleted, the size it takes out.
+    expect(await pieceTitle($, world, 'src/CLAUDE.md')).toBe(`src/CLAUDE.md [deleted] · ${int(rule.length)} tok`)
     const last = world.api[world.api.length - 1] as unknown as { content: { type: string; text: string; content: string }[] }
     last.content = [{ type: 'tool_result', text: body + tail, content: body + tail }]
     world.cacheRead = end - (rule.length + tail.length) - 10

@@ -220,6 +220,8 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   const wanted = (await read($, injectionsAtom)).filter(p => scope === 'all' || p.isYours)
   const patches = new Map<string, Partial<Piece>>()
   const patch = (p: Piece, more: Partial<Piece>) => patches.set(p.key, { ...(patches.get(p.key) ?? {}), ...more })
+  // Sized by its text alone: never over a size set meanwhile (a reminder sized where it sits, tags and all).
+  const textSized = new Set<string>()
 
   // 1. Sizes, and a place for each piece waiting in the request that first carried it.
   const toPlace: { p: Piece; text: string; s: Step; block: number; offset: number; after: string[]; suffix: string; own: string; isWholeBlock: boolean }[] = []
@@ -260,7 +262,10 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   let count = await countAll($, model, need)
   for (const p of wanted) {
     const n = p.tokens === null ? count(texts[p.hash] ?? '') : null
-    if (n !== null && p.tokens === null) patch(p, { tokens: n })
+    if (n !== null && p.tokens === null) {
+      patch(p, { tokens: n })
+      textSized.add(p.key)
+    }
   }
   for (const x of toPlace) {
     const afterTokens = sumOf(count, x.after)
@@ -315,7 +320,22 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
     start = moved === null ? null : { at: moved, step: last.id }
   }
   await update($, promptStartAtom, () => start)
-  if (patches.size > 0) await update($, injectionsAtom, list => list.map(p => (patches.has(p.key) ? { ...p, ...patches.get(p.key) } : p)))
+  if (patches.size > 0) {
+    await update($, injectionsAtom, list =>
+      list.map(p => {
+        const more = patches.get(p.key)
+        if (more === undefined) return p
+        if (p.tokens !== null && textSized.has(p.key) && more.tokens !== undefined && more.at === undefined) {
+          const { tokens, ...rest } = more
+          void tokens
+
+          return { ...p, ...rest }
+        }
+
+        return { ...p, ...more }
+      }),
+    )
+  }
 }
 
 /** Context blocks and attachments are cached answers: ask for them again with the next request. */
@@ -489,12 +509,17 @@ async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]
     const pieces = new Map((await read($, injectionsAtom)).map(p => [p.key, p]))
     const texts = await read($, textsAtom)
     const haystack = JSON.stringify(await $.session.messages({ as: 'api' }))
+    // So is one deleted that never had a range: until Claude Code leaves it out (from your next message on).
     const shown = wraps.filter(r => {
       const p = pieces.get(r.key)
-      if (p === undefined || p.at !== null || p.lost === null || !p.lost.startsWith(IN_TOOL_RESULT)) return true
+      const isInTool = p?.lost?.startsWith(IN_TOOL_RESULT) ?? false
+      const isLeaving = r.isDeleted && r.start === null && r.was === null
+      if (p === undefined || p.at !== null || !(isInTool || isLeaving)) return true
       const text = texts[p.hash] ?? ''
+      const isThere = haystack.includes(JSON.stringify(text).slice(1, -1))
 
-      return haystack.includes(JSON.stringify(text).slice(1, -1)) || isInContext(text, haystack)
+      // Deleted: only its own text, as injected, keeps it listed (its lines quoted elsewhere do not).
+      return isThere || (!isLeaving && isInContext(text, haystack))
     })
 
     const extra = await filesInContext($, new Set(shown.map(x => x.label)))
