@@ -229,8 +229,8 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   for (const p of wanted) {
     const text = texts[p.hash]
     if (text === undefined) continue
-    // A file Claude read is sized where it sits only (its text alone may be an id).
-    if (p.tokens === null && p.attachment !== 'file') need.push(text)
+    // One inside a tool result is sized where it sits only (its text alone may be an id).
+    if (p.tokens === null && !isInToolResult(p)) need.push(text)
     const isRetry = ['counting failed', 'sent outside', 'not found'].some(why => p.lost?.startsWith(why) ?? false)
     if (p.zone === 'system' || p.step === null || p.at !== null || p.was !== null || (p.lost !== null && !isRetry)) continue
     if (isRetry) patch(p, { lost: null })
@@ -262,7 +262,7 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   }
   let count = await countAll($, model, need)
   for (const p of wanted) {
-    const n = p.tokens === null && p.attachment !== 'file' ? count(texts[p.hash] ?? '') : null
+    const n = p.tokens === null && !isInToolResult(p) ? count(texts[p.hash] ?? '') : null
     if (n !== null && p.tokens === null) {
       patch(p, { tokens: n })
       textSized.add(p.key)
@@ -355,6 +355,9 @@ async function persist($: Engine): Promise<void> {
   }
 }
 
+/** Reads of a file in flight: the call's id and the file's path (its result moves a file of yours out to text). */
+const readsInFlight = new Map<string, string>()
+
 /** 🗑: the group leaves the prompt from the next request on (a skill: its later uses stop). A queued move is cancelled. */
 async function remove($: Engine, group: string): Promise<void> {
   await update($, removedAtom, list => [...new Set([...list, group])])
@@ -373,19 +376,15 @@ async function moveToEnd($: Engine, row: Row): Promise<boolean> {
   const texts = await read($, textsAtom)
   const p = pieces.find(x => x.key === row.key)
   let text = p === undefined ? undefined : texts[p.hash]
-  // A file's copy is its own text (not as a tool showed it, numbered), read now; a PDF's or a picture's, an @ mention
-  // of it, so Claude Code attaches the file itself.
+  // A file's copy is its own text (not as a tool showed it, numbered), read now. A PDF or a picture has none.
   if (p !== undefined && p.attachment === 'file') {
     const name = p.group.slice('file:'.length)
+    if (MEDIA.test(name)) return false
     const path = name.startsWith('/') ? name : name.startsWith('~/') ? `${/^\/(?:root|home\/[^/]+)\//.exec(await $.session.root())?.[0] ?? '/'}${name.slice(2)}` : `${await $.session.root()}/${name}`
-    const ref = name.startsWith('/') || name.startsWith('~/') ? path : name
-    if (MEDIA.test(name)) text = `@${/\s/.test(ref) ? `"${ref}"` : ref}`
-    else {
-      try {
-        text = ((await $.fs.read(path)) as string).trimEnd()
-      } catch {
-        // Gone from disk: the text as it was read.
-      }
+    try {
+      text = ((await $.fs.read(path)) as string).trimEnd()
+    } catch {
+      // Gone from disk: the text as it was read.
     }
   }
   if (p === undefined || text === undefined) return false
@@ -435,7 +434,7 @@ function uniqueLabels(rows: readonly Row[]): string[] {
 /** Source code: what Claude reads to do the work, not a file you gave it. */
 const CODE = /\.(?:[cm]?[jt]sx?|py|go|rs|java|kts?|swift|c|h|cc|cpp|hpp|cs|rb|php|sh|bash|zsh|css|scss|sass|less|sql|vue|svelte|lua|pl|r|scala|dart|exs?|erl|hs|ml|clj|lock)$/i
 
-/** A file the model sees as images (a PDF's pages, a picture): its copy rides as an @ mention, not as text. */
+/** A file the model sees as images (a PDF's pages, a picture): it has no text to move out of its read or to copy. */
 const MEDIA = /\.(?:pdf|png|jpe?g|gif|webp)$/i
 
 /**
@@ -563,14 +562,16 @@ async function act($: Engine, row: Row): Promise<string> {
   const isFile = row.key.startsWith('file:')
   const remove1 = isSkill ? '🗑 Stop later uses' : isFile ? '🗑 Stop later reads' : '🗑 Delete'
   const move1 = isSkill || isFile ? '🔄 Send a copy at end' : '🔄 Re-inject at end'
+  // A PDF or a picture has no text to send as a copy.
+  const moves = isFile && MEDIA.test(row.label) ? [] : [move1]
   const choices =
     row.isCopy || row.isMoved
       ? row.isDeleted
         ? ['Back']
         : ['🗑 Delete', 'Back']
       : row.isDeleted
-        ? [move1, 'Back']
-        : [remove1, move1, 'Back']
+        ? [...moves, 'Back']
+        : [remove1, ...moves, 'Back']
   const choice = await ask($, cardLabel(row) + (row.tokens === null ? '' : ` · ${int(row.tokens)} tok`), 'Piece', choices)
   if (choice === remove1 || choice === '🗑 Delete') {
     const confirm = await ask($, `${isSkill ? 'Stop later uses of' : isFile ? 'Stop later reads of' : 'Delete'} ${row.label}?`, 'Confirm', [isSkill || isFile ? 'Yes, stop them' : 'Yes, delete', 'No'])
@@ -868,6 +869,9 @@ async function findLate($: Engine, text: string, messages: readonly ApiMessage[]
  * unknown, and with them where its text lies.
  */
 const IN_TOOL_RESULT = 'inside a tool result, whose closing tokens the API does not report'
+
+/** A piece sized inside a tool result (or one that could not be). */
+const isInToolResult = (p: Piece) => p.lost?.startsWith(IN_TOOL_RESULT) ?? false
 
 /** The exact tokens of a piece inside a tool result's content (its place there cannot be proven: IN_TOOL_RESULT). */
 async function sizeInResult(place: (content: string, blockEnd: number) => Promise<{ start: number; end: number } | string>, content: string): Promise<{ size: number } | string> {
@@ -1343,6 +1347,8 @@ export const register: Register = on => {
           if (text === '') return p
           const isInText = tailNow.some(t => t.includes(text)) || (p.parent === null && waiting.has(p.key) && blockOf(tailNow, text) >= 0)
           if (isInText) return { ...p, step: id, isEarlier: false, lost: null }
+          // A file of yours moved out of its read is its own text block: never the same text met inside a tool result.
+          if (p.attachment === 'file') return p
           if (isInBlock(sentLast, text, false)) return { ...p, step: id, isEarlier: false, lost: 'sent inside a tool result' }
           if (waiting.has(p.key) && isJoinedLate && before === undefined) return { ...p, isEarlier: true }
 
@@ -1380,7 +1386,7 @@ export const register: Register = on => {
     }
     // Announced after the request that carried it was sent: the message that holds it, and the request whose last message
     // it was.
-    const late = (await read($, injectionsAtom)).filter(p => p.step === null && p.zone !== 'system' && !p.isEarlier)
+    const late = (await read($, injectionsAtom)).filter(p => p.step === null && p.zone !== 'system' && !p.isEarlier && p.attachment !== 'file')
     if (late.length > 0) {
       const steps = await read($, requestsAtom)
       const fresh = await read($, textsAtom)
@@ -1419,6 +1425,7 @@ export const register: Register = on => {
   on('tool.call', { tool: 'Read' }, async ($, e, next) => {
     const path = typeof e.file_path === 'string' ? e.file_path : ''
     if (path === '' || e.agentId !== undefined) return next(e)
+    if (typeof e.tool_use_id === 'string') readsInFlight.set(e.tool_use_id, path)
     const removed = await read($, removedAtom)
     if (!removed.some(g => g.startsWith('file:'))) return next(e)
     const name = await shortPath($, path.startsWith('/') ? path : `${await $.session.root()}/${path}`)
@@ -1640,12 +1647,8 @@ export const register: Register = on => {
     const queued = Object.keys(moved).filter(k => moved[k] === 'queued')
     if (queued.length === 0) return next(e)
     const saved = await read($, savedAtom)
-    // A PDF or a picture rides as an @ mention in the message itself (shown with it), so Claude Code attaches the file.
-    const isMention = (k: string) => k.startsWith('file:') && MEDIA.test(k)
-    const riding = queued.filter(k => !isMention(k)).map(k => saved[k] ?? '').filter(text => text !== '')
-    const mentions = queued.filter(isMention).map(k => saved[k] ?? '').filter(text => text !== '')
-    const text = mentions.length === 0 ? e.text : `${e.text} ${mentions.join(' ')}`
-    const result = await next({ ...e, text, context: [...(e.context ?? []), ...riding] })
+    const riding = queued.map(k => saved[k] ?? '').filter(text => text !== '')
+    const result = await next({ ...e, context: [...(e.context ?? []), ...riding] })
     if (result.drop !== undefined) return result
     await update($, movedAtom, current => {
       const sent: Record<string, Move> = { ...current }
@@ -1669,6 +1672,30 @@ export const register: Register = on => {
 
     // Only 🗑 stops later uses; a skill moved by 🔄 keeps its text (its copy rides once).
     return (await read($, removedAtom)).includes(group) ? { text: `(prompt-inspector deleted the ${e.skill} skill's instructions.)` } : result
+  })
+
+  // A text file of yours Claude reads: its text moves out of the tool's result into a text block of its own right after
+  // it, as the Read tool showed it. Inside a tool result its place can't be proven; as text it is placed exactly.
+  on('session.append', { door: 'tool-result' }, async ($, e, next) => {
+    if (e.agentId !== undefined) return next(e)
+    const blocks = e.message.content as ApiBlock[]
+    const i = blocks.findIndex(b => b.type === 'tool_result')
+    const block = blocks[i]
+    const path = block === undefined ? undefined : readsInFlight.get(String(block.tool_use_id))
+    if (block === undefined || path === undefined) return next(e)
+    readsInFlight.delete(String(block.tool_use_id))
+    const content = block.is_error === true ? null : resultText(block)
+    if (content === null || !/^ *\d+\t/.test(content) || MEDIA.test(path) || !(await isYourFile($, path))) return next(e)
+    const open = content.indexOf('<system-reminder>')
+    const shown = (open < 0 ? content : content.slice(0, open)).trimEnd()
+    const rel = await shortPath($, path)
+    const rest = content.slice(shown.length)
+    const moved = [...blocks.slice(0, i), { ...block, content: `${rel}: its text follows this result.${rest.trim() === '' ? '' : rest}` }, { type: 'text', text: shown }, ...blocks.slice(i + 1)]
+    const result = await next({ ...e, message: { ...e.message, content: moved as never } })
+    const fields: Fields = { key: `file:${rel}@${result.uuid ?? e.uuid}`, group: `file:${rel}`, kind: 'rule', zone: 'conversation', label: rel, isYours: true, attachment: 'file' }
+    await record($, [{ piece: piece(fields, shown, await read($, messageAtom)), text: shown }])
+
+    return result
   })
 
   on('command.run', { command: 'inspect' }, async ($, e) => {

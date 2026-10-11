@@ -620,7 +620,25 @@ describe('plugin', () => {
     expect(await pieceTitle($, world, 'notes/a.txt')).toBe(`notes/a.txt [not measured] · ${int(shown.trimEnd().length)} tok`)
   })
 
-  test('a PDF Claude read is listed by its path, its output sized on its own; 🔄 mentions it in the next message', async ($, on) => {
+  test('a text file of yours Claude reads moves out of its tool result into a text block of its own, placed exactly', async ($, on) => {
+    const world = engine(on)
+    on('tool.call', { tool: 'Read' }, () => ({ result: 'read' }) as never)
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Read it', turnId: 't2' })
+    await $.tool.call({ tool: 'Read', file_path: '/repo/notes/a.txt', tool_use_id: 'r1' } as never)
+    const shown = '1\tMeeting at noon.\n2\tBring the slides.\n3\t'
+    const row = { type: 'user', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'r1', content: shown }] }
+    const stored = (await $.session.append({ door: 'tool-result', origin: { kind: 'tool', tool: 'Read' }, uuid: 'u1', message: row } as never)) as unknown as { message: { content: unknown[] } }
+    expect(stored.message.content).toEqual([
+      { type: 'tool_result', tool_use_id: 'r1', content: 'notes/a.txt: its text follows this result.' },
+      { type: 'text', text: shown.trimEnd() },
+    ])
+    // The next request carries it as text: its exact range.
+    await request($, world, [shown.trimEnd()])
+    expect(await everyLabel($, world)).toContain(`notes/a.txt [${range(where(world, shown.trimEnd()))}]`)
+  })
+
+  test('a PDF Claude read is listed by its path, its output sized on its own; it has no text to send as a copy', async ($, on) => {
     const world = engine(on)
     await firstMessage($, world)
     await $.turn.start({ text: 'Read the report', turnId: 't2' })
@@ -636,13 +654,7 @@ describe('plugin', () => {
     const card = world.cards[world.cards.length - 2]
     // The tool's output, its note and pages, counted on its own: the reminder joined after it is not the file.
     expect(card?.question).toBe(`files/report.pdf [not measured] · ${int(header.length + 200)} tok`)
-    expect(card?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', '🔄 Send a copy at end', 'Back'])
-    // 🔄: the next message mentions it, so Claude Code attaches the file itself at the end.
-    world.taps = ['files/report.pdf', '🔄 Send a copy at end', 'Done']
-    await inspect($)
-    const submitted = await $.prompt.submit({ text: 'Again', wait: false, origin: { kind: 'composer' } })
-    expect(submitted.text).toBe('Again @files/report.pdf')
-    expect(submitted.context ?? []).toEqual([])
+    expect(card?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', 'Back'])
   })
 
   test('a file you sent with your message is yours, listed by its path', async ($, on) => {
