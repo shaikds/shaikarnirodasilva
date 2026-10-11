@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
-import { carry, cutSpans, diffBlocks, filterListing, int, parseListing, rangeFromEnd, typedPosition, withFillers } from '../hooks/model'
+import { carry, cutSpans, diffBlocks, filterListing, int, parseListing, rangeFromEnd, takesSystemTurns, toWire, typedPosition, withFillers } from '../hooks/model'
 import type { Row } from '../hooks/model'
 import type { Position, Step } from '../types'
 
@@ -37,7 +37,7 @@ const LISTING = ['The following skills are available:', '- commit: Writes the co
 const SYSTEM = 9_000
 
 type Card = { question: string; header: string; options: { label: string }[] }
-type Message = { role: 'user' | 'assistant'; content: { type: string; text: string }[] }
+type Message = { role: 'user' | 'assistant' | 'system'; content: { type: string; text: string }[] }
 
 /**
  * The engine beneath the plugin. Its tokenizer counts one token per character
@@ -55,6 +55,13 @@ function engine(on: On) {
     lastEnd: 0,
     /** The tokens it leaves uncached: the closing 2, or more when text follows its cache mark. */
     uncached: 2,
+    /** The tokens after a request's last text, by the role of its last message. */
+    closing: 2,
+    closingUser: 2,
+    /** The model the requests name. */
+    model: 'm',
+    /** The next request's messages as sent, when they differ from `api` (a model that takes system turns). */
+    wire: null as { role: string; content: { type: string; text: string }[] }[] | null,
     /** What the person taps on the next cards, in order; none left closes the card. */
     taps: [] as string[],
     cards: [] as Card[],
@@ -76,14 +83,22 @@ function engine(on: On) {
   on('session.root', () => ({ value: '/repo' }))
   on('session.id', () => ({ value: 's1' }))
   on('session.model', () => ({ value: 'm' }))
-  // The count_tokens endpoint: 1 character is 1 token, an image 100, 50 for the rest of the message.
+  // The API: count_tokens counts a request's messages (see `stream`), 50 for the rest; a request of the inspector's own
+  // leaves its closing uncached.
   on('http.fetch', ($, e) => {
-    const body = JSON.parse(String(e.init?.body ?? '{}')) as { messages?: { content: { content?: string | { type: string; text?: string }[] }[] }[] }
-    const last = body.messages?.[body.messages.length - 1]?.content[0]
-    const content = last?.content
-    const n = typeof content === 'string' ? content.length : Array.isArray(content) ? content.reduce((k, c) => k + (c.type === 'text' ? (c.text ?? '').length : 100), 0) : 0
+    const body = JSON.parse(String(e.init?.body ?? '{}')) as { messages?: Message[] }
+    if (!String(e.url).endsWith('/count_tokens')) {
+      const role = body.messages?.[body.messages.length - 1]?.role
+      const usage = { input_tokens: role === 'system' ? world.closing : world.closingUser, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 6_000 }
 
-    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ input_tokens: 50 + n }) } } as never
+      return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ usage }) } } as never
+    }
+
+    // Like the real counter: the closing after the last message is counted too.
+    const lastRole = body.messages?.[body.messages.length - 1]?.role
+    const n = 50 + stream(body.messages ?? []) + (lastRole === 'system' ? world.closing : world.closingUser)
+
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ input_tokens: n }) } } as never
   })
   on('fs.exists', () => ({ value: world.isDebug }))
   on('fs.list', ($, e) => {
@@ -125,9 +140,13 @@ function engine(on: On) {
   on('skill.prompt', ($, e) => ({ text: e.text }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.step', async function* ($, e) {
-    const end = SYSTEM + chars(world.api)
+    // The request's tokens: tools + system prompt, its messages, its closing; what its cache mark leaves after it is uncached.
+    const sent = world.wire ?? world.api
+    world.wire = null
+    const closing = sent[sent.length - 1]?.role === 'system' ? world.closing : world.closingUser
+    const end = SYSTEM + stream(sent) + closing - world.uncached
     const read = world.cacheRead ?? world.lastEnd
-    const usage = { input_tokens: world.uncached, output_tokens: 10, cache_read_input_tokens: read, cache_creation_input_tokens: end - read, model: 'm' }
+    const usage = { input_tokens: world.uncached, output_tokens: 10, cache_read_input_tokens: read, cache_creation_input_tokens: end - read, model: world.model }
     world.lastEnd = end
     world.cacheRead = null
 
@@ -150,6 +169,29 @@ function engine(on: On) {
 type World = ReturnType<typeof engine>
 
 const chars = (api: readonly Message[]) => api.reduce((n, m) => n + m.content.reduce((k, b) => k + b.text.length, 0), 0)
+
+/** A block's tokens: a text's characters, a tool result's (an image or a page 100), nothing for a call. */
+function blockTokens(b: { type: string; text?: string; content?: unknown }): number {
+  if (b.type === 'tool_result') {
+    const c = b.content
+    if (typeof c === 'string') return c.length
+    return Array.isArray(c) ? (c as { type: string; text?: string }[]).reduce((k, x) => k + (x.type === 'text' ? (x.text ?? '').length : 100), 0) : 0
+  }
+
+  if (b.type === 'image' || b.type === 'document') return 100
+
+  return b.type === 'text' ? (b.text ?? '').length : 0
+}
+
+/** A request's messages in tokens, as the real API counts them: a message's trailing white space is dropped. */
+function stream(messages: readonly { content: readonly { type: string; text?: string; content?: unknown }[] }[]): number {
+  return messages.reduce((n, m) => {
+    const last = m.content[m.content.length - 1]
+    const space = last?.type === 'text' ? (last.text ?? '').length - (last.text ?? '').trimEnd().length : 0
+
+    return n + m.content.reduce((k, b) => k + blockTokens(b), 0) - space
+  }, 0)
+}
 
 /** Where a text's last occurrence sits in the conversation, in the fake engine's tokens. */
 function where(world: World, text: string): { start: number; end: number } {
@@ -279,6 +321,31 @@ describe('model', () => {
     expect(typedPosition('58 002')).toBe(58_002)
     expect(typedPosition('CLAUDE')).toBeNull()
   })
+
+  test('builds the request as sent: the reminders a model takes as a system turn leave the user message and follow it as one', () => {
+    const wrap = (t: string) => `<system-reminder>\n${t}\n</system-reminder>`
+    const nested = 'Contents of /repo/sub/CLAUDE.md:\n\n# Rule\nBe brief.\n'
+    const context = "As you answer the user's questions, you can use the following context:\n# currentDate\nToday."
+    const messages = [
+      { role: 'user', content: [{ type: 'text', text: wrap(context) }, { type: 'text', text: 'Read it' }, { type: 'text', text: wrap('# Environment\nlinux') }] },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'Read', input: {} }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: `1\tyo\n\n${wrap(nested)}` }, { type: 'text', text: wrap('<total_tokens>9 left</total_tokens>') }] },
+    ]
+    // Every reminder is promoted but the person's own context.
+    const wire = toWire(messages, inner => !inner.startsWith('As you answer'))
+    expect(wire[0]?.content).toEqual([
+      { type: 'text', text: wrap(context) },
+      { type: 'text', text: 'Read it' },
+      { type: 'text', text: '# Environment\nlinux', isSystemTurn: true },
+    ])
+    // Joined to the tool result in the view, sent apart from it: the tool's own output stays.
+    expect(wire[2]?.content).toEqual([
+      { type: 'tool_result', tool_use_id: 't1', content: '1\tyo' },
+      { type: 'text', text: `${nested}\n\n<total_tokens>9 left</total_tokens>`, isSystemTurn: true },
+    ])
+    expect(takesSystemTurns('claude-opus-5-5')).toBe(true)
+    expect(takesSystemTurns('claude-sonnet-5')).toBe(false)
+  })
 })
 
 describe('plugin', () => {
@@ -364,16 +431,91 @@ describe('plugin', () => {
     expect(world.cards[0]?.question).toContain(`last request ${int(SYSTEM + chars(world.api) + 2)} tokens`)
   })
 
-  test('a request that left more than the closing tokens uncached places nothing: its end is not its last block’s', async ($, on) => {
+  test('a request whose cache mark left more uncached is placed all the same: its tokens are its messages and the closing', async ($, on) => {
     const world = engine(on)
     await firstMessage($, world)
     await $.turn.start({ text: 'Edit src/app.ts', turnId: 't2' })
     await $.prompt.attachment(NESTED)
     world.uncached = 4
     await request($, world, ['Edit src/app.ts', wrap(NESTED.text)])
-    expect((await everyLabel($, world)).some(l => l.startsWith('src/CLAUDE.md [not measured'))).toBe(true)
-    // The size shown is the last request's, exact even where it places nothing.
-    expect(world.cards[0]?.question).toContain(`last request ${int(SYSTEM + chars(world.api) + 4)} tokens`)
+    expect(await everyLabel($, world)).toContain(`src/CLAUDE.md [${range(where(world, NESTED.text))}]`)
+    expect(world.cards[0]?.question).toContain(`last request ${int(SYSTEM + chars(world.api) + 2)} tokens`)
+  })
+
+  test('a model that takes system turns: a reminder sent in the turn after your message is placed exactly there, by that turn’s closing', async ($, on) => {
+    const world = engine(on)
+    world.model = 'claude-opus-5-5'
+    world.closingUser = 4
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Edit', turnId: 't2' })
+    await $.prompt.attachment(NESTED)
+    await $.prompt.attachment(TODO)
+    world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
+    world.api.push({ role: 'user', content: [{ type: 'text', text: 'Edit' }, { type: 'text', text: wrap(NESTED.text) }, { type: 'text', text: wrap(TODO.text) }] })
+    // As sent: both reminders leave the message and follow it as one system turn, a blank line between them.
+    const turn = `${NESTED.text}\n\n${TODO.text}`
+    world.wire = [...world.api.slice(0, -1), { role: 'user', content: [{ type: 'text', text: 'Edit' }] }, { role: 'system', content: [{ type: 'text', text: turn }] }]
+    const before = SYSTEM + stream(world.wire.slice(0, -1))
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5-5', messageCount: world.api.length })) void chunk
+    const labels = await everyLabel($, world)
+    expect(labels).toContain(`src/CLAUDE.md [${range({ start: before, end: before + NESTED.text.length })}]`)
+    // Your first message ends its own request: the rules in it are placed by a user message's closing.
+    expect(labels).toContain(`CLAUDE.md [${range(where(world, ruleText(FILES[0])))}]`)
+  })
+
+  test('after a deletion with a thinking block between, a later piece is placed again once the cache read proves it', async ($, on) => {
+    const world = engine(on)
+    world.model = 'claude-opus-5-5'
+    world.closingUser = 4
+    await firstMessage($, world)
+    const u0 = world.api[0] as Message
+    await $.turn.start({ text: 'Edit', turnId: 't2' })
+    await $.prompt.attachment(NESTED)
+    world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] }, { role: 'user', content: [{ type: 'text', text: 'Edit' }, { type: 'text', text: wrap(NESTED.text) }] })
+    const a1 = world.api[1] as Message
+    const edit = { role: 'user', content: [{ type: 'text', text: 'Edit' }] } as Message
+    world.wire = [u0, a1, edit, { role: 'system', content: [{ type: 'text', text: NESTED.text }] }]
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5-5', messageCount: world.api.length })) void chunk
+    await $.turn.start({ text: 'More', turnId: 't3' })
+    await $.prompt.attachment(TODO)
+    // An answer that thought: once what precedes it changes, the API stops counting its thinking.
+    const thought = { role: 'assistant', content: [{ type: 'thinking', thinking: '', signature: 'sig' } as never, { type: 'text', text: 'done' }] } as Message
+    world.api.push(thought, { role: 'user', content: [{ type: 'text', text: 'More' }, { type: 'text', text: wrap(TODO.text) }] })
+    const todo = { role: 'system', content: [{ type: 'text', text: TODO.text }] } as Message
+    world.wire = [u0, a1, edit, { role: 'system', content: [{ type: 'text', text: NESTED.text }] }, thought, { role: 'user', content: [{ type: 'text', text: 'More' }] }, todo]
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5-5', messageCount: world.api.length })) void chunk
+    world.taps = ['src/CLAUDE.md', '🗑 Delete', 'Yes, delete', 'Done']
+    await inspect($)
+    // The next request: the reminder is gone; the cache read ends where it was.
+    const message2 = world.api[2]
+    if (message2 !== undefined) message2.content = [{ type: 'text', text: 'Edit' }]
+    world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok again' }] }, { role: 'user', content: [{ type: 'text', text: 'Again' }] })
+    world.wire = [u0, a1, edit, thought, { role: 'user', content: [{ type: 'text', text: 'More' }] }, todo, { role: 'assistant', content: [{ type: 'text', text: 'ok again' }] }, { role: 'user', content: [{ type: 'text', text: 'Again' }] }]
+    const at = SYSTEM + stream(world.wire.slice(0, 5)) + 0
+    world.cacheRead = SYSTEM + stream([u0, a1, edit])
+    await $.turn.start({ text: 'Again', turnId: 't4' })
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5-5', messageCount: world.api.length })) void chunk
+    expect(await everyLabel($, world, 'all')).toContain(`todo reminder: Use the todo list. [${range({ start: at, end: at + TODO.text.length })}]`)
+  })
+
+  test('after a compaction, what it summarized away is not listed; a file it brought back is placed exactly', async ($, on) => {
+    const world = engine(on)
+    const summary = [{ role: 'user', text: 'Summary of the conversation so far.', toolUses: [] }]
+    on('session.compact', () => ({ messages: summary }) as never)
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Edit', turnId: 't2' })
+    await $.prompt.attachment(NESTED)
+    await request($, world, ['Edit', wrap(NESTED.text)])
+    await $.session.compact({ trigger: 'auto', messages: summary } as never)
+    const back = { type: 'file', text: 'Called the Read tool with the following input: {"file_path":"/repo/notes/a.txt"}\nResult of calling the Read tool:\n1\tMeeting at noon.', origin: { kind: 'engine' } } as const
+    await $.prompt.attachment(back as never)
+    world.api = []
+    world.cacheRead = SYSTEM
+    await $.turn.start({ text: 'Go on', turnId: 't3' })
+    await request($, world, ['Summary of the conversation so far.', wrap(back.text), 'Go on'], 1)
+    const labels = await everyLabel($, world)
+    expect(labels).toContain(`notes/a.txt [${range(where(world, back.text))}]`)
+    expect(labels.some(l => l.startsWith('src/CLAUDE.md') || l.startsWith('CLAUDE.md'))).toBe(false)
   })
 
   test('🔄 moves a rule to ride with the next message, where its copy is placed exactly; the original reads moved', async ($, on) => {
@@ -385,13 +527,14 @@ describe('plugin', () => {
     await inspect($)
     expect(world.cards[2]?.question).toStartWith('CLAUDE.md moved to the end. ')
     const submitted = await $.prompt.submit({ text: 'Again', wait: false, origin: { kind: 'composer' } })
-    const copy = submitted.context?.[0] ?? ''
-    expect(copy).toBe(ruleText(a))
+    // On a line of its own: the words before it can't share a token with it.
+    const copy = (submitted.context?.[0] ?? '').slice(1)
+    expect(submitted.context?.[0]).toBe(`\n${ruleText(a)}`)
     expect((await $.prompt.context(CONTEXT)).instructionFiles?.map(f => f.path)).toEqual([RULE_B])
     world.api[0] = { role: 'user', content: [{ type: 'text', text: contextBlock(renderClaudeMd([b])) }, { type: 'text', text: 'Hello there' }] }
     world.cacheRead = SYSTEM
     await $.turn.start({ text: 'Again', turnId: 't2' })
-    const riding = `prompt.submit hook additional context: ${copy}`
+    const riding = `prompt.submit hook additional context: \n${copy}`
     await $.prompt.attachment({ type: 'hook_additional_context', text: riding, origin: { kind: 'plugin', event: 'prompt.submit' } })
     await request($, world, ['Again', wrap(riding)])
     expect(await everyLabel($, world)).toEqual([`.claude/rules/tests.md [${range(where(world, ruleText(b)))}]`, `🔄 CLAUDE.md [${range(where(world, copy))}]`])
@@ -544,7 +687,7 @@ describe('plugin', () => {
     expect(world.cards[1]?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', '🔄 Send a copy at end', 'Back'])
     expect(world.cards[2]?.question).toStartWith('docs/CLAUDE.md copied to the end. ')
     const submitted = await $.prompt.submit({ text: 'Again', wait: false, origin: { kind: 'composer' } })
-    expect(submitted.context?.[0]).toBe(rule.trimEnd())
+    expect(submitted.context?.[0]).toBe(`\n${rule.trimEnd()}`)
     // 🗑: later reads are refused, and Claude Code's own injection of it is left out.
     world.taps = ['docs/CLAUDE.md', '🗑 Stop later reads', 'Yes, stop them', 'Done']
     await inspect($)
@@ -631,11 +774,28 @@ describe('plugin', () => {
     const stored = (await $.session.append({ door: 'tool-result', origin: { kind: 'tool', tool: 'Read' }, uuid: 'u1', message: row } as never)) as unknown as { message: { content: unknown[] } }
     expect(stored.message.content).toEqual([
       { type: 'tool_result', tool_use_id: 'r1', content: 'notes/a.txt: its text follows this result.' },
-      { type: 'text', text: shown.trimEnd() },
+      { type: 'text', text: `${shown.trimEnd()}\n` },
     ])
     // The next request carries it as text: its exact range.
-    await request($, world, [shown.trimEnd()])
+    await request($, world, [`${shown.trimEnd()}\n`])
     expect(await everyLabel($, world)).toContain(`notes/a.txt [${range(where(world, shown.trimEnd()))}]`)
+  })
+
+  test('a file of yours a command prints whole moves out of its result into a text block of its own, placed exactly', async ($, on) => {
+    const world = engine(on)
+    world.disk['/repo/notes.md'] = 'gamma notes\nsecond gamma\n'
+    on('tool.call', { tool: 'Bash' }, () => ({ result: 'ran' }) as never)
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Show it', turnId: 't2' })
+    await $.tool.call({ tool: 'Bash', command: 'cat notes.md', tool_use_id: 'b1' } as never)
+    const row = { type: 'user', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'b1', content: 'gamma notes\nsecond gamma\n' }] }
+    const stored = (await $.session.append({ door: 'tool-result', origin: { kind: 'tool', tool: 'Bash' }, uuid: 'u2', message: row } as never)) as unknown as { message: { content: unknown[] } }
+    expect(stored.message.content).toEqual([
+      { type: 'tool_result', tool_use_id: 'b1', content: 'notes.md: its text follows this result.' },
+      { type: 'text', text: 'gamma notes\nsecond gamma\n' },
+    ])
+    await request($, world, ['gamma notes\nsecond gamma\n'])
+    expect(await everyLabel($, world)).toContain(`notes.md [${range(where(world, 'gamma notes\nsecond gamma'))}]`)
   })
 
   test('a PDF Claude read is listed by its path, its output sized on its own; it has no text to send as a copy', async ($, on) => {
