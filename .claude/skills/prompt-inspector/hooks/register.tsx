@@ -484,7 +484,18 @@ async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]
     const listed = rows.filter(r => r.isYours && r.kind !== 'context' && (r.start !== null || (r.was === null && r.note !== null && !r.note.startsWith('arrives') && !placed.has(r.label))))
     // A piece that only wraps others of yours (all the CLAUDE.md files sent as one reminder) is not one of them.
     const holds = (r: Row, o: Row) => o !== r && r.start !== null && r.end !== null && o.start !== null && o.end !== null && r.start <= o.start && o.end <= r.end && r.end - r.start > o.end - o.start
-    const shown = listed.filter(r => r.kind !== 'rule' || !listed.some(o => o.kind === 'rule' && holds(r, o)))
+    const wraps = listed.filter(r => r.kind !== 'rule' || !listed.some(o => o.kind === 'rule' && holds(r, o)))
+    // One inside a tool result has no place to carry: it is listed while its text is still in the conversation.
+    const pieces = new Map((await read($, injectionsAtom)).map(p => [p.key, p]))
+    const texts = await read($, textsAtom)
+    const haystack = JSON.stringify(await $.session.messages({ as: 'api' }))
+    const shown = wraps.filter(r => {
+      const p = pieces.get(r.key)
+      if (p === undefined || p.at !== null || p.lost === null || !p.lost.startsWith(IN_TOOL_RESULT)) return true
+      const text = texts[p.hash] ?? ''
+
+      return haystack.includes(JSON.stringify(text).slice(1, -1)) || isInContext(text, haystack)
+    })
 
     const extra = await filesInContext($, new Set(shown.map(x => x.label)))
 
@@ -725,67 +736,12 @@ function isInBlock(message: ApiMessage | undefined, text: string, isText: boolea
   return message.content.some(b => (b.type === 'text') === isText && JSON.stringify(b).includes(escaped))
 }
 
-/** A block's index among every block of the request, messages in order (`flatKeys`: a key for each message, then its blocks). */
-function flatIndex(messages: readonly ApiMessage[], m: number, j: number): number {
-  let n = 0
-  for (let k = 0; k < m; k++) n += 1 + (messages[k]?.content.length ?? 0)
-
-  return n + 1 + j
-}
-
-/** A piece inside a tool result with its exact place, or why it has none. */
-function withPlace(p: Piece, at: { start: number; end: number } | string | undefined, block: number): Piece {
+/** A piece inside a tool result: its exact size, never a place (IN_TOOL_RESULT); or why not even that. */
+function withPlace(p: Piece, at: { size: number } | string | undefined): Piece {
   if (at === undefined) return p
-  if (typeof at === 'string') return { ...p, at: null, lost: `sent inside a tool result: ${at}` }
+  if (typeof at === 'string') return { ...p, at: null, lost: `${IN_TOOL_RESULT} (${at})` }
 
-  return { ...p, lost: null, at: { start: at.start, end: at.end, block, offset: 0, key: 'tool:result', isWholeBlock: false }, tokens: at.end - at.start }
-}
-
-/** Claude Code's opening line of the system prompt: a request through the session's subscription must start with it. */
-const IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude."
-
-/**
- * Tokens after block `j` of a request's last message, to the request's end:
- * the API's own cache marks, one at the end of block `j` and one at the end of
- * the message, in a request of the same blocks (a cache mark ends exactly where
- * its block ends). 0 for the last block. Answers why not, when not.
- */
-async function tokensAfter($: Engine, model: string, message: ApiMessage, asked: ApiMessage | undefined, j: number): Promise<number | string> {
-  const last = message.content.length - 1
-  if (j === last) return 0
-  const key = `after:${model}:${hash(JSON.stringify(message.content))}:${j}`
-  const stored = await $.store.get(key)
-  if (typeof stored === 'number') return stored
-  // Above every model's least cacheable prompt (4,096 tokens for some).
-  const pad = { type: 'text', text: 'This text only gives the prompt cache enough to hold a mark. '.repeat(480) }
-  const blocks = message.content.map(b => {
-    const { cache_control: _, ...rest } = b as ApiBlock & { cache_control?: unknown }
-
-    return rest
-  })
-  // The calls these results answer, as they were made: a result's tokens may name its tool.
-  const calls = new Map((asked?.content ?? []).filter(b => b.type === 'tool_use').map(b => [String(b.id), { type: 'tool_use', id: b.id, name: b.name, input: b.input ?? {} }]))
-  const ids = blocks.filter(b => b.type === 'tool_result').map(b => String(b.tool_use_id))
-  if (ids.some(id => !calls.has(id))) return 'its tool call is not known'
-  const uses = ids.map(id => calls.get(id))
-  const markAt = async (k: number): Promise<number | null> => {
-    const user = blocks.map((b, i) => (i === k ? { ...b, cache_control: { type: 'ephemeral' } } : b))
-    const messages = uses.length > 0 ? [{ role: 'user', content: [pad] }, { role: 'assistant', content: uses }, { role: 'user', content: user }] : [{ role: 'user', content: [pad, ...user] }]
-    try {
-      const r = await apiCall($, '/v1/messages', { model, max_tokens: 1, system: [{ type: 'text', text: IDENTITY }], messages })
-      const u = r.json?.usage
-
-      return u === undefined ? null : Number(u.cache_read_input_tokens ?? 0) + Number(u.cache_creation_input_tokens ?? 0)
-    } catch {
-      return null
-    }
-  }
-  const mine = await markAt(j)
-  const end = await markAt(last)
-  if (mine === null || end === null || mine <= 0 || end < mine) return 'the API could not mark its block'
-  await $.store.set(key, end - mine)
-
-  return end - mine
+  return { ...p, at: null, tokens: at.size, lost: IN_TOOL_RESULT }
 }
 
 /**
@@ -793,7 +749,7 @@ async function tokensAfter($: Engine, model: string, message: ApiMessage, asked:
  * request was sent, and that request: whose last message it was. In a text
  * block it is placed later from the request's texts; in a tool result, now.
  */
-async function findLate($: Engine, text: string, messages: readonly ApiMessage[], steps: readonly Step[]): Promise<{ step: number; isText: boolean; at: { start: number; end: number } | string | undefined; block: number } | null> {
+async function findLate($: Engine, text: string, messages: readonly ApiMessage[], steps: readonly Step[]): Promise<{ step: number; isText: boolean; at: { size: number } | string | undefined } | null> {
   if (text === '') return null
   const escaped = JSON.stringify(text).slice(1, -1)
   for (let m = messages.length - 1; m >= Math.max(0, messages.length - 8); m--) {
@@ -805,31 +761,29 @@ async function findLate($: Engine, text: string, messages: readonly ApiMessage[]
     const carrying = steps.slice(-2).reverse().find(s => s.messageCount === m + 1)
     if (carrying === undefined) return null
     const block = message.content[j]
-    if (block === undefined || block.type === 'text') return { step: carrying.id, isText: true, at: undefined, block: flatIndex(messages, m, j) }
+    if (block === undefined || block.type === 'text') return { step: carrying.id, isText: true, at: undefined }
     const content = block.type === 'tool_result' ? resultText(block) : null
-    const at = content === null ? 'not text' : await placeAtBlock($, carrying, message, messages[m - 1], j, (c, end) => placeInResult($, carrying.model, c, text, end), content)
+    const at = content === null ? 'not text' : await sizeInResult(c => placeInResult($, carrying.model, c, text, 0), content)
 
-    return { step: carrying.id, isText: false, at, block: flatIndex(messages, m, j) }
+    return { step: carrying.id, isText: false, at }
   }
 
   return null
 }
 
-/** A place inside block `j` of a request's last message: its block's end is the request's end less the tokens after it. */
-async function placeAtBlock(
-  $: Engine,
-  carrying: Step,
-  message: ApiMessage,
-  asked: ApiMessage | undefined,
-  j: number,
-  place: (content: string, blockEnd: number) => Promise<{ start: number; end: number } | string>,
-  content: string,
-): Promise<{ start: number; end: number } | string> {
-  if (carrying.uncached !== 2) return 'more than the closing tokens uncached'
-  const after = await tokensAfter($, carrying.model, message, asked, j)
-  if (typeof after === 'string') return after
+/**
+ * Why a piece inside a tool result has no range: the API reports where a tool
+ * result's message ends, not where its text ends (a mark inside it is refused,
+ * one on it holds to the message's end), so the tool result's closing tokens are
+ * unknown, and with them where its text lies.
+ */
+const IN_TOOL_RESULT = 'inside a tool result, whose closing tokens the API does not report'
 
-  return place(content, carrying.end - after)
+/** The exact tokens of a piece inside a tool result's content (its place there cannot be proven: IN_TOOL_RESULT). */
+async function sizeInResult(place: (content: string, blockEnd: number) => Promise<{ start: number; end: number } | string>, content: string): Promise<{ size: number } | string> {
+  const at = await place(content, 0)
+
+  return typeof at === 'string' ? at : { size: at.end - at.start }
 }
 
 /** Your instruction files and their texts, read once a message. */
@@ -870,10 +824,10 @@ function fileSpan(content: string, text: string): { from: number; to: number } |
 /**
  * Your instruction files whose text is in the tool results of a request's last
  * message (Claude read one, or a command printed it): each becomes a piece of
- * yours, placed exactly in that request. A file Claude Code injected itself
+ * yours, with its exact size there. A file Claude Code injected itself
  * (`Contents of …`) is its own piece already.
  */
-async function recordFiles($: Engine, message: ApiMessage, asked: ApiMessage | undefined, step: Step, flatFirst: number, instance: number, turn: number): Promise<void> {
+async function recordFiles($: Engine, message: ApiMessage, asked: ApiMessage | undefined, step: Step, instance: number, turn: number): Promise<void> {
   const files = [...(await filesNow($, turn))]
   // A file the tools were asked about by path (a Read of it, a command naming it): read now, so one made this turn counts too.
   const root = await $.session.root()
@@ -911,9 +865,9 @@ async function recordFiles($: Engine, message: ApiMessage, asked: ApiMessage | u
       const key = `file:${f.rel}@${instance}`
       if (pieces.some(p => p.key === key) || added.some(p => p.key === key)) continue
       const spanText = content.slice(span.from, span.to)
-      const at = await placeAtBlock($, step, message, asked, j, (c, end) => placeSpan($, step.model, c, span.from, span.to, end), content)
+      const at = await sizeInResult(c => placeSpan($, step.model, c, span.from, span.to, 0), content)
       const base = piece({ key, group: `file:${f.rel}`, kind: 'rule', zone: 'conversation', label: f.rel, isYours: true, attachment: 'file' }, spanText, turn)
-      added.push(withPlace({ ...base, step: step.id }, at, flatFirst + j))
+      added.push(withPlace({ ...base, step: step.id }, at))
       texts[base.hash] = spanText
     }
   }
@@ -977,12 +931,12 @@ async function toolResultTokens($: Engine, model: string, content: string): Prom
 }
 
 /**
- * Where a reminder lies inside the last tool result of a request, exactly: its
- * block ends where its content ends (the API puts nothing after the content),
- * the content's tokens after it are the whole content's minus those up to it,
- * and each cut is proven to fall between two tokens (the text before it plus
- * the text after it, counted alone, equal the whole). The range takes in the
- * reminder's tags and the blank lines before it. Null when any of it fails.
+ * Where a reminder lies inside a tool result's content, counted back from
+ * `blockEnd` standing for where the content ends: the content's tokens after
+ * it are the whole content's minus those up to it, and each cut is proven to
+ * fall between two tokens (the text before it plus the text after it, counted
+ * alone, equal the whole). The range takes in the reminder's tags and the
+ * blank lines before it. Answers why not, when not.
  */
 async function placeInResult($: Engine, model: string, content: string, text: string, blockEnd: number): Promise<{ start: number; end: number } | string> {
   const at = content.indexOf(text)
@@ -999,10 +953,10 @@ async function placeInResult($: Engine, model: string, content: string, text: st
 }
 
 /**
- * Where the characters `from`..`to` of a tool result's content lie in the
- * request, exactly: the block ends where its content ends, so the span ends
- * the content's tokens after it before the block's end, and starts the
- * tokens from it on before that. A count alone is the content's count less
+ * Where the characters `from`..`to` of a tool result's content lie, counted
+ * back from `blockEnd` standing for where the content ends: the span ends the
+ * content's tokens after it before that, and starts the tokens from it on
+ * before that. A count alone is the content's count less
  * that of one '.' (one token), plus one. Each cut must fall between two
  * tokens: the text before it and the text after it, counted alone, add up to
  * the whole. Answers why not, when not.
@@ -1297,8 +1251,7 @@ export const register: Register = on => {
       }),
     )
     const stepNow = (await read($, requestsAtom)).find(x => x.id === id)
-    const lastFlat = sent.length - 1
-    // A reminder joined into a tool result of this request's last message: its place from the API's own counts.
+    // A reminder joined into a tool result of this request's last message: its exact size from the API's own counts.
     const inTool = (await read($, injectionsAtom)).filter(p => p.step === id && p.lost === 'sent inside a tool result')
     if (inTool.length > 0 && stepNow !== undefined && sentLast !== undefined) {
       const placed = await Promise.all(
@@ -1308,16 +1261,16 @@ export const register: Register = on => {
           const j = sentLast.content.findIndex(b => b.type !== 'text' && JSON.stringify(b).includes(escaped))
           const block = sentLast.content[j]
           const content = block === undefined || block.type !== 'tool_result' ? null : resultText(block)
-          const at = content === null ? 'not in a tool result of text' : await placeAtBlock($, stepNow, sentLast, sent[sent.length - 2], j, (c, blockEnd) => placeInResult($, stepNow.model, c, text, blockEnd), content)
+          const at = content === null ? 'not in a tool result of text' : await sizeInResult(c => placeInResult($, stepNow.model, c, text, 0), content)
 
-          return { key: p.key, at, block: flatIndex(sent, lastFlat, Math.max(j, 0)) }
+          return { key: p.key, at }
         }),
       )
       await update($, injectionsAtom, list =>
         list.map(p => {
           const hit = placed.find(x => x.key === p.key)
 
-          return hit === undefined ? p : withPlace(p, hit.at, hit.block)
+          return hit === undefined ? p : withPlace(p, hit.at)
         }),
       )
     }
@@ -1340,14 +1293,14 @@ export const register: Register = on => {
           if (hit === undefined || hit === null) return p
           const bound = { ...p, step: hit.step, isEarlier: false, lost: null }
 
-          return hit.isText ? bound : withPlace(bound, hit.at, hit.block)
+          return hit.isText ? bound : withPlace(bound, hit.at)
         }),
       )
     }
     // Your instruction files whose text came back in a tool result of this request's last message (Claude read one, or a
     // command printed it).
     try {
-      if (stepNow !== undefined && sentLast !== undefined && sentLast.role === 'user') await recordFiles($, sentLast, sent[sent.length - 2], stepNow, flatIndex(sent, lastFlat, 0), message * 1000 + e.index, message)
+      if (stepNow !== undefined && sentLast !== undefined && sentLast.role === 'user') await recordFiles($, sentLast, sent[sent.length - 2], stepNow, message * 1000 + e.index, message)
     } catch (err) {
       countErrors = [...countErrors.slice(-9), `files: ${err instanceof Error ? err.message : String(err)}`]
     }
