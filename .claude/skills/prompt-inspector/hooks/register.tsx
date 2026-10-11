@@ -294,10 +294,13 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   if (start !== null) carryStart(start.at, start.step, steps, texts, collect)
   if (isStartWanted && firstBlocks !== null) asked.push(...firstBlocks.map(b => b ?? ''))
   count = await countAll($, model, asked)
+  const out = await gone($)
   for (const p of toCarry) {
     const r = carry(p.at, p.step, texts[p.hash] ?? '', p.tokens, steps, texts, count)
     if (r.kind === 'at') patch(p, { at: r.at, step: r.step })
     else if (r.kind === 'gone') patch(p, { at: null, was: r.was, step: r.step })
+    // Inside a tool result that changed after you took it out (🗑 or 🔄): it went where it was.
+    else if (p.at.key === 'tool:result' && p.attachment !== 'file' && out.has(p.group)) patch(p, { at: null, was: { start: p.at.start, end: p.at.end }, step: r.step })
     else patch(p, { at: null, lost: r.reason, step: r.step })
   }
   if (isStartWanted && first !== undefined && firstBlocks !== null) {
@@ -348,9 +351,20 @@ async function moveToEnd($: Engine, row: Row): Promise<boolean> {
   const pieces = await read($, injectionsAtom)
   const texts = await read($, textsAtom)
   const p = pieces.find(x => x.key === row.key)
-  const text = p === undefined ? undefined : texts[p.hash]
+  let text = p === undefined ? undefined : texts[p.hash]
+  // A file's copy is its own text (not as a tool showed it, numbered), read now.
+  if (p !== undefined && p.attachment === 'file') {
+    const name = p.group.slice('file:'.length)
+    const path = name.startsWith('/') ? name : name.startsWith('~/') ? `${/^\/(?:root|home\/[^/]+)\//.exec(await $.session.root())?.[0] ?? '/'}${name.slice(2)}` : `${await $.session.root()}/${name}`
+    try {
+      text = ((await $.fs.read(path)) as string).trimEnd()
+    } catch {
+      // Gone from disk: the text as it was read.
+    }
+  }
   if (p === undefined || text === undefined) return false
-  await update($, savedAtom, saved => ({ ...saved, [row.group]: text }))
+  const copy = text
+  await update($, savedAtom, saved => ({ ...saved, [row.group]: copy }))
   await update($, movedAtom, moved => ({ ...moved, [row.group]: 'queued' as const }))
   await update($, removedAtom, list => list.filter(k => k !== row.group))
   invalidate($)
@@ -485,12 +499,12 @@ async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]
 /** The card for one piece: 🗑 (with a confirmation) or 🔄; answers what to say on the list card. */
 async function act($: Engine, row: Row): Promise<string> {
   const isSkill = row.kind === 'skill'
-  const remove1 = isSkill ? '🗑 Stop later uses' : '🗑 Delete'
-  const move1 = isSkill ? '🔄 Send a copy at end' : '🔄 Re-inject at end'
+  // A file Claude read (or a command printed) is in its own tool result: what was read stays; later reads stop.
+  const isFile = row.key.startsWith('file:')
+  const remove1 = isSkill ? '🗑 Stop later uses' : isFile ? '🗑 Stop later reads' : '🗑 Delete'
+  const move1 = isSkill || isFile ? '🔄 Send a copy at end' : '🔄 Re-inject at end'
   const choices =
-    row.key.startsWith('file:')
-      ? ['Back']
-      : row.isCopy || row.isMoved
+    row.isCopy || row.isMoved
       ? row.isDeleted
         ? ['Back']
         : ['🗑 Delete', 'Back']
@@ -499,16 +513,16 @@ async function act($: Engine, row: Row): Promise<string> {
         : [remove1, move1, 'Back']
   const choice = await ask($, cardLabel(row) + (row.tokens === null ? '' : ` · ${int(row.tokens)} tok`), 'Piece', choices)
   if (choice === remove1 || choice === '🗑 Delete') {
-    const confirm = await ask($, `${isSkill ? 'Stop later uses of' : 'Delete'} ${row.label}?`, 'Confirm', [isSkill ? 'Yes, stop them' : 'Yes, delete', 'No'])
+    const confirm = await ask($, `${isSkill ? 'Stop later uses of' : isFile ? 'Stop later reads of' : 'Delete'} ${row.label}?`, 'Confirm', [isSkill || isFile ? 'Yes, stop them' : 'Yes, delete', 'No'])
     if (confirm === null || confirm === 'No') return ''
     await remove($, row.group)
 
-    return `${isSkill ? 'Stopped' : 'Deleted'} ${row.label}. `
+    return `${isSkill || isFile ? 'Stopped' : 'Deleted'} ${row.label}. `
   }
   if (choice === move1) {
     const isMoved = await moveToEnd($, row)
 
-    return isMoved ? `${row.label} moved to the end. ` : `${row.label}: can't be re-injected. `
+    return isMoved ? `${row.label} ${isSkill || isFile ? 'copied to the end' : 'moved to the end'}. ` : `${row.label}: can't be re-injected. `
   }
 
   return ''
@@ -1045,6 +1059,26 @@ async function placeSpan($: Engine, model: string, content: string, from: number
 }
 
 async function report($: Engine): Promise<Record<string, unknown>> {
+  // Debug only: `.claude/prompt-inspector.act` holds {"label", "action": "delete" | "move"} to press 🗑 or 🔄 on a row.
+  let acted: string | null = null
+  const actFile = `${await $.session.root()}/.claude/prompt-inspector.act`
+  try {
+    const raw = ((await $.fs.read(actFile)) as string).trim()
+    if (raw !== '') {
+      const want = JSON.parse(raw) as { label: string; action: string }
+      const row = (await rowsFor($, 'yours')).rows.find(r => r.label === want.label)
+      if (row === undefined) acted = `no row ${want.label}`
+      else if (want.action === 'delete') {
+        await remove($, row.group)
+        acted = `deleted ${row.key}`
+      } else {
+        acted = `${(await moveToEnd($, row)) ? 'moved' : 'could not move'} ${row.key}`
+      }
+      await $.fs.write(actFile, '')
+    }
+  } catch {
+    // No action asked.
+  }
   await measure($, 'all')
   const steps = await read($, requestsAtom)
   const model = steps[steps.length - 1]?.model ?? (await $.session.model())
@@ -1065,6 +1099,9 @@ async function report($: Engine): Promise<Record<string, unknown>> {
       tailBlocks: tail.length,
       change: change.kind === 'unknown' ? 'unknown' : { blocks: change.blocks.length, brokenAt: change.brokenAt, system: typeof change.system === 'string' ? change.system : 'changed' },
     })),
+    acted,
+    removed: await read($, removedAtom),
+    moved: await read($, movedAtom),
     countErrors,
     lastMessages: summarise(((await $.session.messages({ as: 'api' })) as readonly { role: string; content: readonly ApiBlock[] }[]).slice(-3)),
     yours: yours.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
@@ -1321,6 +1358,18 @@ export const register: Register = on => {
     return result
   })
 
+  // 🗑 on a file Claude read: later reads of it stop (what was read stays where it is).
+  on('tool.call', { tool: 'Read' }, async ($, e, next) => {
+    const path = typeof e.file_path === 'string' ? e.file_path : ''
+    if (path === '' || e.agentId !== undefined) return next(e)
+    const removed = await read($, removedAtom)
+    if (!removed.some(g => g.startsWith('file:'))) return next(e)
+    const name = await shortPath($, path.startsWith('/') ? path : `${await $.session.root()}/${path}`)
+    if (removed.includes(`file:${name}`)) return { deny: `${name} is left out of the context for this test (prompt inspector).` }
+
+    return next(e)
+  })
+
   on('tool.call', { tool: /^mcp__prompt-inspector__debug$/ }, async ($, e, next) => {
     try {
       return { result: JSON.stringify(await report($), null, 2) }
@@ -1518,6 +1567,9 @@ export const register: Register = on => {
       await record($, seen)
     }
     if (out.has(key) || out.has(keys.attachmentType(e.type))) return { text: null }
+    // A CLAUDE.md whose later reads were stopped (🗑 on the file): not injected either.
+    const injectedPath = e.type === 'nested_memory' ? pathOfAttachment(result.text) : null
+    if (injectedPath !== null && (await read($, removedAtom)).includes(`file:${await shortPath($, injectedPath)}`)) return { text: null }
     const drop = new Set(entries.filter(span => out.has(keys.skillLine(span.name))).map(span => span.name))
 
     return drop.size === 0 ? result : { text: filterListing(result.text, drop) }

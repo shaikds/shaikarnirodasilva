@@ -26,6 +26,11 @@ Both open a card, on any device including the phone:
      `moved, was …`. A piece is re-injected once; 🗑 on either row takes it out altogether.
    - For a skill's text: **🗑 Stop later uses** (the text already sent stays where it is) and
      **🔄 Send a copy at end**.
+   - For a file Claude read itself, or a command printed (it is Claude's own tool result, which no
+     hook can take back): **🗑 Stop later reads** (later reads of it are refused, and Claude Code no
+     longer injects it) and **🔄 Send a copy at end** (its text rides with your next message).
+   - A rule Claude Code joined into a file read's result (a nested `CLAUDE.md`) is an injection: 🗑
+     and 🔄 take it out of that result from your next request on.
 
 Claude reads only the command's closing line, `Prompt inspector closed.`; the cards stay out of its
 context.
@@ -81,3 +86,5 @@ claude plugin test .claude/skills/prompt-inspector
 Debug mode: while `.claude/prompt-inspector.debug` exists (git-ignored), the inspector registers a
 `debug` tool that returns its report (the self-test, the boundary check, the last requests and every
 row), and writes the same report to `.claude/prompt-inspector.report.json` at each turn's end.
+
+In debug mode, writing `{"label": "<path>", "action": "delete"}` (or `"move"`) to `.claude/prompt-inspector.act` presses 🗑 or 🔄 on that row at the next `debug` call, for testing without the cards.
