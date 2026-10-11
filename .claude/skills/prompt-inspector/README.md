@@ -11,7 +11,7 @@ end of the context. Then you can send the same message again and compare the ans
 | `/inspect` | Only what is in the context right now, listed as `Name [start - end]` (a count says how many more are in context but not measured; nothing waiting or planned is listed). Your pieces: your `CLAUDE.md` files, `.claude/rules` files, CLAUDE.md files picked up later from subfolders, and the skills you made (their line in the skill list, and their text each time it is used). |
 | `/inspect all` | Every injected piece, Claude Code's own included, plus unnamed lines for what lies between them (tools + system prompt, the conversation), so the ranges run without gaps from 0 to the last token. Never your own messages. |
 
-Your instruction files count wherever their text reaches the context: injected by Claude Code (a `CLAUDE.md` of a folder Claude reads in), read by Claude itself (`files/CLAUDE.md` opened with the Read tool), or printed by a command (`cat sub/CLAUDE.md`). Each is listed by its path with its exact range. A file whose text is not in the context is not listed.
+Your instruction files count wherever their text reaches the context: injected by Claude Code (a `CLAUDE.md` of a folder Claude reads in), read by Claude itself (`files/CLAUDE.md` opened with the Read tool), or printed by a command (`cat sub/CLAUDE.md`). Each is listed by its path. One sent as its own text has its exact range; one inside a tool result (read, printed, or joined into a read) reads `[not measured]` with its exact size, since the API never says where a tool result's text lies (below). **🔄** sends a copy to the end of the context, where the copy gets an exact range. A file whose text is not in the context is not listed.
 
 Both open a card, on any device including the phone:
 
@@ -43,7 +43,8 @@ context.
   after it is counted exactly, then the piece itself.
 - Counting uses the API, because Claude's tokenizer is not public. Each distinct text is counted
   once (8 at a time) and the count is kept.
-- From then on a position is carried to each new request only by proof: the cache read proves
+- Once placed, a range stays the same until you delete or re-inject the piece (or something before
+  it changes). It is carried to each new request only by proof: the cache read proves
   everything before it unchanged; or, after a change (your 🗑 or 🔄), the two requests are compared
   block by block and every block that changed before it is counted whole, as sent.
 - Counts only ever cover text that runs to the end of its block: a text counted alone loses its
@@ -51,7 +52,14 @@ context.
 - Claude Code sends some of its own reminders reworded; those are found by their lines and placed
   as the whole block they were sent in (the card says so). A few are added only as a request is
   sent, outside the messages: those read `not found in its request as sent`.
-- Inside a tool result (a nested `CLAUDE.md` Claude Code joins into a file read's result, or a file Claude read or printed), the text counter can't reach. There the place comes from the API's own `count_tokens` and prompt-cache marks, through the session's credential: a tool result ends where its content ends; the tokens after the piece are the content's tokens after it, plus every block after its own in that message (two cache marks, at its block's end and at the message's end); and each cut is proven to fall between two tokens (the text before it and after it, counted alone, add up to the whole). A reminder's range takes in its tags and the blank lines before it; a file's ends at its last character that shows.
+- Inside a tool result (a nested `CLAUDE.md` Claude Code joins into a file read's result, or a file
+  Claude read or printed) only the size is exact. The API wraps each tool result in tokens of its own
+  before and after the text, and reports only their sum: a cache mark inside a tool result is
+  refused, and one on it holds to the end of its message. So where the text starts and ends is not
+  known, and the row reads `[not measured]`. Its size comes from the API's `count_tokens`, with each
+  cut proven to fall between two tokens (the text before it and after it, counted alone, add up to
+  the whole). A reminder's size takes in its tags and the blank lines before it; a file's ends at its
+  last character that shows. It stays listed while its text is in the conversation.
 - Claude Code adds some reminders (the skill list, a nested `CLAUDE.md`) to a request only as it sends it, and may announce one after the request is gone: the request is read again once sent, and a late one is matched to the message, and request, that carried it.
 - What can't be proven says `not measured` and why (compaction, a block that isn't text, text sent
   before the inspector started), never a guess. Sizes are always exact. System-prompt sections show

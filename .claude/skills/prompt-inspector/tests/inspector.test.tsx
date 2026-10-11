@@ -207,6 +207,15 @@ async function everyLabel($: Engine, world: World, args = ''): Promise<string[]>
   return [...new Set(world.cards.slice(from).flatMap(card => labels(card) ?? []))].filter(l => l !== 'More…' && l !== 'Done')
 }
 
+/** The title of a piece's card, opened by its label. */
+async function pieceTitle($: Engine, world: World, label: string): Promise<string | undefined> {
+  const from = world.cards.length
+  world.taps = [label, 'Back', 'Done']
+  await inspect($)
+
+  return world.cards[from + 1]?.question
+}
+
 /** Opens a piece by typing a token inside it, then taps what follows. */
 async function open($: Engine, world: World, at: number, then: string[], args = ''): Promise<Card[]> {
   const from = world.cards.length
@@ -499,7 +508,7 @@ describe('plugin', () => {
     expect(labels(world.cards[0])?.some(l => l.startsWith("src/CLAUDE.md [not measured"))).toBe(true)
   })
 
-  test('a file of yours printed into a tool result is placed exactly there; one never in the context is not listed', async ($, on) => {
+  test('a file of yours printed into a tool result: its exact size, its place not measured; one never in the context is not listed', async ($, on) => {
     const world = engine(on)
     const rule = '# Docs rule\nAlways link the source of every claim.\nNever invent a section number.\n'
     world.disk['/repo/docs/CLAUDE.md'] = rule
@@ -510,11 +519,12 @@ describe('plugin', () => {
     world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
     world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
-    const end = SYSTEM + chars(world.api)
     const labels = await everyLabel($, world)
-    // Its text to its last character that shows; the line break after it is not its own.
-    expect(labels).toContain(`docs/CLAUDE.md [${int(end - rule.length)} - ${int(end - 1)}]`)
+    // The API never says where a tool result's text ends, so its place is not measured.
+    expect(labels).toContain('docs/CLAUDE.md [not measured]')
     expect(labels.some(l => l.startsWith('other/CLAUDE.md'))).toBe(false)
+    // Its text to its last character that shows; the line break after it is not its own.
+    expect(await pieceTitle($, world, 'docs/CLAUDE.md')).toBe(`docs/CLAUDE.md [not measured] · ${int(rule.length - 1)} tok`)
   })
 
   test('🗑 on a file Claude read stops its later reads and its injection; 🔄 sends its own text with the next message', async ($, on) => {
@@ -528,14 +538,14 @@ describe('plugin', () => {
     world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
     // 🔄 first: a copy of the file's own text rides with the next message; what was read stays.
-    world.taps = ['More…', 'docs/CLAUDE.md', '🔄 Send a copy at end', 'Done']
+    world.taps = ['docs/CLAUDE.md', '🔄 Send a copy at end', 'Done']
     await inspect($)
-    expect(world.cards[2]?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', '🔄 Send a copy at end', 'Back'])
-    expect(world.cards[3]?.question).toStartWith('docs/CLAUDE.md copied to the end. ')
+    expect(world.cards[1]?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', '🔄 Send a copy at end', 'Back'])
+    expect(world.cards[2]?.question).toStartWith('docs/CLAUDE.md copied to the end. ')
     const submitted = await $.prompt.submit({ text: 'Again', wait: false, origin: { kind: 'composer' } })
     expect(submitted.context?.[0]).toBe(rule.trimEnd())
     // 🗑: later reads are refused, and Claude Code's own injection of it is left out.
-    world.taps = ['More…', 'docs/CLAUDE.md', '🗑 Stop later reads', 'Yes, stop them', 'Done']
+    world.taps = ['docs/CLAUDE.md', '🗑 Stop later reads', 'Yes, stop them', 'Done']
     await inspect($)
     const denied = await $.tool.call({ tool: 'Read', file_path: '/repo/docs/CLAUDE.md' } as never)
     expect(String((denied as { deny?: string }).deny)).toContain('docs/CLAUDE.md is left out of the context')
@@ -543,7 +553,7 @@ describe('plugin', () => {
     expect(injected.text).toBeNull()
   })
 
-  test('a file Claude read is placed as the Read tool shows it, numbered lines and all', async ($, on) => {
+  test('a file Claude read is sized as the Read tool shows it, numbered lines and all', async ($, on) => {
     const world = engine(on)
     const rule = '# Docs rule\nAlways link the source of every claim.\n'
     world.disk['/repo/docs/CLAUDE.md'] = rule
@@ -554,12 +564,10 @@ describe('plugin', () => {
     world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
     world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
-    const end = SYSTEM + chars(world.api)
-    const after = content.length - shown.trimEnd().length
-    expect(await everyLabel($, world)).toContain(`docs/CLAUDE.md [${int(end - content.length)} - ${int(end - after)}]`)
+    expect(await pieceTitle($, world, 'docs/CLAUDE.md')).toBe(`docs/CLAUDE.md [not measured] · ${int(shown.trimEnd().length)} tok`)
   })
 
-  test('a rule joined into a tool result is placed exactly from the API counts: its tags and blank lines, up to where its block ends', async ($, on) => {
+  test('a rule joined into a tool result is sized exactly from the API counts, its tags and blank lines included; its place is not measured', async ($, on) => {
     const world = engine(on)
     world.isDebug = true
     on('tool.register', ($, e) => ({ value: { tool: `mcp__prompt-inspector__${e.name}` } }))
@@ -575,11 +583,10 @@ describe('plugin', () => {
     world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
     const end = SYSTEM + chars(world.api)
-    const labels = await everyLabel($, world)
     // From the end of the body (the blank lines are the rule's), to where its closing tag ends.
-    expect(labels).toContain(`src/CLAUDE.md [${int(end - (rule.length + tail.length))} - ${int(end - tail.length)}]`)
+    expect(await pieceTitle($, world, 'src/CLAUDE.md')).toBe(`src/CLAUDE.md [not measured] · ${int(rule.length)} tok`)
     // 🗑: Claude Code sends the read again without it, and it leaves the list (only what is in the context is listed).
-    world.taps = ['More…', 'src/CLAUDE.md', '🗑 Delete', 'Yes, delete', 'Done']
+    world.taps = ['src/CLAUDE.md', '🗑 Delete', 'Yes, delete', 'Done']
     await inspect($)
     expect((await $.prompt.attachment(NESTED)).text).toBeNull()
     const last = world.api[world.api.length - 1] as unknown as { content: { type: string; text: string; content: string }[] }
