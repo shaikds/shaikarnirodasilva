@@ -496,21 +496,41 @@ describe('plugin', () => {
     await request($, world, ['Now'])
     world.taps = ['src/CLAUDE.md', 'Back', 'Done']
     await inspect($)
-    expect(labels(world.cards[0]).some(l => l.startsWith("src/CLAUDE.md [not measured"))).toBe(true)
+    expect(labels(world.cards[0])?.some(l => l.startsWith("src/CLAUDE.md [not measured"))).toBe(true)
   })
 
-  test('a file of yours whose content is in the context is listed, even when it came by a command; one that is not is ignored', async ($, on) => {
+  test('a file of yours printed into a tool result is placed exactly there; one never in the context is not listed', async ($, on) => {
     const world = engine(on)
-    world.disk['/repo/docs/CLAUDE.md'] = '# Docs rule\nAlways link the source of every claim.\nNever invent a section number.\n'
+    const rule = '# Docs rule\nAlways link the source of every claim.\nNever invent a section number.\n'
+    world.disk['/repo/docs/CLAUDE.md'] = rule
     world.disk['/repo/other/CLAUDE.md'] = '# Other rule\nSomething nobody has printed into the conversation.\nStill nothing here.\n'
     await firstMessage($, world)
     await $.turn.start({ text: 'Read docs', turnId: 't2' })
+    const content = `==> docs/CLAUDE.md <==\n${rule}`
     world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
-    world.api.push({ role: 'user', content: [{ type: 'tool_result', text: '', content: '==> docs/CLAUDE.md <==\n# Docs rule\nAlways link the source of every claim.\nNever invent a section number.\n' } as never] })
+    world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
+    const end = SYSTEM + chars(world.api)
     const labels = await everyLabel($, world)
-    expect(labels).toContain('docs/CLAUDE.md [not measured]')
+    // Its text to its last character that shows; the line break after it is not its own.
+    expect(labels).toContain(`docs/CLAUDE.md [${int(end - rule.length)} - ${int(end - 1)}]`)
     expect(labels.some(l => l.startsWith('other/CLAUDE.md'))).toBe(false)
+  })
+
+  test('a file Claude read is placed as the Read tool shows it, numbered lines and all', async ($, on) => {
+    const world = engine(on)
+    const rule = '# Docs rule\nAlways link the source of every claim.\n'
+    world.disk['/repo/docs/CLAUDE.md'] = rule
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Read docs', turnId: 't2' })
+    const shown = '1\t# Docs rule\n2\tAlways link the source of every claim.\n3\t'
+    const content = `${shown}\n\n<system-reminder>\nA reminder after it.\n</system-reminder>`
+    world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
+    world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
+    const end = SYSTEM + chars(world.api)
+    const after = content.length - shown.trimEnd().length
+    expect(await everyLabel($, world)).toContain(`docs/CLAUDE.md [${int(end - content.length)} - ${int(end - after)}]`)
   })
 
   test('a rule joined into a tool result is placed exactly from the API counts: its tags and blank lines, up to where its block ends', async ($, on) => {

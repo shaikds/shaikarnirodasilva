@@ -322,8 +322,14 @@ export function carry(
       step = s.id
       continue
     }
-    // Inside a tool result: only the cache can carry it (its block has no text of its own to count again).
-    if (pos.key === 'tool:result') return { kind: 'lost', reason: LOST.broken, step }
+    // Inside a tool result: carried only when nothing at or before its block changed (its block has no text to count again).
+    if (pos.key === 'tool:result') {
+      const c = s.change
+      const isSame = c.kind === 'known' && c.system === 'same' && (c.brokenAt === null || c.brokenAt > pos.block) && c.blocks.every(b => b.at > pos.block)
+      if (!isSame) return { kind: 'lost', reason: c.kind === 'unknown' ? LOST.unseen : LOST.broken, step }
+      step = s.id
+      continue
+    }
     const change = s.change
     if (change.kind === 'unknown') return { kind: 'lost', reason: LOST.unseen, step }
     if (change.system === 'tools') return { kind: 'lost', reason: LOST.tools, step }
