@@ -373,14 +373,19 @@ async function moveToEnd($: Engine, row: Row): Promise<boolean> {
   const texts = await read($, textsAtom)
   const p = pieces.find(x => x.key === row.key)
   let text = p === undefined ? undefined : texts[p.hash]
-  // A file's copy is its own text (not as a tool showed it, numbered), read now.
+  // A file's copy is its own text (not as a tool showed it, numbered), read now; a PDF's or a picture's, an @ mention
+  // of it, so Claude Code attaches the file itself.
   if (p !== undefined && p.attachment === 'file') {
     const name = p.group.slice('file:'.length)
     const path = name.startsWith('/') ? name : name.startsWith('~/') ? `${/^\/(?:root|home\/[^/]+)\//.exec(await $.session.root())?.[0] ?? '/'}${name.slice(2)}` : `${await $.session.root()}/${name}`
-    try {
-      text = ((await $.fs.read(path)) as string).trimEnd()
-    } catch {
-      // Gone from disk: the text as it was read.
+    const ref = name.startsWith('/') || name.startsWith('~/') ? path : name
+    if (MEDIA.test(name)) text = `@${/\s/.test(ref) ? `"${ref}"` : ref}`
+    else {
+      try {
+        text = ((await $.fs.read(path)) as string).trimEnd()
+      } catch {
+        // Gone from disk: the text as it was read.
+      }
     }
   }
   if (p === undefined || text === undefined) return false
@@ -430,7 +435,7 @@ function uniqueLabels(rows: readonly Row[]): string[] {
 /** Source code: what Claude reads to do the work, not a file you gave it. */
 const CODE = /\.(?:[cm]?[jt]sx?|py|go|rs|java|kts?|swift|c|h|cc|cpp|hpp|cs|rb|php|sh|bash|zsh|css|scss|sass|less|sql|vue|svelte|lua|pl|r|scala|dart|exs?|erl|hs|ml|clj|lock)$/i
 
-/** A file the model sees as images (a PDF's pages, a picture): no text of it can ride as a copy. */
+/** A file the model sees as images (a PDF's pages, a picture): its copy rides as an @ mention, not as text. */
 const MEDIA = /\.(?:pdf|png|jpe?g|gif|webp)$/i
 
 /**
@@ -558,16 +563,14 @@ async function act($: Engine, row: Row): Promise<string> {
   const isFile = row.key.startsWith('file:')
   const remove1 = isSkill ? '🗑 Stop later uses' : isFile ? '🗑 Stop later reads' : '🗑 Delete'
   const move1 = isSkill || isFile ? '🔄 Send a copy at end' : '🔄 Re-inject at end'
-  // A PDF or a picture has no text to send as a copy.
-  const moves = isFile && MEDIA.test(row.label) ? [] : [move1]
   const choices =
     row.isCopy || row.isMoved
       ? row.isDeleted
         ? ['Back']
         : ['🗑 Delete', 'Back']
       : row.isDeleted
-        ? [...moves, 'Back']
-        : [remove1, ...moves, 'Back']
+        ? [move1, 'Back']
+        : [remove1, move1, 'Back']
   const choice = await ask($, cardLabel(row) + (row.tokens === null ? '' : ` · ${int(row.tokens)} tok`), 'Piece', choices)
   if (choice === remove1 || choice === '🗑 Delete') {
     const confirm = await ask($, `${isSkill ? 'Stop later uses of' : isFile ? 'Stop later reads of' : 'Delete'} ${row.label}?`, 'Confirm', [isSkill || isFile ? 'Yes, stop them' : 'Yes, delete', 'No'])
@@ -1637,8 +1640,12 @@ export const register: Register = on => {
     const queued = Object.keys(moved).filter(k => moved[k] === 'queued')
     if (queued.length === 0) return next(e)
     const saved = await read($, savedAtom)
-    const riding = queued.map(k => saved[k] ?? '').filter(text => text !== '')
-    const result = await next({ ...e, context: [...(e.context ?? []), ...riding] })
+    // A PDF or a picture rides as an @ mention in the message itself (shown with it), so Claude Code attaches the file.
+    const isMention = (k: string) => k.startsWith('file:') && MEDIA.test(k)
+    const riding = queued.filter(k => !isMention(k)).map(k => saved[k] ?? '').filter(text => text !== '')
+    const mentions = queued.filter(isMention).map(k => saved[k] ?? '').filter(text => text !== '')
+    const text = mentions.length === 0 ? e.text : `${e.text} ${mentions.join(' ')}`
+    const result = await next({ ...e, text, context: [...(e.context ?? []), ...riding] })
     if (result.drop !== undefined) return result
     await update($, movedAtom, current => {
       const sent: Record<string, Move> = { ...current }
