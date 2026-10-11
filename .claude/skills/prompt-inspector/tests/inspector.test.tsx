@@ -76,13 +76,14 @@ function engine(on: On) {
   on('session.root', () => ({ value: '/repo' }))
   on('session.id', () => ({ value: 's1' }))
   on('session.model', () => ({ value: 'm' }))
-  // The count_tokens endpoint: 1 character is 1 token, 50 for the rest of the message.
+  // The count_tokens endpoint: 1 character is 1 token, an image 100, 50 for the rest of the message.
   on('http.fetch', ($, e) => {
-    const body = JSON.parse(String(e.init?.body ?? '{}')) as { messages?: { content: { content?: string }[] }[] }
+    const body = JSON.parse(String(e.init?.body ?? '{}')) as { messages?: { content: { content?: string | { type: string; text?: string }[] }[] }[] }
     const last = body.messages?.[body.messages.length - 1]?.content[0]
-    const content = typeof last?.content === 'string' ? last.content : ''
+    const content = last?.content
+    const n = typeof content === 'string' ? content.length : Array.isArray(content) ? content.reduce((k, c) => k + (c.type === 'text' ? (c.text ?? '').length : 100), 0) : 0
 
-    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ input_tokens: 50 + content.length }) } } as never
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ input_tokens: 50 + n }) } } as never
   })
   on('fs.exists', () => ({ value: world.isDebug }))
   on('fs.list', ($, e) => {
@@ -597,6 +598,56 @@ describe('plugin', () => {
     await $.turn.start({ text: 'Again', turnId: 't3' })
     await request($, world, ['Again'])
     expect((await everyLabel($, world)).some(l => l.startsWith('src/CLAUDE.md'))).toBe(false)
+  })
+
+  test('a file of yours Claude read (a text, not code) is listed by its path, with its exact size as the Read tool showed it', async ($, on) => {
+    const world = engine(on)
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Read them', turnId: 't2' })
+    const shown = '1\tMeeting at noon.\n2\tBring the slides.\n3\t'
+    const content = `${shown}\n\n<system-reminder>\nA reminder after it.\n</system-reminder>`
+    const uses = [
+      { type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/repo/notes/a.txt' }, text: '' },
+      { type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: '/repo/src/app.ts' }, text: '' },
+    ]
+    world.api.push({ role: 'assistant', content: uses } as never)
+    world.api.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'r1', text: content, content }, { type: 'tool_result', tool_use_id: 'r2', text: '1\tconst x = 1', content: '1\tconst x = 1' }] } as never)
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
+    const labels = await everyLabel($, world)
+    expect(labels).toContain('notes/a.txt [not measured]')
+    // Source code Claude reads to work is not a file you gave it.
+    expect(labels.some(l => l.startsWith('src/app.ts'))).toBe(false)
+    expect(await pieceTitle($, world, 'notes/a.txt')).toBe(`notes/a.txt [not measured] · ${int(shown.trimEnd().length)} tok`)
+  })
+
+  test('a PDF Claude read is listed by its path, its output sized on its own; it has no text to send as a copy', async ($, on) => {
+    const world = engine(on)
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Read the report', turnId: 't2' })
+    const header = 'PDF pages extracted: 2 page(s) from /repo/files/report.pdf (885 bytes)'
+    const page = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } }
+    const reminder = { type: 'text', text: '<system-reminder>\nA reminder after it.\n</system-reminder>' }
+    world.api.push({ role: 'assistant', content: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/repo/files/report.pdf' }, text: '' }] } as never)
+    world.api.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'r1', text: '', content: [{ type: 'text', text: header }, page, page, reminder] }] } as never)
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
+    expect(await everyLabel($, world)).toContain('files/report.pdf [not measured]')
+    world.taps = ['files/report.pdf', 'Back', 'Done']
+    await inspect($)
+    const card = world.cards[world.cards.length - 2]
+    // The tool's output, its note and pages, counted on its own: the reminder joined after it is not the file.
+    expect(card?.question).toBe(`files/report.pdf [not measured] · ${int(header.length + 200)} tok`)
+    expect(card?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', 'Back'])
+  })
+
+  test('a file you sent with your message is yours, listed by its path', async ($, on) => {
+    const world = engine(on)
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Look at @notes/a.txt', turnId: 't2' })
+    const sent = 'Called the Read tool with the following input: {"file_path":"/repo/notes/a.txt"}\nResult of calling the Read tool:\n1\tMeeting at noon.'
+    await $.prompt.attachment({ type: 'file', text: sent, origin: { kind: 'engine' } } as never)
+    await request($, world, ['Look at @notes/a.txt', wrap(sent)])
+    // It came with your message as text of its own: its exact range.
+    expect(await everyLabel($, world)).toContain(`notes/a.txt [${range(where(world, sent))}]`)
   })
 
   test('a skill you made: its list line and its text when used; 🗑 stops later uses and the text already sent keeps its place', async ($, on) => {

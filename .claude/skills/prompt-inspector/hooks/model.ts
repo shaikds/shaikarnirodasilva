@@ -32,9 +32,9 @@ export function int(n: number): string {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-/** A file path an attachment names (`Contents of /x/CLAUDE.md:`), or null. */
+/** A file path an attachment names (`Contents of /x/CLAUDE.md:`, a Read call's `file_path`), or null. */
 export function pathOfAttachment(text: string): string | null {
-  return /[Cc]ontents of (\S+?):?(?:\s|$)/.exec(text)?.[1] ?? null
+  return /[Cc]ontents of (\S+?):?(?:\s|$)/.exec(text)?.[1] ?? /"file_path":\s*"([^"]+)"/.exec(text)?.[1] ?? null
 }
 
 /** The first line of a text, for a piece with no better name. */
