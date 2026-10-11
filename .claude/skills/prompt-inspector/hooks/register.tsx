@@ -229,7 +229,8 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   for (const p of wanted) {
     const text = texts[p.hash]
     if (text === undefined) continue
-    if (p.tokens === null) need.push(text)
+    // A file Claude read is sized where it sits only (its text alone may be an id).
+    if (p.tokens === null && p.attachment !== 'file') need.push(text)
     const isRetry = ['counting failed', 'sent outside', 'not found'].some(why => p.lost?.startsWith(why) ?? false)
     if (p.zone === 'system' || p.step === null || p.at !== null || p.was !== null || (p.lost !== null && !isRetry)) continue
     if (isRetry) patch(p, { lost: null })
@@ -261,7 +262,7 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   }
   let count = await countAll($, model, need)
   for (const p of wanted) {
-    const n = p.tokens === null ? count(texts[p.hash] ?? '') : null
+    const n = p.tokens === null && p.attachment !== 'file' ? count(texts[p.hash] ?? '') : null
     if (n !== null && p.tokens === null) {
       patch(p, { tokens: n })
       textSized.add(p.key)
@@ -426,6 +427,24 @@ function uniqueLabels(rows: readonly Row[]): string[] {
   })
 }
 
+/** Source code: what Claude reads to do the work, not a file you gave it. */
+const CODE = /\.(?:[cm]?[jt]sx?|py|go|rs|java|kts?|swift|c|h|cc|cpp|hpp|cs|rb|php|sh|bash|zsh|css|scss|sass|less|sql|vue|svelte|lua|pl|r|scala|dart|exs?|erl|hs|ml|clj|lock)$/i
+
+/** A file the model sees as images (a PDF's pages, a picture): no text of it can ride as a copy. */
+const MEDIA = /\.(?:pdf|png|jpe?g|gif|webp)$/i
+
+/**
+ * A file of yours: in the project, or one you uploaded; not source code, and
+ * not the inspector's own, a dependency's or git's.
+ */
+async function isYourFile($: Engine, path: string): Promise<boolean> {
+  const root = await $.session.root()
+  const home = /^\/(?:root|home\/[^/]+)\//.exec(root)?.[0] ?? '/root/'
+  const isPlace = path.startsWith(`${root}/`) || path.startsWith(`${home}.claude/uploads/`) || path.startsWith('/mnt/user-data/')
+
+  return isPlace && !CODE.test(path) && !/\/(?:node_modules|\.git)\/|\/\.claude\/skills\/prompt-inspector\//.test(path)
+}
+
 /** Your instruction files on disk: every CLAUDE.md and `.claude/rules` file under the project, and the home CLAUDE.md. */
 async function yourFiles($: Engine): Promise<string[]> {
   const root = await $.session.root()
@@ -539,14 +558,16 @@ async function act($: Engine, row: Row): Promise<string> {
   const isFile = row.key.startsWith('file:')
   const remove1 = isSkill ? '🗑 Stop later uses' : isFile ? '🗑 Stop later reads' : '🗑 Delete'
   const move1 = isSkill || isFile ? '🔄 Send a copy at end' : '🔄 Re-inject at end'
+  // A PDF or a picture has no text to send as a copy.
+  const moves = isFile && MEDIA.test(row.label) ? [] : [move1]
   const choices =
     row.isCopy || row.isMoved
       ? row.isDeleted
         ? ['Back']
         : ['🗑 Delete', 'Back']
       : row.isDeleted
-        ? [move1, 'Back']
-        : [remove1, move1, 'Back']
+        ? [...moves, 'Back']
+        : [remove1, ...moves, 'Back']
   const choice = await ask($, cardLabel(row) + (row.tokens === null ? '' : ` · ${int(row.tokens)} tok`), 'Piece', choices)
   if (choice === remove1 || choice === '🗑 Delete') {
     const confirm = await ask($, `${isSkill ? 'Stop later uses of' : isFile ? 'Stop later reads of' : 'Delete'} ${row.label}?`, 'Confirm', [isSkill || isFile ? 'Yes, stop them' : 'Yes, delete', 'No'])
@@ -753,6 +774,47 @@ function resultText(block: ApiBlock): string | null {
   return null
 }
 
+/**
+ * What the Read tool showed of a file, as its piece: its output up to the
+ * reminders Claude Code joined after it, with its exact size there. A text's
+ * size is from a proven cut; a PDF's or a picture's, from its output counted
+ * on its own. Its text is the output, or for images the
+ * tool call's id (what tells it is still in the conversation). Null when the
+ * read showed nothing.
+ */
+async function readShown($: Engine, model: string, block: ApiBlock): Promise<{ text: string; at: { size: number } | string } | null> {
+  if (block.is_error === true) return null
+  const content = resultText(block)
+  if (content !== null) {
+    const open = content.indexOf('<system-reminder>')
+    const to = (open < 0 ? content : content.slice(0, open)).trimEnd().length
+    // The Read tool shows a text as numbered lines; anything else (a note that the file is unchanged) is not the file.
+    if (to === 0 || !/^ *\d+\t/.test(content)) return null
+
+    return { text: content.slice(0, to), at: await sizeInResult(c => placeSpan($, model, c, 0, to, 0), content) }
+  }
+  // A PDF or a picture: the tool's output (its note and the pages), without the reminders joined after it.
+  const parts = Array.isArray(block.content) ? (block.content as ApiBlock[]) : []
+  const isReminder = (b: ApiBlock) => b.type === 'text' && String(b.text).trimStart().startsWith('<system-reminder>')
+  const own = parts.filter(b => !isReminder(b))
+  if (!own.some(b => b.type === 'image' || b.type === 'document')) return null
+
+  return { text: String(block.tool_use_id), at: await partsSize($, model, own) }
+}
+
+/**
+ * The exact tokens of a tool's output of pages (a PDF's, a picture), counted on
+ * its own. Pages and the text beside them do not add up part by part (a page
+ * next to text costs a few tokens more), so the output is counted whole, and
+ * what Claude Code joins after it is not part of it.
+ */
+async function partsSize($: Engine, model: string, own: readonly ApiBlock[]): Promise<{ size: number } | string> {
+  const [mine, dot] = await Promise.all([toolResultTokens($, model, own), toolResultTokens($, model, '.')])
+  if (mine === null || dot === null) return 'the API count failed'
+
+  return { size: mine - dot + 1 }
+}
+
 /** Whether a message holds the text inside a block that is not text (a tool result). */
 function isInBlock(message: ApiMessage | undefined, text: string, isText: boolean): boolean {
   if (message === undefined || text === '') return false
@@ -871,7 +933,6 @@ async function recordFiles($: Engine, message: ApiMessage, asked: ApiMessage | u
       // Not a file: nothing to look for.
     }
   }
-  if (files.length === 0) return
   const pieces = await read($, injectionsAtom)
   const added: Piece[] = []
   const texts: Record<string, string> = {}
@@ -895,6 +956,21 @@ async function recordFiles($: Engine, message: ApiMessage, asked: ApiMessage | u
       added.push(withPlace({ ...base, step: step.id }, at))
       texts[base.hash] = spanText
     }
+  }
+  // Any other file of yours Claude read (a text, a PDF, a picture): as the Read tool showed it.
+  for (const use of asked?.content ?? []) {
+    if (use.type !== 'tool_use' || use.name !== 'Read') continue
+    const path = (use.input as { file_path?: unknown } | undefined)?.file_path
+    if (typeof path !== 'string' || files.some(f => f.path === path) || !(await isYourFile($, path))) continue
+    const block = message.content.find(b => b.type === 'tool_result' && b.tool_use_id === use.id)
+    const rel = await shortPath($, path)
+    const key = `file:${rel}@${instance}`
+    if (block === undefined || pieces.some(p => p.key === key) || added.some(p => p.key === key)) continue
+    const shown = await readShown($, step.model, block)
+    if (shown === null) continue
+    const base = piece({ key, group: `file:${rel}`, kind: 'rule', zone: 'conversation', label: rel, isYours: true, attachment: 'file' }, shown.text, turn)
+    added.push(withPlace({ ...base, step: step.id }, shown.at))
+    texts[base.hash] = shown.text
   }
   if (added.length === 0) return
   await remember($, texts)
@@ -929,8 +1005,8 @@ async function apiCall($: Engine, path: string, body: unknown): Promise<{ status
  * as the request, so the closing and framing are the same), through the session's
  * own credential. The count is cached. Null when the API can't be reached.
  */
-async function toolResultTokens($: Engine, model: string, content: string): Promise<number | null> {
-  const key = `tr:${model}:${hash(content)}`
+async function toolResultTokens($: Engine, model: string, content: string | readonly unknown[]): Promise<number | null> {
+  const key = `tr:${model}:${hash(typeof content === 'string' ? content : JSON.stringify(content))}`
   const stored = await $.store.get(key)
   if (typeof stored === 'number') return stored
   const messages = [
@@ -1522,14 +1598,16 @@ export const register: Register = on => {
       const userSkills = new Set(await read($, userSkillsAtom))
       const path = pathOfAttachment(result.text)
       const isRule = e.type === 'nested_memory' || e.type === 'instructions'
+      // A file you sent with your message (or one Claude Code brings back after a compaction): yours, by its path.
+      const isFile = e.type === 'file' && path !== null && (await isYourFile($, path))
       const kind: PieceKind = isRule ? 'rule' : 'reminder'
       const label =
         e.type === 'skill_listing'
           ? `skill list (${entries.length} skills)`
           : path !== null
-            ? `${await shortPath($, path)}${isRule ? '' : ` (${e.type.replace(/_/g, ' ')})`}`
+            ? `${await shortPath($, path)}${isRule || isFile ? '' : ` (${e.type.replace(/_/g, ' ')})`}`
             : attachmentLabel(originOf(e.origin, e.type), result.text)
-      const seen = [{ piece: piece({ key, kind, zone: 'conversation', label, attachment: e.type, isYours: isRule }, result.text, message), text: result.text }]
+      const seen = [{ piece: piece({ key, kind, zone: 'conversation', label, attachment: e.type, isYours: isRule || isFile }, result.text, message), text: result.text }]
       for (const span of entries) {
         const text = result.text.slice(span.offset, span.offset + span.chars)
         const fields: Fields = {

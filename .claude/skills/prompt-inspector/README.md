@@ -13,6 +13,8 @@ end of the context. Then you can send the same message again and compare the ans
 
 Your instruction files count wherever their text reaches the context: injected by Claude Code (a `CLAUDE.md` of a folder Claude reads in), read by Claude itself (`files/CLAUDE.md` opened with the Read tool), or printed by a command (`cat sub/CLAUDE.md`). Each is listed by its path. One sent as its own text has its exact range; one inside a tool result (read, printed, or joined into a read) reads `[not measured]` with its exact size, since the API never says where a tool result's text lies (below). **🔄** sends a copy to the end of the context, where the copy gets an exact range. A file whose text is not in the context is not listed.
 
+Your other files count the same way: any file of yours Claude opens with the Read tool (a `.txt`, `.md`, `.csv`, a PDF, a picture; anything but source code), in the project or one you uploaded, and any file you send with your message (`@notes/a.txt`). A file you send comes as its own text, with its exact range. One Claude read is inside its tool result: `[not measured]`, with its exact size, the Read tool's output (a text's numbered lines; a PDF's or a picture's whole output, counted on its own, since its pages and the text beside them cost a few tokens more together than apart). A PDF or a picture has no 🔄: it has no text to send as a copy.
+
 Both open a card, on any device including the phone:
 
 1. The list: two pieces per card, each with its exact range (`CLAUDE.md [76,489 - 77,102]`), then
