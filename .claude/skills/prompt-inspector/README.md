@@ -11,9 +11,9 @@ end of the context. Then you can send the same message again and compare the ans
 | `/inspect` | Only what is in the context right now, listed as `Name [start - end]` (a count says how many more are in context but not measured; nothing waiting or planned is listed). Your pieces: your `CLAUDE.md` files, `.claude/rules` files, CLAUDE.md files picked up later from subfolders, and the skills you made (their line in the skill list, and their text each time it is used). |
 | `/inspect all` | Every injected piece, Claude Code's own included, plus unnamed lines for what lies between them (tools + system prompt, the conversation), so the ranges run without gaps from 0 to the last token. Never your own messages. |
 
-Your instruction files count wherever their text reaches the context: injected by Claude Code (a `CLAUDE.md` of a folder Claude reads in), read by Claude itself (`files/CLAUDE.md` opened with the Read tool), or printed by a command (`cat sub/CLAUDE.md`). Each is listed by its path. One sent as its own text has its exact range; one inside a tool result (read, printed, or joined into a read) reads `[not measured]` with its exact size, since the API never says where a tool result's text lies (below). **🔄** sends a copy to the end of the context, where the copy gets an exact range. A file whose text is not in the context is not listed.
+Your instruction files count wherever their text reaches the context: injected by Claude Code (a `CLAUDE.md` of a folder Claude reads in), read by Claude itself (`files/CLAUDE.md` opened with the Read tool), or printed by a command (`cat sub/CLAUDE.md`). Each is listed by its path, with its exact range. **🔄** sends a copy to the end of the context, where the copy gets its own exact range. A file whose text is not in the context is not listed.
 
-Your other files count the same way: any file of yours Claude opens with the Read tool (a `.txt`, `.md`, `.csv`, a PDF, a picture; anything but source code), in the project or one you uploaded, and any file you send with your message (`@notes/a.txt`). A text file Claude reads is moved out of the tool's reply into a block of text of its own right after it (the reply says so; Claude reads the same numbered lines), where its range is exact; a subfolder's `CLAUDE.md` that Claude Code brings in with that read then comes as its own text too, also exact. A file you send comes as its own text, with its exact range. A PDF or a picture stays inside its tool result: `[not measured]`, with its exact size, the Read tool's whole output counted on its own (its pages and the text beside them cost a few tokens more together than apart). It has no 🔄: no text to send as a copy. A `CLAUDE.md` Claude Code brings in with a read of source code stays inside that tool result too: size only.
+Your other files count the same way: any file of yours Claude opens with the Read tool (a `.txt`, `.md`, `.csv`, a PDF, a picture; anything but source code), in the project or one you uploaded, any file a command prints whole (`cat notes.md`), and any file you send with your message (`@notes/a.txt`). A text file Claude reads, or a command prints whole, is moved out of the tool's reply into a block of text of its own right after it (the reply says so; Claude reads the same text), where its range is exact. A file you send comes as its own text, with its exact range. A PDF or a picture stays inside its tool result (Claude Code keeps no picture moved out of one): its size is exact, its place inside the result is not measured (below). It has no 🔄: no text to send as a copy. A file printed together with other output, or a `CLAUDE.md` Claude Code brings in with a read of source code, stays inside that tool result too: size only.
 
 Both open a card, on any device including the phone:
 
@@ -42,33 +42,47 @@ context.
 
 ## How the numbers are exact
 
-- The API reports each request's size exactly. Where its cached part ends (`cache read + cache
-  write`) is exactly where its last block ends, when only the closing tokens are left uncached.
-- A piece is placed backwards from that point in the request that first carries it: everything
-  after it is counted exactly, then the piece itself.
-- Counting uses the API, because Claude's tokenizer is not public. Each distinct text is counted
-  once (8 at a time) and the count is kept.
-- Once placed, a range stays the same until you delete or re-inject the piece (or something before
-  it changes). It is carried to each new request only by proof: the cache read proves
-  everything before it unchanged; or, after a change (your 🗑 or 🔄), the two requests are compared
-  block by block and every block that changed before it is counted whole, as sent.
-- Counts only ever cover text that runs to the end of its block: a text counted alone loses its
-  trailing whitespace, so a piece's start is taken from the piece with the rest of its block.
-- Claude Code sends some of its own reminders reworded; those are found by their lines and placed
-  as the whole block they were sent in (the card says so). A few are added only as a request is
-  sent, outside the messages: those read `not found in its request as sent`.
-- Inside a tool result (a nested `CLAUDE.md` Claude Code joins into a file read's result, or a file
-  Claude read or printed) only the size is exact. The API wraps each tool result in tokens of its own
-  before and after the text, and reports only their sum: a cache mark inside a tool result is
-  refused, and one on it holds to the end of its message. So where the text starts and ends is not
-  known, and the row reads `[not measured]`. Its size comes from the API's `count_tokens`, with each
-  cut proven to fall between two tokens (the text before it and after it, counted alone, add up to
-  the whole). A reminder's size takes in its tags and the blank lines before it; a file's ends at its
-  last character that shows. It stays listed while its text is in the conversation.
-- Claude Code adds some reminders (the skill list, a nested `CLAUDE.md`) to a request only as it sends it, and may announce one after the request is gone: the request is read again once sent, and a late one is matched to the message, and request, that carried it.
-- What can't be proven says `not measured` and why (compaction, a block that isn't text, text sent
-  before the inspector started), never a guess. Sizes are always exact. System-prompt sections show
-  their size; their position inside tools + system prompt is not reported by the API.
+- **The request as the model gets it.** The inspector rebuilds each request from what the session
+  holds, as Claude Code sends it: your messages in a row are one, and on models that read system
+  turns (Opus 5.5 and others) the reminders leave your message and follow it as one system turn (an
+  attachment drawn as several reminders joined by a line break, attachments by a blank line). Rebuilt
+  requests were compared with real captured ones: identical.
+- **Where a request ends.** The API reports a request's size exactly. It is its messages and the
+  closing tokens after its last message (4 after a message of yours, 2 after a system turn on
+  Opus 5.5). The inspector measures those closings once per model, with a short request of its own
+  whose cache mark ends its last text (only the closing is left uncached).
+- **Where a piece is.** A piece is placed in the request that first carries it, from that request's
+  end: the API's own token counter (`count_tokens`) counts the request's end as sent, and again cut
+  just after the piece. The difference is everything after the piece, so the piece ends that far
+  before the end; it starts its own size earlier. Both edges are checked to fall between two tokens,
+  and a piece's range is its text as it shows (white space at its edges belongs to what is beside it).
+- Claude Code sends some of its own reminders reworded; those are found by most of their lines and
+  placed as the whole block they were sent in (the card says so).
+- **Checked against the API.** Every kind of range (a CLAUDE.md, a rule, a skill line, a file read or
+  printed, a file you sent, a 🔄 copy, ranges after 🗑, 🔄 and a compaction) was checked by replaying
+  the real request cut at the piece's edge, with the cache mark there: the API's cached part ends on
+  the same token.
+- **It stays.** A range stays the same until something before it changes: each request's cache read
+  proves everything before it unchanged. After your 🗑 or 🔄, a block taken out before it is counted
+  whole as sent (a system turn with its framing).
+- **After a change, thinking.** When what precedes an answer that thought changes (your 🗑 of a
+  reminder before it), the API stops counting that answer's thinking, which no count shows. So a
+  piece after it is placed again in the request that carried the change, from its end, and trusted
+  only once proven: placed the same way, the end of the block where the change began must land
+  exactly on the token where the API says that request's cache read ended. (An answer of text alone
+  costs 2 tokens more while a thinking block is still bound in the conversation; the proof also says
+  which.)
+- **Compaction.** After a compaction, what it summarized away leaves the list, and what is still in
+  the context (the files Claude Code brings back with the summary, your CLAUDE.md files) is placed
+  again from the next request.
+- **Inside a tool result** (a picture, a PDF, a file printed with other output) only the size is
+  exact. The API wraps a tool result in tokens of its own before and after its content and reports
+  only their sum: a cache mark inside a tool result is refused, and one on it holds to its end. Its
+  size comes from `count_tokens` (the content with and without it).
+- What can't be proven says `not measured` and why, never a guess: a place inside a tool result,
+  text sent before the inspector started (a session resumed in a new process too), a request in
+  which a server tool ran. Sizes are always exact. System-prompt sections show their size; their
+  position inside tools + system prompt is not reported by the API.
 - Debug mode runs a self-test of these facts against the model (`exact` when they hold).
 
 ## How it turns on
@@ -88,6 +102,8 @@ context.
 - A skill's text, once sent, stays in the conversation; deleting a skill stops its later uses.
 - Deleting a piece of the first message's context changes the start of the prompt, so the next
   request is sent without the prompt cache from that point.
+- Deleting or moving a piece drops the thinking of the answers after it from the context (the API
+  binds thinking to what came before it).
 
 ## Develop
 
@@ -100,4 +116,4 @@ Debug mode: while `.claude/prompt-inspector.debug` exists (git-ignored), the ins
 `debug` tool that returns its report (the self-test, the boundary check, the last requests and every
 row), and writes the same report to `.claude/prompt-inspector.report.json` at each turn's end.
 
-In debug mode, writing `{"label": "<path>", "action": "delete"}` (or `"move"`) to `.claude/prompt-inspector.act` presses 🗑 or 🔄 on that row at the next `debug` call, for testing without the cards.
+In debug mode, writing `{"label": "<path>", "action": "delete"}` (or `"move"`) to `.claude/prompt-inspector.act` presses 🗑 or 🔄 on that row at the next `debug` call, for testing without the cards (`"action": "compacted"` treats the conversation as just compacted).

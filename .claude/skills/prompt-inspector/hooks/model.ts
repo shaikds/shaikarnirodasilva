@@ -24,8 +24,233 @@ export function hash(text: string): string {
   return (h >>> 0).toString(16).padStart(8, '0')
 }
 
+/**
+ * Models that read a system turn in the middle of a conversation: Claude Code
+ * sends them most of its reminders as one, after the user message.
+ */
+export function takesSystemTurns(model: string): boolean {
+  return /^claude-(opus-5|opus-4-8|fable-5|mythos|sonnet-5-5|haiku-5-5)/.test(model)
+}
+
+const REMINDER_OPEN = '<system-reminder>\n'
+const REMINDER_CLOSE = '\n</system-reminder>'
+
+/** A reminder's own text, inside its `<system-reminder>` wrapper (a line break may follow it); null when the text is not one whole reminder. */
+export function reminderInner(text: string): string | null {
+  const whole = text.endsWith(`${REMINDER_CLOSE}\n`) ? text.slice(0, -1) : text
+  if (!whole.startsWith(REMINDER_OPEN) || !whole.endsWith(REMINDER_CLOSE)) return null
+  const inner = whole.slice(REMINDER_OPEN.length, whole.length - REMINDER_CLOSE.length)
+
+  return inner.includes(REMINDER_CLOSE) ? null : inner
+}
+
+/** A tool call Claude Code shows as two reminders (a file you mentioned, a folder): the call, then its result. */
+const isCallThenResult = (a: string | undefined, b: string | undefined) =>
+  a !== undefined && b !== undefined && /^Called the \S+ tool with the following input: /.test(a) && /^Result of calling the \S+ tool:/.test(b)
+
+/**
+ * A system turn's text: each attachment's own text (an attachment drawn as
+ * several reminders has them joined by a line break), the attachments joined
+ * by a blank line. `attachments` holds the keys of the attachment texts seen.
+ */
+export function joinTurn(inners: readonly string[], attachments: ReadonlySet<string>): string {
+  const parts: string[] = []
+  for (let i = 0; i < inners.length; ) {
+    let size = 1
+    for (let n = inners.length - i; n >= 2; n--) {
+      const run = inners.slice(i, i + n)
+      if (attachments.has(textKey(run.join('\n'))) || (n === 2 && isCallThenResult(run[0], run[1]))) {
+        size = n
+        break
+      }
+    }
+    parts.push(inners.slice(i, i + size).join('\n'))
+    i += size
+  }
+
+  return parts.join('\n\n')
+}
+
+/** Reminders joined to the end of a tool result's text (each after a blank line): its own output, and theirs. */
+export function splitJoined(content: string): { own: string; inners: string[] } {
+  const inners: string[] = []
+  let own = content
+  for (let i = own.lastIndexOf(`\n\n${REMINDER_OPEN}`); i >= 0; i = own.lastIndexOf(`\n\n${REMINDER_OPEN}`)) {
+    const inner = reminderInner(own.slice(i + 2))
+    if (inner === null) break
+    inners.unshift(inner)
+    own = own.slice(0, i)
+  }
+
+  return { own, inners }
+}
+
+/**
+ * A request's messages as Claude Code sends them to a model that takes system
+ * turns. User messages in a row are one. Each reminder it promotes
+ * (`promotes`: its own text, and whether it was joined to a tool result)
+ * leaves its user message, as a block of its own or from a tool result's text,
+ * and they all follow that message as one system turn (see `joinTurn`). Here
+ * that turn is the user message's last block, marked `isSystemTurn`.
+ */
+export function toWire(
+  messages: readonly { role: string; content: readonly ApiBlock[] }[],
+  promotes: (inner: string, isJoined: boolean) => boolean,
+  attachments: ReadonlySet<string> = new Set(),
+): { role: string; content: ApiBlock[] }[] {
+  const merged: { role: string; content: ApiBlock[] }[] = []
+  for (const m of messages) {
+    const prior = merged[merged.length - 1]
+    if (prior !== undefined && prior.role === 'user' && m.role === 'user') prior.content = [...prior.content, ...m.content]
+    else merged.push({ role: m.role, content: [...m.content] })
+  }
+
+  return merged.map(message => {
+    if (message.role !== 'user') return { role: message.role, content: [...message.content] }
+    const turn: string[] = []
+    const content: ApiBlock[] = []
+    for (const block of message.content) {
+      const inner = block.type === 'text' && typeof block.text === 'string' ? reminderInner(block.text) : null
+      if (inner !== null && promotes(inner, false)) {
+        turn.push(inner)
+        continue
+      }
+      if (block.type === 'tool_result' && typeof block.content === 'string') {
+        const { own, inners } = splitJoined(block.content)
+        const kept = inners.filter(i => !promotes(i, true))
+        turn.push(...inners.filter(i => promotes(i, true)))
+        content.push(kept.length === inners.length ? block : { ...block, content: [own, ...kept.map(i => `${REMINDER_OPEN}${i}${REMINDER_CLOSE}`)].join('\n\n') })
+        continue
+      }
+      if (block.type === 'tool_result' && Array.isArray(block.content)) {
+        const parts = block.content as ApiBlock[]
+        const isPromoted = (b: ApiBlock) => {
+          const i = b.type === 'text' && typeof b.text === 'string' ? reminderInner(b.text) : null
+
+          return i !== null && promotes(i, true)
+        }
+        turn.push(...parts.filter(isPromoted).map(b => reminderInner(String(b.text)) ?? ''))
+        content.push(parts.some(isPromoted) ? { ...block, content: parts.filter(b => !isPromoted(b)) } : block)
+        continue
+      }
+      content.push(block)
+    }
+    if (turn.length > 0) content.push({ type: 'text', text: joinTurn(turn, attachments), isSystemTurn: true })
+
+    return { role: message.role, content }
+  })
+}
+
+/** One message of a request as counted: a system turn is a message of its own. */
+export type WireMessage = { role: string; content: ApiBlock[] }
+
+/**
+ * The end of a request as sent, ready to count: its last user message and the
+ * system turn after it. When that message answers tool calls, the calls go
+ * before it (each result needs its call), after a one-character user message
+ * (a request opens on a user message). What comes before the last user message
+ * is left out: it changes no difference between two counts of this tail.
+ * `first` is where the request's own messages begin in it.
+ */
+export function wireTail(sent: readonly { role: string; content: readonly ApiBlock[] }[]): { messages: WireMessage[]; first: number } | null {
+  let last = sent.length - 1
+  while (last >= 0 && sent[last]?.role !== 'user') last--
+  const user = sent[last]
+  if (user === undefined) return null
+  const clean = (b: ApiBlock): ApiBlock => Object.fromEntries(Object.entries(b).filter(([k]) => k !== 'cache_control' && k !== 'isSystemTurn')) as ApiBlock
+  const own = user.content.filter(b => b.isSystemTurn !== true).map(clean)
+  const turn = user.content.find(b => b.isSystemTurn === true)
+  const messages: WireMessage[] = []
+  if (own.some(b => b.type === 'tool_result')) {
+    const calls = (sent[last - 1]?.content ?? []).filter(b => b.type === 'tool_use').map(clean)
+    messages.push({ role: 'user', content: [{ type: 'text', text: '.' }] }, { role: 'assistant', content: calls })
+  }
+  const first = messages.length
+  if (own.length > 0) messages.push({ role: 'user', content: own })
+  if (turn !== undefined && typeof turn.text === 'string') messages.push({ role: 'system', content: [{ type: 'text', text: turn.text }] })
+
+  return messages.length === first ? null : { messages, first }
+}
+
+/**
+ * A whole request as sent, ready to count: each system turn a message of its
+ * own. `origin` says, for each of its messages, which message of `sent` it
+ * came from and which of that message's blocks each of its blocks is.
+ */
+export function wireMessages(sent: readonly { role: string; content: readonly ApiBlock[] }[]): { messages: WireMessage[]; origin: { message: number; blocks: number[] }[] } {
+  const clean = (b: ApiBlock): ApiBlock => Object.fromEntries(Object.entries(b).filter(([k]) => k !== 'cache_control' && k !== 'isSystemTurn')) as ApiBlock
+  const messages: WireMessage[] = []
+  const origin: { message: number; blocks: number[] }[] = []
+  for (const [k, m] of sent.entries()) {
+    const own = m.content.map((b, j) => ({ b, j })).filter(x => x.b.isSystemTurn !== true)
+    if (own.length > 0) {
+      messages.push({ role: m.role, content: own.map(x => clean(x.b)) })
+      origin.push({ message: k, blocks: own.map(x => x.j) })
+    }
+    const turn = m.content.findIndex(b => b.isSystemTurn === true)
+    const text = m.content[turn]?.text
+    if (turn >= 0 && typeof text === 'string') {
+      messages.push({ role: 'system', content: [{ type: 'text', text }] })
+      origin.push({ message: k, blocks: [turn] })
+    }
+  }
+
+  return { messages, origin }
+}
+
+/** Where a text lies in a tail: the message, the block, and the offset in the block's text. */
+export type WireAt = { message: number; block: number; offset: number }
+
+/** Finds `text` in the text blocks of the tail's own messages (from `first`), the last occurrence first. */
+export function locateInTail(messages: readonly WireMessage[], first: number, text: string): WireAt | null {
+  if (text.length === 0) return null
+  for (let m = messages.length - 1; m >= first; m--) {
+    const blocks = messages[m]?.content ?? []
+    for (let b = blocks.length - 1; b >= 0; b--) {
+      const t = blocks[b]?.type === 'text' ? blocks[b]?.text : undefined
+      const offset = typeof t === 'string' ? t.lastIndexOf(text) : -1
+      if (offset >= 0) return { message: m, block: b, offset }
+    }
+  }
+
+  return null
+}
+
+/**
+ * The tail cut at a point: everything before it, nothing after. A block left
+ * empty is dropped, and a message left empty too.
+ */
+export function cutTail(messages: readonly WireMessage[], at: WireAt): WireMessage[] {
+  const out = messages.slice(0, at.message).map(m => ({ role: m.role, content: [...m.content] }))
+  const m = messages[at.message]
+  if (m === undefined) return out
+  const blocks = m.content.slice(0, at.block)
+  const b = m.content[at.block]
+  const text = b !== undefined && typeof b.text === 'string' ? b.text.slice(0, at.offset) : ''
+  if (text !== '') blocks.push({ ...b, text } as ApiBlock)
+  if (blocks.length > 0) out.push({ role: m.role, content: blocks })
+
+  return out
+}
+
+/**
+ * The text just before a point in the tail, in its own block (the text block
+ * before it when it opens one); null where nothing can share a token with it:
+ * a message's start, or a block that is not text (a tool result) before it.
+ */
+export function textBefore(messages: readonly WireMessage[], at: WireAt): string | null {
+  const blocks = messages[at.message]?.content ?? []
+  if (at.offset > 0) return String(blocks[at.block]?.text ?? '').slice(0, at.offset)
+  const prior = blocks[at.block - 1]
+
+  return prior !== undefined && prior.type === 'text' && typeof prior.text === 'string' ? prior.text : null
+}
+
 /** Where a text is kept, and what its exact count is cached by. */
 export const textKey = (text: string) => `${hash(text)}:${text.length}`
+
+/** A system turn's key among a request's blocks: its text's, marked as a message of its own. */
+export const turnKey = (text: string) => `s:${textKey(text)}`
 
 /** `58002` as `58,002`. */
 export function int(n: number): string {
@@ -102,7 +327,8 @@ export function spansOfFiles(block: string, files: readonly { path: string; cont
 /**
  * The block a reminder was sent in when Claude Code rewords it: the one that
  * holds the most of its distinctive lines (24 characters or more, the first
- * 40 checked); -1 when none holds any.
+ * 40 checked), and more than half of them; -1 when none does (a line or two
+ * any reminder of its kind has is no match).
  */
 export function blockOf(blocks: readonly string[], text: string): number {
   const lines = text
@@ -120,7 +346,7 @@ export function blockOf(blocks: readonly string[], text: string): number {
     }
   }
 
-  return best
+  return most * 2 > lines.length ? best : -1
 }
 
 /** Where a piece's text lies in a request's last message: the block, and the offset in it. */
@@ -185,12 +411,17 @@ export function flatKeys(messages: readonly { role: string; content: readonly Ap
   for (const message of messages) {
     out.push(`m:${message.role}`)
     for (const block of message.content) {
-      if (block.type === 'text' && typeof block.text === 'string') {
+      // A system turn is a message of its own, framing and all: `s:` tells it from a text block (see `carry`).
+      if (block.isSystemTurn === true && typeof block.text === 'string') {
+        texts[turnKey(block.text)] = block.text
+        out.push(turnKey(block.text))
+      } else if (block.type === 'text' && typeof block.text === 'string') {
         const key = textKey(block.text)
         texts[key] = block.text
         out.push(key)
       } else {
-        out.push(`x:${hash(JSON.stringify(block))}`)
+        // A thinking block is marked: a change before it unbinds it, and it then costs nothing (see `carry`).
+        out.push(`x:${block.type === 'thinking' || block.type === 'redacted_thinking' ? 'thinking:' : ''}${hash(JSON.stringify(block))}`)
       }
     }
   }
@@ -290,6 +521,7 @@ export const LOST = {
   unseen: 'the prompt before it changed in a way the inspector did not see',
   tools: 'the tools offered changed',
   broken: 'the conversation before it changed (compaction, or an edit that can’t be counted)',
+  thinking: 'a change before it unbound a thinking block before it, which then costs what no count gives',
   text: 'a text it depends on was not kept',
 }
 
@@ -301,8 +533,9 @@ export const LOST = {
  * changing finds it in the new block, or finds it taken out. Anything that
  * can't be counted makes it lost: never a guess.
  *
- * `count` answers a text's exact tokens, or null; run it once collecting the
- * texts it asks for, count them, then again with the counts.
+ * `count` answers a text's exact tokens, or null; `countBlock` a whole block's
+ * where it sits, by its key (a system turn's framing included); run it once
+ * collecting what it asks for, count, then again with the counts.
  */
 export function carry(
   at: Position,
@@ -312,11 +545,15 @@ export function carry(
   steps: readonly Step[],
   texts: Readonly<Record<string, string>>,
   count: (text: string) => number | null,
+  countBlock: (key: string) => number | null = key => (texts[key] === undefined ? null : count(texts[key] ?? '')),
 ): Carried {
   let pos = at
   let step = from
+  let prior = steps.find(s => s.id === from)
   for (const s of steps) {
     if (s.id <= from) continue
+    const before = prior
+    prior = s
     // The cache proves everything up to the piece's end the same as in the request before.
     if (s.cacheRead >= pos.end) {
       step = s.id
@@ -334,6 +571,9 @@ export function carry(
     if (change.kind === 'unknown') return { kind: 'lost', reason: LOST.unseen, step }
     if (change.system === 'tools') return { kind: 'lost', reason: LOST.tools, step }
     if (change.brokenAt !== null && change.brokenAt <= pos.block) return { kind: 'lost', reason: LOST.broken, step }
+    // A thinking block between the first change and the piece: the API stops counting it once what precedes it changed.
+    const firstChange = Math.min(...change.blocks.filter(c => c.at < pos.block).map(c => c.at))
+    if ((before?.thinkingAt ?? []).some(i => i > firstChange && i < pos.block)) return { kind: 'lost', reason: LOST.thinking, step }
     let shift = 0
     let isCounted = true
     const add = (t: string | undefined, sign: number) => {
@@ -343,6 +583,12 @@ export function carry(
         return
       }
       const n = t.length === 0 ? 0 : count(t)
+      if (n === null) isCounted = false
+      else shift += sign * n
+    }
+    // A whole block put in or taken out: what it costs where it sits.
+    const addBlock = (key: string, sign: number) => {
+      const n = countBlock(key)
       if (n === null) isCounted = false
       else shift += sign * n
     }
@@ -361,14 +607,14 @@ export function carry(
       if (before === undefined || after === undefined) return { kind: 'lost', reason: LOST.text, step }
       if (c.before === null) {
         // Put in before the piece's block.
-        add(after ?? '', 1)
+        if (c.after !== null) addBlock(c.after, 1)
         block++
         continue
       }
       if (c.at < pos.block) {
-        add(before ?? '', -1)
-        if (after === null) block--
-        else add(after, 1)
+        addBlock(c.before, -1)
+        if (c.after === null) block--
+        else addBlock(c.after, 1)
         continue
       }
       // Its own block: taken out, or changed (find the same occurrence of its text in the new one).

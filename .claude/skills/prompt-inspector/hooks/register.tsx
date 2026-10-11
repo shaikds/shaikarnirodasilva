@@ -20,18 +20,25 @@ import {
   int,
   keys,
   layout,
-  locate,
+  LOST,
   parseListing,
   pathOfAttachment,
   rowAt,
   spansOfFiles,
   systemChange,
+  takesSystemTurns,
   textKey,
-  textsToCount,
+  turnKey,
+  toWire,
   typedPosition,
   withFillers,
+  wireTail,
+  wireMessages,
+  locateInTail,
+  cutTail,
+  textBefore,
 } from './model'
-import type { Row, Span } from './model'
+import type { Row, Span, WireAt, WireMessage } from './model'
 
 const injectionsAtom = atom({ plugin: 'prompt-inspector', key: 'injections' } as const, [])
 const requestsAtom = atom({ plugin: 'prompt-inspector', key: 'requests' } as const, [])
@@ -54,6 +61,40 @@ const PERSON_WORDS = new Set(['queued_command'])
 
 /** The blocks of the last main request, to tell what the next one changed (kept by this module only). */
 let previous: { keys: string[]; system: SystemSnapshot | null } | null = null
+
+/** Where a block of a request as sent (`wireMessages`) sits among the request's blocks (what `carry` follows), and its key. */
+function flatOf(sent: readonly ApiMessage[], origin: readonly { message: number; blocks: number[] }[]): (at: WireAt) => { block: number; key: string } {
+  const markers: number[] = []
+  let n = 0
+  for (const m of sent) {
+    markers.push(n)
+    n += 1 + m.content.length
+  }
+
+  return at => {
+    const from = origin[at.message]
+    const k = from?.message ?? 0
+    const j = from?.blocks[at.block] ?? 0
+    const b = sent[k]?.content[j]
+
+    return { block: (markers[k] ?? 0) + 1 + j, key: b !== undefined && b.type === 'text' && typeof b.text === 'string' ? (b.isSystemTurn === true ? turnKey(b.text) : textKey(b.text)) : '-' }
+  }
+}
+
+/**
+ * Answers after message `m` of text alone (no thinking, no tool call): while a thinking block is still bound in the
+ * conversation, each costs 2 tokens more as sent than counting its messages alone gives.
+ */
+function plainAnswersAfter(messages: readonly WireMessage[], m: number): number {
+  return messages.filter((x, i) => i > m && x.role === 'assistant' && !x.content.some(b => b.type === 'tool_use' || b.type === 'thinking' || b.type === 'redacted_thinking')).length
+}
+
+/** A system turn between a message and an answer (or none there): what its message costs, framing and all, is the difference. */
+const turnProbe = (text: string | null): WireMessage[] => [
+  { role: 'user', content: [{ type: 'text', text: '.' }] },
+  ...(text === null ? [] : [{ role: 'system', content: [{ type: 'text', text }] }]),
+  { role: 'assistant', content: [{ type: 'text', text: '.' }] },
+]
 
 /** The session began before this module was loaded: what came before its first request is not placed. */
 let isJoinedLate = false
@@ -195,20 +236,91 @@ async function countAll($: Engine, model: string, texts: readonly string[]): Pro
   return text => (text.length === 0 ? 0 : (counts.get(textKey(text)) ?? null))
 }
 
-const sumOf = (count: (t: string) => number | null, list: readonly string[]) =>
-  list.reduce<number | null>((n, t) => {
-    const c = count(t)
+/**
+ * Messages counted by the API's own token counter, as they would be sent (no
+ * system prompt, no tools: a constant that every difference of two counts
+ * drops). Each list is counted once and kept; null when counting failed.
+ */
+async function messagesTokens($: Engine, model: string, messages: readonly WireMessage[]): Promise<number | null> {
+  const json = JSON.stringify(messages)
+  const key = `cm:${model}:${hash(json)}:${json.length}`
+  const stored = await $.store.get(key)
+  if (typeof stored === 'number') return stored
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await apiCall($, '/v1/messages/count_tokens', { model, messages })
+      const n = r.json?.input_tokens
+      if (typeof n === 'number') {
+        await $.store.set(key, n)
 
-    return n === null || c === null ? null : n + c
-  }, 0)
+        return n
+      }
+      countErrors = [...countErrors, `messages: ${r.status} ${r.text.slice(0, 120)}`].slice(-10)
+    } catch (err) {
+      countErrors = [...countErrors, `messages: ${err instanceof Error ? err.message : String(err)}`].slice(-10)
+    }
+  }
+
+  return null
+}
+
+/** Counts each list of messages once, several at once; answers a lookup by list. */
+async function countAllMessages($: Engine, model: string, lists: readonly WireMessage[][]): Promise<(messages: readonly WireMessage[]) => number | null> {
+  const unique = [...new Map(lists.map(l => [JSON.stringify(l), l])).entries()]
+  const counts = new Map<string, number | null>()
+  let next = 0
+  const worker = async () => {
+    for (let item = unique[next++]; item !== undefined; item = unique[next++]) counts.set(item[0], await messagesTokens($, model, item[1]))
+  }
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, unique.length) }, worker))
+
+  return messages => counts.get(JSON.stringify(messages)) ?? null
+}
+
+/**
+ * The tokens that follow a request's last text (its closing), by the role of
+ * its last message: asked once per model with a request of the inspector's own
+ * whose cache mark ends its last text, so only the closing is left uncached.
+ * Null while not known.
+ */
+async function closingOf($: Engine, model: string, role: string): Promise<number | null> {
+  const key = `closing:${model}:${role}`
+  const stored = await $.store.get(key)
+  if (typeof stored === 'number') return stored
+  // A text the cache keeps (a few thousand tokens); after it, a short last text of this role.
+  const long = 'The inspector measures every injected piece exactly. '.repeat(400).trimEnd()
+  const mark = { type: 'ephemeral' }
+  const messages =
+    role === 'system'
+      ? [{ role: 'user', content: [{ type: 'text', text: long }] }, { role: 'system', content: [{ type: 'text', text: 'Done.', cache_control: mark }] }]
+      : [{ role: 'user', content: [{ type: 'text', text: long, cache_control: mark }] }]
+  try {
+    const r = await apiCall($, '/v1/messages', { model, max_tokens: 1, system: [{ type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." }], messages }, ['claude-code-20250219'])
+    const usage = r.json?.usage as ModelUsage | undefined
+    if (usage === undefined || usage.cache_read_input_tokens + usage.cache_creation_input_tokens === 0) {
+      countErrors = [...countErrors, `closing: ${r.status} ${r.text.slice(0, 120)}`].slice(-10)
+
+      return null
+    }
+    await $.store.set(key, usage.input_tokens)
+
+    return usage.input_tokens
+  } catch (err) {
+    countErrors = [...countErrors, `closing: ${err instanceof Error ? err.message : String(err)}`].slice(-10)
+
+    return null
+  }
+}
+
+const lastRoleOf = (messages: readonly WireMessage[]) => messages[messages.length - 1]?.role ?? ''
 
 /**
  * Measures the pieces a view shows (`yours`: your pieces; `all`: every piece,
  * and where the first message begins). First each piece waiting is placed in
- * the request that first carried it: that request ended at an exact token
- * (cache read + cache write), and the piece ends where what follows it in the
- * last message begins. Then each placed piece is carried to the last request
- * by proof (see `carry`). Every text this takes is counted several at once.
+ * the request that first carried it, from that request's end as sent (see
+ * step 1). Then each placed piece is carried to the last request by proof
+ * (see `carry`), and one a change moved is placed again where the change was
+ * made, once proven (step 3). Every text this takes is counted several at once.
  */
 async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   const steps = await read($, requestsAtom)
@@ -216,7 +328,6 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   const last = steps[steps.length - 1]
   const model = last?.model ?? (await $.session.model())
   const stepById = new Map(steps.map(s => [s.id, s]))
-  const exact = exactSteps(steps)
   const wanted = (await read($, injectionsAtom)).filter(p => scope === 'all' || p.isYours)
   const patches = new Map<string, Partial<Piece>>()
   const patch = (p: Piece, more: Partial<Piece>) => patches.set(p.key, { ...(patches.get(p.key) ?? {}), ...more })
@@ -224,14 +335,37 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   const textSized = new Set<string>()
 
   // 1. Sizes, and a place for each piece waiting in the request that first carried it.
-  const toPlace: { p: Piece; text: string; s: Step; block: number; offset: number; after: string[]; suffix: string; own: string; isWholeBlock: boolean }[] = []
-  const need: string[] = []
+  // `extra`: tokens the request as sent has after the piece that counting its messages alone does not give (see step 3).
+  type Plan = { p: Piece | null; s: Step; tail: WireMessage[]; at: WireAt; placed: string; after: string; isWholeBlock: boolean; flat: { block: number; key: string }; extra: number }
+  const tailOf = (s: Step): { tail: WireMessage[]; first: number } | null => {
+    const json = s.wire === undefined ? undefined : texts[s.wire]
+
+    return json === undefined || s.isWhole !== true ? null : { tail: JSON.parse(json) as WireMessage[], first: s.wireFirst ?? 0 }
+  }
+  // A piece's range is its text as it shows: white space at its edges belongs with what is next to it (the API may join
+  // it to the white space beside it in one token).
+  const plan = (p: Piece | null, s: Step, tail: WireMessage[], found: WireAt, text: string, isWholeBlock: boolean, flat: Plan['flat'], extra = 0): Plan => {
+    const placed = text.trim()
+    const at = { ...found, offset: found.offset + (text.length - text.trimStart().length) }
+    const block = tail[at.message]?.content[at.block]?.text
+    const after = typeof block === 'string' ? block.slice(at.offset + placed.length) : ''
+
+    return { p, s, tail, at, placed, after, isWholeBlock, flat, extra }
+  }
+  // Where a block of a request's end sits among all its blocks (what `carry` follows): its own message's, or the system turn's.
+  const tailFlat = (s: Step, tail: WireMessage[], at: WireAt): Plan['flat'] => {
+    const i = tail[at.message]?.role === 'system' ? (s.systemTurn ?? s.tail.length - 1) : at.block
+
+    return { block: s.blocks - s.tail.length + i, key: s.tail[i] ?? '' }
+  }
+  const plans: Plan[] = []
+  const sized: string[] = []
   for (const p of wanted) {
     const text = texts[p.hash]
     if (text === undefined) continue
     // One inside a tool result is sized where it sits only (its text alone may be an id).
-    if (p.tokens === null && !isInToolResult(p)) need.push(text)
-    const isRetry = ['counting failed', 'sent outside', 'not found'].some(why => p.lost?.startsWith(why) ?? false)
+    if (p.tokens === null && !isInToolResult(p)) sized.push(text)
+    const isRetry = ['counting failed', 'sent outside', 'not found', 'the closing'].some(why => p.lost?.startsWith(why) ?? false)
     if (p.zone === 'system' || p.step === null || p.at !== null || p.was !== null || (p.lost !== null && !isRetry)) continue
     if (isRetry) patch(p, { lost: null })
     const s = stepById.get(p.step)
@@ -239,87 +373,237 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
       patch(p, { lost: 'its request was not kept' })
       continue
     }
-    if (!exact.has(s.id)) {
-      patch(p, { lost: 'text followed the cache mark in its request' })
+    const kept = tailOf(s)
+    if (kept === null) {
+      patch(p, { lost: s.isWhole === false ? 'a server tool ran in its request' : 'its request was not kept as sent' })
       continue
     }
-    const blocks = s.tail.map(k => (k === '-' ? null : (texts[k] ?? null)))
-    const plain = blocks.map(b => b ?? '')
-    const found = locate(plain, text)
-    // Sent reworded (Claude Code rewrites some reminders): the block that holds its lines, whole.
-    const wholeAt = found === null && p.parent === null ? blockOf(plain, text) : -1
-    const at = found ?? (wholeAt >= 0 ? { block: wholeAt, offset: 0 } : null)
-    if (at === null || blocks.slice(at.block + 1).some(b => b === null)) {
-      patch(p, { lost: at === null ? 'not found in its request as sent' : 'a block after it is not text' })
+    const found = locateInTail(kept.tail, kept.first, text)
+    if (found !== null) {
+      plans.push(plan(p, s, kept.tail, found, text, false, tailFlat(s, kept.tail, found)))
       continue
     }
-    const own = blocks[at.block] ?? ''
-    const placed = found === null ? own : text
-    const { after, suffix } = textsToCount(plain, at, placed)
-    // Only texts that run to the block's end are counted: a text's trailing whitespace is dropped when it is counted alone.
-    need.push(...after, suffix, placed + suffix)
-    toPlace.push({ p, text: placed, s, block: s.blocks - s.tail.length + at.block, offset: at.offset, after, suffix, own, isWholeBlock: found === null })
+    // Sent reworded (Claude Code rewrites some reminders): the text block that holds its lines, whole.
+    const blocks = kept.tail.flatMap((m, mi) =>
+      mi < kept.first ? [] : m.content.map((b, bi) => ({ at: { message: mi, block: bi, offset: 0 }, text: b.type === 'text' && typeof b.text === 'string' ? b.text : '' })),
+    )
+    const hit = p.parent === null ? blocks[blockOf(blocks.map(b => b.text), text)] : undefined
+    if (hit === undefined) {
+      patch(p, { lost: 'not found in its request as sent' })
+      continue
+    }
+    plans.push(plan(p, s, kept.tail, hit.at, hit.text, true, tailFlat(s, kept.tail, hit.at)))
   }
-  let count = await countAll($, model, need)
+  // Where the first message begins: its first block, placed the same way.
+  let start = await read($, promptStartAtom)
+  const firstStep = steps.find(s => s.messageCount === 1 && tailOf(s) !== null)
+  if (scope === 'all' && start === null && firstStep !== undefined) {
+    const kept = tailOf(firstStep)
+    const opening = kept === null ? undefined : kept.tail[kept.first]?.content[0]
+    if (kept !== null && opening !== undefined && typeof opening.text === 'string' && opening.text.trim() !== '') {
+      const at = { message: kept.first, block: 0, offset: 0 }
+      plans.push(plan(null, firstStep, kept.tail, at, opening.text, false, tailFlat(firstStep, kept.tail, at)))
+    }
+  }
+  const sizeOf = await countAll($, model, sized)
   for (const p of wanted) {
-    const n = p.tokens === null && !isInToolResult(p) ? count(texts[p.hash] ?? '') : null
+    const n = p.tokens === null && !isInToolResult(p) ? sizeOf(texts[p.hash] ?? '') : null
     if (n !== null && p.tokens === null) {
       patch(p, { tokens: n })
       textSized.add(p.key)
     }
   }
-  for (const x of toPlace) {
-    const afterTokens = sumOf(count, x.after)
-    const suffixTokens = count(x.suffix)
-    const toEnd = count(x.text + x.suffix)
-    if (afterTokens === null || suffixTokens === null || toEnd === null) {
-      patch(x.p, { lost: `counting failed${countErrors.length > 0 ? ` (${countErrors[countErrors.length - 1]})` : ''}; Refresh tries again` })
-      continue
+  // A request's tokens are its messages' and its closing: cut just after the piece, it would end where the piece ends.
+  // The API's own count of the request as sent, less its count cut there, is everything after the piece and the closing
+  // after its last message; the closing after the cut's last message is what the cut ends with. Each edge is checked to
+  // fall between two tokens.
+  const settle = async (batch: readonly Plan[]) => {
+    const need: string[] = []
+    const lists: WireMessage[][] = []
+    for (const x of batch) {
+      lists.push(x.tail, cutTail(x.tail, { ...x.at, offset: x.at.offset + x.placed.length }))
+      if (textBefore(x.tail, x.at) !== null) lists.push(cutTail(x.tail, x.at))
+      need.push(x.placed)
+      if (x.after.trim() !== '') need.push(x.after, x.placed + x.after)
     }
-    // Its block ends where the blocks after it begin; it starts where the text from it to its block's end begins.
-    const blockEnd = x.s.end - afterTokens
-    const range = { start: blockEnd - toEnd, end: blockEnd - suffixTokens }
-    const key = x.s.tail[x.block - (x.s.blocks - x.s.tail.length)] ?? ''
-    patch(x.p, { tokens: range.end - range.start, at: { ...range, block: x.block, offset: x.offset, key, ...(x.isWholeBlock ? { isWholeBlock: true } : {}) } })
+    const count = await countAll($, model, need)
+    const countMessages = await countAllMessages($, model, lists)
+    for (const x of batch) {
+      const failed = (why: string) => {
+        if (x.p !== null) patch(x.p, { lost: why })
+      }
+      const xEnd = cutTail(x.tail, { ...x.at, offset: x.at.offset + x.placed.length })
+      const whole = countMessages(x.tail)
+      const toEnd = countMessages(xEnd)
+      const size = count(x.placed)
+      const closeCut = await closingOf($, x.s.model, lastRoleOf(xEnd))
+      if (closeCut === null) {
+        failed(`the closing tokens after a ${lastRoleOf(xEnd)} message are not known yet; Refresh tries again`)
+        continue
+      }
+      if (whole === null || toEnd === null || size === null) {
+        failed(`counting failed${countErrors.length > 0 ? ` (${countErrors[countErrors.length - 1]})` : ''}; Refresh tries again`)
+        continue
+      }
+      // Its end: where the request cut there would end, less that cut's closing.
+      const end = x.s.total - whole + toEnd - closeCut - x.extra
+      const begin = end - size
+      // No token spans its end: it and the rest of its block, counted alone, add up to them counted together.
+      if (x.after.trim() !== '') {
+        const rest = count(x.after)
+        const both = count(x.placed + x.after)
+        if (rest === null || both === null) {
+          failed('counting failed; Refresh tries again')
+          continue
+        }
+        if (size + rest !== both) {
+          failed('its end shares a token with the text after it')
+          continue
+        }
+      }
+      // No token spans its start: the request cut just before it ends there, or before the white space that leads to it.
+      const before = textBefore(x.tail, x.at)
+      if (before !== null) {
+        const xStart = cutTail(x.tail, x.at)
+        const upTo = countMessages(xStart)
+        const closeStart = await closingOf($, x.s.model, lastRoleOf(xStart))
+        if (upTo === null || closeStart === null) {
+          failed('counting failed; Refresh tries again')
+          continue
+        }
+        const cut = x.s.total - whole + upTo - closeStart - x.extra
+        const space = /\s*$/.exec(before)?.[0].length ?? 0
+        if (space === 0 ? cut !== begin : begin - cut < 1 || begin - cut > space) {
+          failed('its start shares a token with the text before it')
+          continue
+        }
+      }
+      if (x.p === null) {
+        start = { at: begin, step: x.s.id }
+        continue
+      }
+      const at = { start: begin, end, block: x.flat.block, offset: x.at.offset, key: x.flat.key, ...(x.isWholeBlock ? { isWholeBlock: true } : {}) }
+      patch(x.p, { tokens: end - begin, at, step: x.s.id, lost: null, isEarlier: false })
+    }
   }
+  await settle(plans)
 
   // 2. Carry each placed piece to the last request, and where the first message begins.
-  const current = wanted.map(p => ({ ...p, ...(patches.get(p.key) ?? {}) }))
-  const toCarry = current.filter((p): p is Piece & { at: Position; step: number; tokens: number } => p.at !== null && p.step !== null && p.tokens !== null && last !== undefined && p.step < last.id)
-  let start = await read($, promptStartAtom)
-  const first = steps.find(s => s.messageCount === 1 && exact.has(s.id))
-  const firstBlocks = first === undefined ? null : first.tail.map(k => (k === '-' ? null : (texts[k] ?? null)))
-  const isStartWanted = scope === 'all' && start === null && first !== undefined && firstBlocks !== null && !firstBlocks.some(b => b === null)
-  const asked: string[] = []
-  const collect = (t: string) => {
-    asked.push(t)
-
-    return 0
-  }
-  for (const p of toCarry) carry(p.at, p.step, texts[p.hash] ?? '', p.tokens, steps, texts, collect)
-  if (start !== null) carryStart(start.at, start.step, steps, texts, collect)
-  if (isStartWanted && firstBlocks !== null) asked.push(...firstBlocks.map(b => b ?? ''))
-  count = await countAll($, model, asked)
   const out = await gone($)
-  for (const p of toCarry) {
-    const r = carry(p.at, p.step, texts[p.hash] ?? '', p.tokens, steps, texts, count)
-    if (r.kind === 'at') patch(p, { at: r.at, step: r.step })
-    else if (r.kind === 'gone') patch(p, { at: null, was: r.was, step: r.step })
-    // Inside a tool result that changed after you took it out (🗑 or 🔄): it went where it was.
-    else if (p.at.key === 'tool:result' && p.attachment !== 'file' && out.has(p.group)) patch(p, { at: null, was: { start: p.at.start, end: p.at.end }, step: r.step })
-    else patch(p, { at: null, lost: r.reason, step: r.step })
+  type Placed = Piece & { at: Position; step: number; tokens: number }
+  const carryAll = async (list: readonly Placed[], withStart: boolean) => {
+    const asked: string[] = []
+    const askedBlocks = new Set<string>()
+    const collect = (t: string) => {
+      asked.push(t)
+
+      return 0
+    }
+    const collectBlock = (key: string) => {
+      askedBlocks.add(key)
+
+      return 0
+    }
+    for (const p of list) carry(p.at, p.step, texts[p.hash] ?? '', p.tokens, steps, texts, collect, collectBlock)
+    if (withStart && start !== null) carryStart(start.at, start.step, steps, texts, collect)
+    // A block put in or taken out costs its text where it sits; a system turn, its message's framing too: counted with a
+    // message after it on both sides, so nothing at the end differs. A text block ending in white space is not counted
+    // (where it sits decides whether that white space costs a token).
+    const turnLists = [...askedBlocks].filter(k => k.startsWith('s:') && texts[k] !== undefined).flatMap(k => [turnProbe(texts[k] ?? ''), turnProbe(null)])
+    const countTurns = await countAllMessages($, model, turnLists)
+    for (const k of askedBlocks) if (!k.startsWith('s:') && texts[k] !== undefined) asked.push(texts[k] ?? '')
+    const count = await countAll($, model, asked)
+    const countBlock = (key: string): number | null => {
+      const t = texts[key]
+      if (t === undefined) return null
+      if (key.startsWith('s:')) {
+        const withIt = countTurns(turnProbe(t))
+        const without = countTurns(turnProbe(null))
+
+        return withIt === null || without === null ? null : withIt - without
+      }
+
+      return t.length === 0 ? 0 : /\s$/.test(t) ? null : count(t)
+    }
+    for (const p of list) {
+      const r = carry(p.at, p.step, texts[p.hash] ?? '', p.tokens, steps, texts, count, countBlock)
+      if (r.kind === 'at') patch(p, { at: r.at, step: r.step })
+      else if (r.kind === 'gone') patch(p, { at: null, was: r.was, step: r.step })
+      // Inside a tool result that changed after you took it out (🗑 or 🔄): it went where it was.
+      else if (p.at.key === 'tool:result' && p.attachment !== 'file' && out.has(p.group)) patch(p, { at: null, was: { start: p.at.start, end: p.at.end }, step: r.step })
+      else patch(p, { at: null, lost: r.reason, step: r.step })
+    }
+    if (withStart && start !== null && last !== undefined && start.step < last.id) {
+      const moved = carryStart(start.at, start.step, steps, texts, count)
+      start = moved === null ? null : { at: moved, step: last.id }
+    }
   }
-  if (isStartWanted && first !== undefined && firstBlocks !== null) {
-    const all = sumOf(
-      count,
-      firstBlocks.map(b => b ?? ''),
-    )
-    if (all !== null) start = { at: first.end - all, step: first.id }
+  const isPlaced = (p: Piece): p is Placed => p.at !== null && p.step !== null && p.tokens !== null && last !== undefined && p.step < last.id
+  await carryAll(wanted.map(p => ({ ...p, ...(patches.get(p.key) ?? {}) })).filter(isPlaced), true)
+
+  // 3. A piece lost on the way (a change before it: a deletion, a move) is placed again in the request that carried the
+  // change, from its end: what follows it counted as sent, and for each answer of text alone (no thinking, no tool call)
+  // 2 tokens more while a thinking block is still bound in the conversation. A thinking block after the change costs
+  // nothing any more (the API drops thinking whose conversation before it changed), one before it costs what no count
+  // gives: so this is trusted only once proven. Placed the same way, a block's end before the change must fall exactly
+  // where the API says that request's cache read ended. Then it is carried to the last request.
+  const groups = new Map<number, Piece[]>()
+  for (const p of wanted.map(x => ({ ...x, ...(patches.get(x.key) ?? {}) }))) {
+    if (p.zone === 'system' || p.at !== null || p.was !== null || p.step === null || !Object.values(LOST).includes(p.lost ?? '')) continue
+    const failed = steps.find(s => s.id > (p.step ?? 0))
+    if (failed?.whole !== undefined && failed.isWhole === true) groups.set(failed.id, [...(groups.get(failed.id) ?? []), p])
   }
-  if (start !== null && last !== undefined && start.step < last.id) {
-    const moved = carryStart(start.at, start.step, steps, texts, count)
-    start = moved === null ? null : { at: moved, step: last.id }
+  for (const [id, group] of groups) {
+    const s = stepById.get(id)
+    const json = s?.whole === undefined ? undefined : texts[s.whole]
+    if (s === undefined || json === undefined) continue
+    const sent = JSON.parse(json) as ApiMessage[]
+    const now = wireMessages(sent)
+    const flat = flatOf(sent, now.origin)
+    const adrift = group.flatMap(p => {
+      const text = texts[p.hash] ?? ''
+      const at = text === '' ? null : locateInTail(now.messages, 0, text)
+
+      return at === null ? [] : [{ p, text, at }]
+    })
+    // Block ends before the first block the request changed (the diff with the request before says which), nearest first.
+    const change = s.change
+    const firstChange = change.kind === 'known' ? Math.min(...change.blocks.map(c => c.at), change.brokenAt ?? Infinity) : Infinity
+    const bounds: WireAt[] = []
+    for (let m = now.messages.length - 1; m >= 0 && bounds.length < 12 && firstChange !== Infinity; m--) {
+      const msg = now.messages[m]
+      if (msg === undefined || msg.role === 'assistant') continue
+      for (let k = msg.content.length - 1; k >= 0 && bounds.length < 12; k--) {
+        const t = msg.content[k]?.text
+        // White space ending a message is dropped where it sits as it is in the cut; inside a message it costs a token there.
+        const isClean = typeof t === 'string' && t.trim() !== '' && (k === msg.content.length - 1 || !/\s$/.test(t))
+        const at = { message: m, block: k, offset: typeof t === 'string' ? t.length : 0 }
+        if (msg.content[k]?.type === 'text' && isClean && flat(at).block < firstChange) bounds.push(at)
+      }
+    }
+    if (adrift.length === 0 || bounds.length === 0) continue
+    const cuts = bounds.map(b => cutTail(now.messages, b))
+    const countCuts = await countAllMessages($, model, [now.messages, ...cuts])
+    const whole = countCuts(now.messages)
+    // Whether an answer of text alone costs 2 tokens more is the API's to say: the proof says which, or nothing is placed.
+    let proof: { at: WireAt; perAnswer: number } | null = null
+    for (const [i, b] of bounds.entries()) {
+      const c = countCuts(cuts[i] ?? [])
+      const close = await closingOf($, s.model, now.messages[b.message]?.role ?? '')
+      if (whole === null || c === null || close === null) continue
+      const perAnswer = [2, 0].find(n => s.total - whole + c - close - n * plainAnswersAfter(now.messages, b.message) === s.cacheRead)
+      if (perAnswer !== undefined) {
+        proof = { at: b, perAnswer }
+        break
+      }
+    }
+    const from = proof
+    if (from === null) continue
+    const after = adrift.filter(x => x.at.message > from.at.message || (x.at.message === from.at.message && x.at.block > from.at.block))
+    await settle(after.map(x => plan(x.p, s, now.messages, x.at, x.text, false, flat(x.at), from.perAnswer * plainAnswersAfter(now.messages, x.at.message))))
   }
+  const regrouped = new Set([...groups.values()].flat().map(p => p.key))
+  if (regrouped.size > 0) await carryAll(wanted.filter(p => regrouped.has(p.key)).map(p => ({ ...p, ...(patches.get(p.key) ?? {}) })).filter(isPlaced), false)
   await update($, promptStartAtom, () => start)
   if (patches.size > 0) {
     await update($, injectionsAtom, list =>
@@ -355,8 +639,63 @@ async function persist($: Engine): Promise<void> {
   }
 }
 
+/**
+ * Attachment kinds Claude Code keeps in the user message; every other reminder
+ * goes to a model that takes system turns as one, after that message (its own
+ * record says which: `renderedRole` in the session's transcript).
+ */
+const userTypes = new Set(['session_context', 'remote_session_change'])
+/** Kinds the transcript was read for. */
+const knownTypes = new Set<string>()
+/** The texts the inspector last read the transcript at, so a kind not in it is read for once. */
+let rolesReadAt = -1
+
+/** Learns from the session's transcript which attachment kinds stay in the user message. */
+async function learnRoles($: Engine): Promise<void> {
+  try {
+    const root = await $.session.root()
+    const home = (await $.env.get('HOME')) ?? /^\/(?:root|home\/[^/]+)/.exec(root)?.[0] ?? '/root'
+    const text = (await $.fs.read(`${home.replace(/\/$/, '')}/.claude/projects/${root.replace(/[^A-Za-z0-9]/g, '-')}/${await $.session.id()}.jsonl`)) as string
+    if (text.length === rolesReadAt) return
+    rolesReadAt = text.length
+    for (const line of text.split('\n')) {
+      if (!line.includes('"renderedRole"')) continue
+      const row = JSON.parse(line) as { attachment?: { type?: unknown }; renderedRole?: unknown }
+      const type = row.attachment?.type
+      if (typeof type !== 'string') continue
+      knownTypes.add(type)
+      if (row.renderedRole === 'user') userTypes.add(type)
+      else if (row.renderedRole === 'system') userTypes.delete(type)
+    }
+  } catch {
+    // No transcript to read: the kinds known to stay in the user message.
+  }
+}
+
+/** Reminders that open the user's own context: kept in the user message when their kind is not known. */
+const USER_CONTEXT = /^(As you answer the user's questions, you can use the following context|Attribution for git commits)/
+
+/**
+ * Whether Claude Code sends a reminder (its own text) as part of the system
+ * turn: its kind's, when the inspector saw it injected; one joined to a tool
+ * result that it did not see is the tool's own text.
+ */
+function promoterOf(pieces: readonly Piece[]): (inner: string, isJoined: boolean) => boolean {
+  const kinds = new Map(pieces.filter(p => p.attachment !== null && p.attachment !== 'file').map(p => [p.hash, p.attachment ?? '']))
+
+  return (inner, isJoined) => {
+    const kind = kinds.get(textKey(inner))
+    if (kind !== undefined) return !userTypes.has(kind)
+
+    return !isJoined && !USER_CONTEXT.test(inner)
+  }
+}
+
 /** Reads of a file in flight: the call's id and the file's path (its result moves a file of yours out to text). */
 const readsInFlight = new Map<string, string>()
+
+/** Commands in flight: the call's id and the command (a file of yours it prints whole moves out to text). */
+const commandsInFlight = new Map<string, string>()
 
 /** 🗑: the group leaves the prompt from the next request on (a skill: its later uses stop). A queued move is cancelled. */
 async function remove($: Engine, group: string): Promise<void> {
@@ -545,9 +884,12 @@ async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]
       return isThere || (!isLeaving && isInContext(text, haystack))
     })
 
-    const extra = await filesInContext($, new Set(shown.map(x => x.label)))
+    // A file Claude Code brought back whole (after a compaction) holds the piece it was read as: listed once, as brought back.
+    const isInside = (r: Row, o: Row) => o !== r && o.label === r.label && r.start !== null && r.end !== null && o.start !== null && o.end !== null && o.start <= r.start && r.end <= o.end && o.end - o.start > r.end - r.start
+    const once = shown.filter(r => !shown.some(o => isInside(r, o)))
+    const extra = await filesInContext($, new Set(once.map(x => x.label)))
 
-    return { rows: [...shown, ...extra], total }
+    return { rows: [...once, ...extra], total }
   }
   const start = await read($, promptStartAtom)
   const isProven = start !== null && steps.every(s => s.id <= start.step || s.cacheRead >= start.at)
@@ -819,12 +1161,17 @@ async function partsSize($: Engine, model: string, own: readonly ApiBlock[]): Pr
   return { size: mine - dot + 1 }
 }
 
+/** The inspector's own debug calls: their results quote every piece, and are none of them. */
+const ownCalls = new Set<string>()
+
+const isOwnResult = (b: ApiBlock) => b.type === 'tool_result' && ownCalls.has(String(b.tool_use_id))
+
 /** Whether a message holds the text inside a block that is not text (a tool result). */
 function isInBlock(message: ApiMessage | undefined, text: string, isText: boolean): boolean {
   if (message === undefined || text === '') return false
   const escaped = JSON.stringify(text).slice(1, -1)
 
-  return message.content.some(b => (b.type === 'text') === isText && JSON.stringify(b).includes(escaped))
+  return message.content.some(b => (b.type === 'text') === isText && !isOwnResult(b) && JSON.stringify(b).includes(escaped))
 }
 
 /** A piece inside a tool result: its exact size, never a place (IN_TOOL_RESULT); or why not even that. */
@@ -846,7 +1193,7 @@ async function findLate($: Engine, text: string, messages: readonly ApiMessage[]
   for (let m = messages.length - 1; m >= Math.max(0, messages.length - 8); m--) {
     const message = messages[m]
     if (message === undefined || message.role !== 'user') continue
-    const j = message.content.findIndex(b => JSON.stringify(b).includes(escaped))
+    const j = message.content.findIndex(b => !isOwnResult(b) && JSON.stringify(b).includes(escaped))
     if (j < 0) continue
     // Only this request or the one before: a reminder is announced at most one request late.
     const carrying = steps.slice(-2).reverse().find(s => s.messageCount === m + 1)
@@ -984,8 +1331,8 @@ async function recordFiles($: Engine, message: ApiMessage, asked: ApiMessage | u
   await update($, injectionsAtom, list => [...list, ...added])
 }
 
-/** Experiment: the API itself, through the session's credential. */
-async function apiCall($: Engine, path: string, body: unknown): Promise<{ status: number; json: Record<string, any> | null; text: string }> {
+/** A call to the API itself, through the session's credential (`betas`: any it needs beyond the credential's own). */
+async function apiCall($: Engine, path: string, body: unknown, betas: readonly string[] = []): Promise<{ status: number; json: Record<string, any> | null; text: string }> {
   // An engine without `authorize` is asked without a credential (the API refuses it, and nothing is placed).
   let auth: { handle: string | undefined; kind: 'bearer' | 'api-key' } | null
   try {
@@ -995,7 +1342,8 @@ async function apiCall($: Engine, path: string, body: unknown): Promise<{ status
   }
   if (auth === null) return { status: 0, json: null, text: 'no credential' }
   const headers: Record<string, string> = { 'content-type': 'application/json', 'anthropic-version': '2023-06-01' }
-  if (auth.kind === 'bearer') headers['anthropic-beta'] = 'oauth-2025-04-20'
+  const beta = [...(auth.kind === 'bearer' ? ['oauth-2025-04-20'] : []), ...betas]
+  if (beta.length > 0) headers['anthropic-beta'] = beta.join(',')
   const r = await $.http.fetch(`https://api.anthropic.com${path}`, { method: 'POST', headers, body: JSON.stringify(body), auth: auth.handle })
   let json: Record<string, any> | null = null
   try {
@@ -1129,7 +1477,10 @@ async function report($: Engine): Promise<Record<string, unknown>> {
     if (raw !== '') {
       const want = JSON.parse(raw) as { label: string; action: string }
       const row = (await rowsFor($, 'yours')).rows.find(r => r.label === want.label)
-      if (row === undefined) acted = `no row ${want.label}`
+      if (want.action === 'compacted') {
+        await $.store.set(`compacted:${await $.session.id()}`, true)
+        acted = 'marked compacted'
+      } else if (row === undefined) acted = `no row ${want.label}`
       else if (want.action === 'delete') {
         await remove($, row.group)
         acted = `deleted ${row.key}`
@@ -1166,6 +1517,12 @@ async function report($: Engine): Promise<Record<string, unknown>> {
     moved: await read($, movedAtom),
     countErrors,
     lastMessages: summarise(((await $.session.messages({ as: 'api' })) as readonly { role: string; content: readonly ApiBlock[] }[]).slice(-3)),
+    // Your pieces as kept: their text, the request they are placed in and where, or why not.
+    pieces: await (async () => {
+      const kept = await read($, textsAtom)
+
+      return (await read($, injectionsAtom)).filter(p => p.isYours || p.copyOf !== null).map(p => ({ key: p.key, label: p.label, step: p.step, at: p.at, lost: p.lost, tokens: p.tokens, text: kept[p.hash] ?? null }))
+    })(),
     yours: yours.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
     all: all.rows.slice(0, (await $.fs.exists(`${await $.session.root()}/.claude/prompt-inspector.brief`)) ? 3 : undefined).map(r => `${cardLabel(r)}  [${describe(r)}]`),
   }
@@ -1186,8 +1543,11 @@ async function prune($: Engine): Promise<void> {
   if (last === undefined || last.id % 20 !== 0) return
   const used = [...pieces.filter(p => p.step !== null && p.was === null && p.lost === null).map(p => p.step ?? last.id), ...(start === null ? [] : [start.step])]
   const oldest = Math.min(last.id, ...used)
-  const waiting = new Set(pieces.filter(p => p.at === null && p.lost === null && p.was === null && p.step !== null).map(p => p.step))
-  const kept = steps.filter(s => s.id >= oldest).map(s => (waiting.has(s.id) || s.id >= last.id - 1 ? s : { ...s, tail: [] }))
+  const isRetry = (p: Piece) => p.lost === null || ['counting failed', 'the closing'].some(why => p.lost?.startsWith(why) ?? false)
+  const waiting = new Set(pieces.filter(p => p.at === null && isRetry(p) && p.was === null && p.step !== null).map(p => p.step))
+  // A request that carried a change keeps its whole form while a piece the change moved waits to be placed again.
+  const lostAt = new Set(pieces.filter(p => p.at === null && Object.values(LOST).includes(p.lost ?? '')).map(p => steps.find(s => s.id > (p.step ?? 0))?.id))
+  const kept = steps.filter(s => s.id >= oldest).map(s => (waiting.has(s.id) || s.id >= last.id - 1 ? s : { ...s, tail: [], wire: undefined, ...(lostAt.has(s.id) ? {} : { whole: undefined }) }))
   const refs = new Set<string>()
   for (const p of pieces) {
     refs.add(p.hash)
@@ -1195,6 +1555,8 @@ async function prune($: Engine): Promise<void> {
   }
   for (const s of kept) {
     for (const k of s.tail) refs.add(k)
+    if (s.wire !== undefined) refs.add(s.wire)
+    if (s.whole !== undefined) refs.add(s.whole)
     if (s.change.kind === 'known') {
       for (const c of s.change.blocks) for (const k of [c.before, c.after]) if (k !== null) refs.add(k)
       if (typeof s.change.system !== 'string') for (const k of [...s.change.system.before, ...s.change.system.after]) refs.add(k)
@@ -1242,6 +1604,7 @@ export const register: Register = on => {
       })
     }
     await refreshYours($)
+    await learnRoles($)
     // A resumed session: what the person deleted or moved keeps applying.
     try {
       const isEmpty = (await read($, removedAtom)).length === 0 && Object.keys(await read($, movedAtom)).length === 0
@@ -1292,15 +1655,42 @@ export const register: Register = on => {
       if (fresh.length > 0) await update($, injectionsAtom, list => [...list, ...fresh])
     }
 
+    // After a compaction: what is no longer in the conversation is not listed; the rest is placed again from this request.
+    const compactedKey = `compacted:${await $.session.id()}`
+    if ((await $.store.get(compactedKey)) === true) {
+      await $.store.set(compactedKey, false)
+      const pieces = await read($, injectionsAtom)
+      const attachments = new Set(pieces.filter(p => p.attachment !== null).map(p => p.hash))
+      const haystack = JSON.stringify(toWire(api, promoterOf(pieces), attachments))
+      const kept = await read($, textsAtom)
+      await update($, injectionsAtom, list =>
+        list.flatMap(p => {
+          if (p.zone === 'system') return [p]
+          // A copy 🔄 sent is summarized away with the rest (what was moved goes back to its place).
+          if (p.copyOf !== null) return []
+          const text = kept[p.hash] ?? ''
+          const isThere = text !== '' && haystack.includes(JSON.stringify(text).slice(1, -1))
+
+          return isThere ? [{ ...p, step: null, at: null, was: null, lost: null, isEarlier: false }] : []
+        }),
+      )
+      await update($, promptStartAtom, () => null)
+      previous = null
+    }
     // Only what waited before this request was sent: a skill used while the answer streams belongs to the next one.
     const waiting = new Set((await read($, injectionsAtom)).filter(p => p.step === null && p.zone !== 'system').map(p => p.key))
     const result = yield* next(e)
     const usage = result.usage
     // The request as it was sent: Claude Code joins some reminders into its messages only as it sends them.
-    const sent = sentOf(api as readonly ApiMessage[], (await $.session.messages({ as: 'api' })) as readonly ApiMessage[])
+    const asViewed = sentOf(api as readonly ApiMessage[], (await $.session.messages({ as: 'api' })) as readonly ApiMessage[])
+    // As the model receives it: a model that takes system turns gets most reminders as one, after the user message.
+    const pieces = await read($, injectionsAtom)
+    const attachments = new Set(pieces.filter(p => p.attachment !== null).map(p => p.hash))
+    const sent = takesSystemTurns(usage?.model ?? e.model) ? toWire(asViewed, promoterOf(pieces), attachments) : asViewed
     const sentFlat = flatKeys(sent)
     const sentLast = sent[sent.length - 1]
-    const sentTail = sentLast === undefined || sentLast.role !== 'user' ? [] : sentLast.content.map(b => (b.type === 'text' && typeof b.text === 'string' ? textKey(b.text) : '-'))
+    const sentTail = sentLast === undefined || sentLast.role !== 'user' ? [] : sentLast.content.map(b => (b.type === 'text' && typeof b.text === 'string' ? (b.isSystemTurn === true ? turnKey(b.text) : textKey(b.text)) : '-'))
+    const systemTurn = sentLast === undefined || sentLast.role !== 'user' ? -1 : sentLast.content.findIndex(b => b.isSystemTurn === true)
     const sentDiff = previous === null ? null : diffBlocks(previous.keys, sentFlat.keys)
     const change: Change =
       previous === null || sentDiff === null ? { kind: 'unknown' } : { kind: 'known', blocks: sentDiff.blocks, brokenAt: sentDiff.brokenAt, system: systemChange(previous.system, system) }
@@ -1309,6 +1699,20 @@ export const register: Register = on => {
     previous = { keys: sentFlat.keys, system }
     if (usage === null) return result
     const end = usage.cache_read_input_tokens + usage.cache_creation_input_tokens
+    // Its end as sent, kept to count: what a piece in its last message is placed by.
+    const wire = wireTail(sent)
+    const wireJson = wire === null ? null : JSON.stringify(wire.messages)
+    const wireKey = wireJson === null ? undefined : `w:${textKey(wireJson)}`
+    if (wireJson !== null && wireKey !== undefined) await remember($, { [wireKey]: wireJson })
+    const lastSent = wire?.messages[wire.messages.length - 1]
+    const lastText = [...(lastSent?.content ?? [])].reverse().find(b => b.type === 'text' || b.type === 'tool_result')
+    const endsInSpace = lastText === undefined || typeof lastText.text !== 'string' || /\s$/.test(lastText.text)
+    const isWhole = (result.serverToolUses?.length ?? 0) === 0
+    // A request that changed what came before (a deletion, a move): kept whole, where a piece the change moved is placed again.
+    const isEdited = change.kind === 'known' && (change.blocks.length > 0 || change.brokenAt !== null)
+    const sentJson = isEdited ? JSON.stringify(sent) : null
+    const wholeKey = sentJson === null ? undefined : `S:${textKey(sentJson)}`
+    if (sentJson !== null && wholeKey !== undefined) await remember($, { [wholeKey]: sentJson })
     let id = 0
     let before: Step | undefined
     await update($, requestsAtom, steps => {
@@ -1328,6 +1732,12 @@ export const register: Register = on => {
         isAnchor: usage.input_tokens <= 8 && (result.serverToolUses?.length ?? 0) === 0,
         blocks: sentFlat.keys.length,
         tail: sentTail,
+        ...(systemTurn >= 0 ? { systemTurn } : {}),
+        ...(wireKey !== undefined && wire !== null ? { wire: wireKey, wireFirst: wire.first, lastRole: lastSent?.role ?? '' } : {}),
+        endsInSpace,
+        isWhole,
+        thinkingAt: sentFlat.keys.flatMap((k, i) => (k.startsWith('x:thinking:') ? [i] : [])),
+        ...(wholeKey !== undefined ? { whole: wholeKey } : {}),
         change,
         model: usage.model,
       }
@@ -1434,7 +1844,15 @@ export const register: Register = on => {
     return next(e)
   })
 
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    if (e.agentId === undefined && typeof e.tool_use_id === 'string' && typeof e.command === 'string') commandsInFlight.set(e.tool_use_id, e.command)
+
+    return next(e)
+  })
+
   on('tool.call', { tool: /^mcp__prompt-inspector__debug$/ }, async ($, e, next) => {
+    const id = (e as { tool_use_id?: unknown }).tool_use_id
+    if (typeof id === 'string') ownCalls.add(id)
     try {
       return { result: JSON.stringify(await report($), null, 2) }
     } catch (err) {
@@ -1458,6 +1876,8 @@ export const register: Register = on => {
     if (e.agentId === undefined) {
       await forgetMoves($)
       invalidate($)
+      // The next request is the compacted conversation's first: every place is taken again from it.
+      await $.store.set(`compacted:${await $.session.id()}`, true)
     }
 
     return result
@@ -1603,6 +2023,10 @@ export const register: Register = on => {
 
     const out = await gone($)
     const key = keys.attachment(e.type, e.text)
+    if (!knownTypes.has(e.type)) {
+      knownTypes.add(e.type)
+      await learnRoles($)
+    }
     const entries = e.type === 'skill_listing' ? parseListing(result.text) : []
     if (isMain) {
       const userSkills = new Set(await read($, userSkillsAtom))
@@ -1647,7 +2071,8 @@ export const register: Register = on => {
     const queued = Object.keys(moved).filter(k => moved[k] === 'queued')
     if (queued.length === 0) return next(e)
     const saved = await read($, savedAtom)
-    const riding = queued.map(k => saved[k] ?? '').filter(text => text !== '')
+    // Each copy on a line of its own: the words Claude Code puts before it can't share a token with its first characters.
+    const riding = queued.map(k => saved[k] ?? '').filter(text => text !== '').map(text => `\n${text}`)
     const result = await next({ ...e, context: [...(e.context ?? []), ...riding] })
     if (result.drop !== undefined) return result
     await update($, movedAtom, current => {
@@ -1674,26 +2099,56 @@ export const register: Register = on => {
     return (await read($, removedAtom)).includes(group) ? { text: `(prompt-inspector deleted the ${e.skill} skill's instructions.)` } : result
   })
 
-  // A text file of yours Claude reads: its text moves out of the tool's result into a text block of its own right after
-  // it, as the Read tool showed it. Inside a tool result its place can't be proven; as text it is placed exactly.
+  // A text file of yours Claude reads, or a command prints whole: its text moves out of the tool's result into a text
+  // block of its own right after it, as the tool showed it. Inside a tool result its place can't be proven; as text it is
+  // placed exactly. (A picture or a PDF stays: the engine keeps no media moved out of a result.)
   on('session.append', { door: 'tool-result' }, async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
     const blocks = e.message.content as ApiBlock[]
     const i = blocks.findIndex(b => b.type === 'tool_result')
     const block = blocks[i]
-    const path = block === undefined ? undefined : readsInFlight.get(String(block.tool_use_id))
-    if (block === undefined || path === undefined) return next(e)
-    readsInFlight.delete(String(block.tool_use_id))
-    const content = block.is_error === true ? null : resultText(block)
-    if (content === null || !/^ *\d+\t/.test(content) || MEDIA.test(path) || !(await isYourFile($, path))) return next(e)
+    const id = block === undefined ? '' : String(block.tool_use_id)
+    const readPath = readsInFlight.get(id)
+    const command = commandsInFlight.get(id)
+    if (block === undefined || (readPath === undefined && command === undefined)) return next(e)
+    readsInFlight.delete(id)
+    commandsInFlight.delete(id)
+    if (block.is_error === true) return next(e)
+    const message = await read($, messageAtom)
+    const before = blocks.slice(0, i)
+    const after = blocks.slice(i + 1)
+    const content = resultText(block)
+    if (content === null) return next(e)
     const open = content.indexOf('<system-reminder>')
-    const shown = (open < 0 ? content : content.slice(0, open)).trimEnd()
+    const output = (open < 0 ? content : content.slice(0, open)).trimEnd()
+    const rest = content.slice(output.length)
+    let path: string | null = null
+    if (readPath !== undefined) {
+      // The Read tool shows a text as numbered lines; anything else (a note that the file is unchanged) is not the file.
+      if (/^ *\d+\t/.test(content) && !MEDIA.test(readPath) && (await isYourFile($, readPath))) path = readPath
+    } else if (command !== undefined && output !== '') {
+      // A command that printed one file of yours whole (`cat notes.md`): the file named in it whose text is the output.
+      const root = await $.session.root()
+      for (const word of command.split(/[\s;&|<>()'"`]+/).filter(w => /^[\w./~-]+$/.test(w))) {
+        const full = word.startsWith('/') ? word : `${root}/${word.replace(/^\.\//, '')}`
+        if (MEDIA.test(full) || !(await isYourFile($, full))) continue
+        try {
+          if (((await $.fs.read(full)) as string).trimEnd() === output) {
+            path = full
+            break
+          }
+        } catch {
+          // Not a file: not looked at.
+        }
+      }
+    }
+    if (path === null) return next(e)
     const rel = await shortPath($, path)
-    const rest = content.slice(shown.length)
-    const moved = [...blocks.slice(0, i), { ...block, content: `${rel}: its text follows this result.${rest.trim() === '' ? '' : rest}` }, { type: 'text', text: shown }, ...blocks.slice(i + 1)]
+    // A line break ends it: a text after it (another file's) can't share a token with its last characters.
+    const moved = [...before, { ...block, content: `${rel}: its text follows this result.${rest.trim() === '' ? '' : rest}` }, { type: 'text', text: `${output}\n` }, ...after]
     const result = await next({ ...e, message: { ...e.message, content: moved as never } })
     const fields: Fields = { key: `file:${rel}@${result.uuid ?? e.uuid}`, group: `file:${rel}`, kind: 'rule', zone: 'conversation', label: rel, isYours: true, attachment: 'file' }
-    await record($, [{ piece: piece(fields, shown, await read($, messageAtom)), text: shown }])
+    await record($, [{ piece: piece(fields, output, message), text: output }])
 
     return result
   })

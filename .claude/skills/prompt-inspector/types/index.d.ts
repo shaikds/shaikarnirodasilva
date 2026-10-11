@@ -104,6 +104,22 @@ export type Step = {
   blocks: number
   /** The text keys of its last message's blocks, in order; `-` for a block that is not text. */
   tail: string[]
+  /** Where in `tail` the system turn that follows the last message sits (the reminders sent as one), when there is one. */
+  systemTurn?: number
+  /** The key (in `texts`) of its end as sent, ready to count (`wireTail`): its last user message and the system turn after it. */
+  wire?: string
+  /** Where the request's own messages begin in `wire` (a tool call answered goes before them). */
+  wireFirst?: number
+  /** The role of its last message: what the closing tokens after it depend on. */
+  lastRole?: string
+  /** Its last text ends in white space (the API drops it, and one closing token less is left uncached). */
+  endsInSpace?: boolean
+  /** No server tool ran in it: its usage is this one request's. */
+  isWhole?: boolean
+  /** Where its thinking blocks sit among its blocks. */
+  thinkingAt?: number[]
+  /** For a request that changed what came before: the key (in `texts`) of the whole request as sent. */
+  whole?: string
   /** How it differs from the request before. */
   change: Change
   model: string
