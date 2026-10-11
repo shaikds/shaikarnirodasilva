@@ -517,6 +517,32 @@ describe('plugin', () => {
     expect(labels.some(l => l.startsWith('other/CLAUDE.md'))).toBe(false)
   })
 
+  test('🗑 on a file Claude read stops its later reads and its injection; 🔄 sends its own text with the next message', async ($, on) => {
+    const world = engine(on)
+    const rule = '# Docs rule\nAlways link the source of every claim.\nNever invent a section number.\n'
+    world.disk['/repo/docs/CLAUDE.md'] = rule
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Read docs', turnId: 't2' })
+    const content = `==> docs/CLAUDE.md <==\n${rule}`
+    world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
+    world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
+    for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
+    // 🔄 first: a copy of the file's own text rides with the next message; what was read stays.
+    world.taps = ['More…', 'docs/CLAUDE.md', '🔄 Send a copy at end', 'Done']
+    await inspect($)
+    expect(world.cards[2]?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', '🔄 Send a copy at end', 'Back'])
+    expect(world.cards[3]?.question).toStartWith('docs/CLAUDE.md copied to the end. ')
+    const submitted = await $.prompt.submit({ text: 'Again', wait: false, origin: { kind: 'composer' } })
+    expect(submitted.context?.[0]).toBe(rule.trimEnd())
+    // 🗑: later reads are refused, and Claude Code's own injection of it is left out.
+    world.taps = ['More…', 'docs/CLAUDE.md', '🗑 Stop later reads', 'Yes, stop them', 'Done']
+    await inspect($)
+    const denied = await $.tool.call({ tool: 'Read', file_path: '/repo/docs/CLAUDE.md' } as never)
+    expect(String((denied as { deny?: string }).deny)).toContain('docs/CLAUDE.md is left out of the context')
+    const injected = await $.prompt.attachment({ type: 'nested_memory', text: `Contents of /repo/docs/CLAUDE.md:\n\n${rule}`, origin: { kind: 'engine' } })
+    expect(injected.text).toBeNull()
+  })
+
   test('a file Claude read is placed as the Read tool shows it, numbered lines and all', async ($, on) => {
     const world = engine(on)
     const rule = '# Docs rule\nAlways link the source of every claim.\n'
@@ -552,6 +578,16 @@ describe('plugin', () => {
     const labels = await everyLabel($, world)
     // From the end of the body (the blank lines are the rule's), to where its closing tag ends.
     expect(labels).toContain(`src/CLAUDE.md [${int(end - (rule.length + tail.length))} - ${int(end - tail.length)}]`)
+    // 🗑: Claude Code sends the read again without it, and it leaves the list (only what is in the context is listed).
+    world.taps = ['More…', 'src/CLAUDE.md', '🗑 Delete', 'Yes, delete', 'Done']
+    await inspect($)
+    expect((await $.prompt.attachment(NESTED)).text).toBeNull()
+    const last = world.api[world.api.length - 1] as unknown as { content: { type: string; text: string; content: string }[] }
+    last.content = [{ type: 'tool_result', text: body + tail, content: body + tail }]
+    world.cacheRead = end - (rule.length + tail.length) - 10
+    await $.turn.start({ text: 'Again', turnId: 't3' })
+    await request($, world, ['Again'])
+    expect((await everyLabel($, world)).some(l => l.startsWith('src/CLAUDE.md'))).toBe(false)
   })
 
   test('a skill you made: its list line and its text when used; 🗑 stops later uses and the text already sent keeps its place', async ($, on) => {
