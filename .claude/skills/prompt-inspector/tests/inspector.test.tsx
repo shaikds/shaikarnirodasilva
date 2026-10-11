@@ -620,7 +620,7 @@ describe('plugin', () => {
     expect(await pieceTitle($, world, 'notes/a.txt')).toBe(`notes/a.txt [not measured] · ${int(shown.trimEnd().length)} tok`)
   })
 
-  test('a PDF Claude read is listed by its path, its output sized on its own; it has no text to send as a copy', async ($, on) => {
+  test('a PDF Claude read is listed by its path, its output sized on its own; 🔄 mentions it in the next message', async ($, on) => {
     const world = engine(on)
     await firstMessage($, world)
     await $.turn.start({ text: 'Read the report', turnId: 't2' })
@@ -636,7 +636,13 @@ describe('plugin', () => {
     const card = world.cards[world.cards.length - 2]
     // The tool's output, its note and pages, counted on its own: the reminder joined after it is not the file.
     expect(card?.question).toBe(`files/report.pdf [not measured] · ${int(header.length + 200)} tok`)
-    expect(card?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', 'Back'])
+    expect(card?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', '🔄 Send a copy at end', 'Back'])
+    // 🔄: the next message mentions it, so Claude Code attaches the file itself at the end.
+    world.taps = ['files/report.pdf', '🔄 Send a copy at end', 'Done']
+    await inspect($)
+    const submitted = await $.prompt.submit({ text: 'Again', wait: false, origin: { kind: 'composer' } })
+    expect(submitted.text).toBe('Again @files/report.pdf')
+    expect(submitted.context ?? []).toEqual([])
   })
 
   test('a file you sent with your message is yours, listed by its path', async ($, on) => {
