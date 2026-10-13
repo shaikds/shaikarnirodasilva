@@ -70,11 +70,12 @@ context.
   piece after it is placed again in the request that carried the change, from its end, and trusted
   only once proven: placed the same way, the end of the block where the change began must land
   exactly on the token where the API says that request's cache read ended. (An answer of text alone
-  costs 2 tokens more while a thinking block is still bound in the conversation; the proof also says
-  which.)
+  that begins Claude's turn costs 2 tokens more while a thinking block is still bound in the
+  conversation; the proof also says which.)
 - **Compaction.** After a compaction, what it summarized away leaves the list, and what is still in
   the context (the files Claude Code brings back with the summary, your CLAUDE.md files) is placed
-  again from the next request.
+  again from the next request. A `CLAUDE.md` you deleted stays out: Claude Code brings its file back
+  with the summary, and the inspector leaves it out.
 - **Inside a tool result** (a file Claude read, a command's output, a picture, a PDF) no place can be
   told: the API wraps a tool result in tokens of its own before and after its content and reports
   only their sum, and no request cut between two results is accepted. So the range shown is Claude's

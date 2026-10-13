@@ -521,6 +521,28 @@ describe('plugin', () => {
     expect(labels.some(l => l.startsWith('src/CLAUDE.md') || l.startsWith('CLAUDE.md'))).toBe(false)
   })
 
+  test('a deleted CLAUDE.md stays out when a compaction brings its file back, a second compaction too', async ($, on) => {
+    const world = engine(on)
+    const summary = [{ role: 'user', text: 'Summary of the conversation so far.', toolUses: [] }]
+    on('session.compact', () => ({ messages: summary }) as never)
+    await firstMessage($, world)
+    await $.turn.start({ text: 'Edit', turnId: 't2' })
+    await $.prompt.attachment(NESTED)
+    await request($, world, ['Edit', wrap(NESTED.text)])
+    await open($, world, where(world, NESTED.text).start, ['🗑 Delete', 'Yes, delete'], 'all')
+    const back = (path: string) => ({ type: 'file', text: `Called the Read tool with the following input: {"file_path":"${path}"}\nResult of calling the Read tool:\n1\tUse tabs.`, origin: { kind: 'engine' } }) as never
+    await $.session.compact({ trigger: 'auto', messages: summary } as never)
+    expect((await $.prompt.attachment(back('/repo/src/CLAUDE.md'))).text).toBeNull()
+    expect((await $.prompt.attachment(back('/repo/notes/a.txt'))).text).not.toBeNull()
+    // The compacted conversation's first request: what was summarized away leaves the list, the deletion stays.
+    world.api = []
+    world.cacheRead = SYSTEM
+    await $.turn.start({ text: 'Go on', turnId: 't3' })
+    await request($, world, ['Summary of the conversation so far.', 'Go on'], 1)
+    await $.session.compact({ trigger: 'auto', messages: summary } as never)
+    expect((await $.prompt.attachment(back('/repo/src/CLAUDE.md'))).text).toBeNull()
+  })
+
   test('🔄 moves a rule to ride with the next message, where its copy is placed exactly; the original reads moved', async ($, on) => {
     const world = engine(on)
     await firstMessage($, world)

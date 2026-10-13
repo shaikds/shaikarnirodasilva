@@ -82,11 +82,13 @@ function flatOf(sent: readonly ApiMessage[], origin: readonly { message: number;
 }
 
 /**
- * Answers after message `m` of text alone (no thinking, no tool call): while a thinking block is still bound in the
- * conversation, each costs 2 tokens more as sent than counting its messages alone gives.
+ * Answers after message `m` of text alone (no thinking, no tool call) that begin Claude's turn (not one that follows a
+ * tool's results): while a thinking block is still bound in the conversation, each costs 2 tokens more as sent than
+ * counting its messages alone gives.
  */
 function plainAnswersAfter(messages: readonly WireMessage[], m: number): number {
-  return messages.filter((x, i) => i > m && x.role === 'assistant' && !x.content.some(b => b.type === 'tool_use' || b.type === 'thinking' || b.type === 'redacted_thinking')).length
+  const isResults = (x: WireMessage | undefined) => x !== undefined && x.content.some(b => b.type === 'tool_result')
+  return messages.filter((x, i) => i > m && x.role === 'assistant' && !isResults(messages[i - 1]) && !x.content.some(b => b.type === 'tool_use' || b.type === 'thinking' || b.type === 'redacted_thinking')).length
 }
 
 /** A system turn between a message and an answer (or none there): what its message costs, framing and all, is the difference. */
@@ -666,9 +668,11 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
       const c = countCuts(cuts[i] ?? [])
       const close = await closingOf($, s.model, b.role)
       if (whole === null || c === null || close === null) continue
-      const perAnswer = [2, 0].find(n => s.total - whole + c - close - n * plainAnswersAfter(now.messages, b.at.message) === s.cacheRead)
-      if (perAnswer !== undefined) {
-        proof = { message: b.at.message, block: b.block, perAnswer }
+      // A cut where tool results end, under answers after them, can cost a token more as sent than counted: the proof says.
+      const shifts = b.role === 'tool_result' ? [0, 1] : [0]
+      const fit = [2, 0].flatMap(n => shifts.map(d => ({ n, d }))).find(({ n, d }) => s.total - whole + c - close - d - n * plainAnswersAfter(now.messages, b.at.message) === s.cacheRead)
+      if (fit !== undefined) {
+        proof = { message: b.at.message, block: b.block, perAnswer: fit.n }
         break
       }
     }
@@ -776,7 +780,9 @@ function promoterOf(pieces: readonly Piece[]): (inner: string, isJoined: boolean
 
 /** 🗑: the group leaves the prompt from the next request on (a skill: its later uses stop). A queued move is cancelled. */
 async function remove($: Engine, group: string): Promise<void> {
-  await update($, removedAtom, list => [...new Set([...list, group])])
+  // A rule Claude Code injected: by its path too, which a compaction's summary does not take away (its file comes back with it).
+  const rules = (await read($, injectionsAtom)).filter(p => p.group === group && (p.attachment === 'nested_memory' || p.attachment === 'instructions')).map(p => `rule:${p.label}`)
+  await update($, removedAtom, list => [...new Set([...list, group, ...rules])])
   const moved = await read($, movedAtom)
   if (moved[group] === 'queued') {
     await update($, movedAtom, m => Object.fromEntries(Object.entries(m).filter(([k]) => k !== group)))
@@ -807,7 +813,7 @@ async function moveToEnd($: Engine, row: Row): Promise<boolean> {
   const copy = text
   await update($, savedAtom, saved => ({ ...saved, [row.group]: copy }))
   await update($, movedAtom, moved => ({ ...moved, [row.group]: 'queued' as const }))
-  await update($, removedAtom, list => list.filter(k => k !== row.group))
+  await update($, removedAtom, list => list.filter(k => k !== row.group && k !== `rule:${p.label}`))
   invalidate($)
   await persist($)
 
@@ -863,6 +869,15 @@ async function isYourFile($: Engine, path: string): Promise<boolean> {
   const isPlace = path.startsWith(`${root}/`) || path.startsWith(`${home}.claude/uploads/`) || path.startsWith('/mnt/user-data/')
 
   return isPlace && !CODE.test(path) && !/\/(?:node_modules|\.git)\/|\/\.claude\/skills\/prompt-inspector\//.test(path)
+}
+
+/** A file you deleted: its rule (🗑 on a `CLAUDE.md` Claude Code injected), or its later reads. */
+async function isDeletedFile($: Engine, path: string | null): Promise<boolean> {
+  if (path === null) return false
+  const short = await shortPath($, path)
+  const removed = new Set(await read($, removedAtom))
+
+  return removed.has(`file:${short}`) || removed.has(`rule:${short}`)
 }
 
 /** Your instruction files on disk: every CLAUDE.md and `.claude/rules` file under the project, and the home CLAUDE.md. */
@@ -2105,6 +2120,8 @@ export const register: Register = on => {
       return text.replace(/^[^\n:]*context:\s*/, '').trim() === '' ? { text: null } : { text }
     }
 
+    // A file Claude Code brings back after a compaction stays out once you deleted it.
+    if (e.type === 'file' && (await isDeletedFile($, pathOfAttachment(result.text)))) return { text: null }
     const out = await gone($)
     const key = keys.attachment(e.type, e.text)
     if (!knownTypes.has(e.type)) {
