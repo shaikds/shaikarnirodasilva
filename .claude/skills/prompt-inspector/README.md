@@ -81,8 +81,12 @@ context.
   call and its results: it starts where the request before ended (the cache read proves it
   unchanged) and ends where the results end (counted the same way as a piece). The piece's own size
   comes from `count_tokens` (the result with and without it).
-- What can't be proven says `not measured` and why, never a guess: text sent before the inspector
-  started (a session resumed in a new process too), a request in
+- What came before the inspector started (a session resumed in a new process too) can't be placed:
+  no request it saw first carried it. It is counted in the list's header, not listed.
+- What can't be proven says `not measured` and why, never a guess: after a 🗑 or 🔄, a piece later
+  in the conversation whose new place the cache read can't prove (counting without Claude Code's own
+  system prompt and tools differs from the request by a token or two across later answers and tool
+  results; the API takes no system prompt or tool list the inspector could read), and a request in
   which a server tool ran. Sizes are always exact. System-prompt sections show their size; their
   position inside tools + system prompt is not reported by the API.
 - Debug mode runs a self-test of these facts against the model (`exact` when they hold).

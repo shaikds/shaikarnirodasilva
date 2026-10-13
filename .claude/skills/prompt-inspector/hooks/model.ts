@@ -749,13 +749,13 @@ export function layout(pieces: readonly Piece[], steps: readonly Step[], removed
     const isHere = last !== undefined && at !== null && p.step !== null && steps.every(s => s.id <= (p.step ?? 0) || s.cacheRead >= at.end)
     const note =
       p.zone === 'system'
-        ? 'inside tools + system prompt (position not measured)'
+        ? 'in tools + system prompt'
         : p.was !== null
           ? null
           : p.lost !== null
             ? `not measured: ${p.lost}`
             : p.isEarlier && !isHere
-              ? 'sent before the inspector started (not measured)'
+              ? 'sent before the inspector started'
               : p.step === null
                 ? 'arrives with your next message'
                 : isHere
@@ -830,7 +830,7 @@ export function withFillers(rows: readonly Row[], total: number | null, systemEn
     cursor = Math.max(cursor, r.end ?? cursor)
   }
   if (total !== null && total > cursor) out.push(filler(cursor, total, gap()))
-  const isSystem = (r: Row) => r.note?.startsWith('inside') ?? false
+  const isSystem = (r: Row) => r.note?.startsWith('in tools') ?? false
 
   return [...others.filter(isSystem), ...out, ...others.filter(r => !isSystem(r))]
 }
@@ -864,7 +864,7 @@ export function cardLabel(r: Row): string {
   const name = r.kind === 'filler' ? `▒ ${r.label}` : shortName(r.label)
   const range = r.start !== null && r.end !== null ? `${int(r.start)} - ${int(r.end)}` : null
   // The choice is the path and the range, nothing else; the piece's card says the rest.
-  const state = range ?? ((r.note ?? '').startsWith('inside') ? 'in system prompt' : r.was !== null ? `was ${int(r.was.start)} - ${int(r.was.end)}` : r.isDeleted ? 'deleted' : 'not measured')
+  const state = range ?? ((r.note ?? '').startsWith('in tools') ? 'in system prompt' : r.was !== null ? `was ${int(r.was.start)} - ${int(r.was.end)}` : r.isDeleted ? 'deleted' : 'not measured')
 
   return `${name} [${state}]`
 }
