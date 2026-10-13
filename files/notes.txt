@@ -1,9 +1,0 @@
-Meeting notes, 3 June
-Attendees: Dana, Omar, Lee
-
-Decisions:
-- Launch moves to 17 June.
-- Budget stays at 12,000.
-- Omar writes the release notes.
-
-Open question: who tests on Android?
