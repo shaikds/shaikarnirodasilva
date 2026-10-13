@@ -269,6 +269,9 @@ async function open($: Engine, world: World, at: number, then: string[], args = 
 }
 const range = (r: { start: number; end: number }) => `${int(r.start)} - ${int(r.end)}`
 
+/** Claude's call and its results in the last request: from where the request before ended to where the results end. */
+const exchange = (world: World, before: number) => ({ start: SYSTEM + stream(world.api.slice(0, before)), end: SYSTEM + stream(world.api) })
+
 describe('model', () => {
   test('cuts a span and the line breaks after it', () => {
     expect(cutSpans('a\n\nbb\n\nc', [{ name: 'b', offset: 3, chars: 2 }])).toBe('a\n\nc')
@@ -652,7 +655,7 @@ describe('plugin', () => {
     expect(labels(world.cards[0])?.some(l => l.startsWith("src/CLAUDE.md [not measured"))).toBe(true)
   })
 
-  test('a file of yours printed into a tool result: its exact size, its place not measured; one never in the context is not listed', async ($, on) => {
+  test('a file of yours printed into a tool result: its exact size, placed as the call and results that hold it; one never in the context is not listed', async ($, on) => {
     const world = engine(on)
     const rule = '# Docs rule\nAlways link the source of every claim.\nNever invent a section number.\n'
     world.disk['/repo/docs/CLAUDE.md'] = rule
@@ -664,11 +667,12 @@ describe('plugin', () => {
     world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
     const labels = await everyLabel($, world)
-    // The API never says where a tool result's text ends, so its place is not measured.
-    expect(labels).toContain('docs/CLAUDE.md [not measured]')
+    // No place inside a tool result can be told: its range is the call and the results that hold it.
+    const ex = exchange(world, 1)
+    expect(labels).toContain(`docs/CLAUDE.md [${range(ex)}]`)
     expect(labels.some(l => l.startsWith('other/CLAUDE.md'))).toBe(false)
-    // Its text to its last character that shows; the line break after it is not its own.
-    expect(await pieceTitle($, world, 'docs/CLAUDE.md')).toBe(`docs/CLAUDE.md [not measured] · ${int(rule.length - 1)} tok`)
+    // Its own size: its text to its last character that shows; the line break after it is not its own.
+    expect((await open($, world, ex.start + 1, ['Back']))[1]?.question).toBe(`docs/CLAUDE.md [${range(ex)}] · ${int(rule.length - 1)} tok`)
   })
 
   test('🗑 on a file Claude read stops its later reads and its injection; 🔄 sends its own text with the next message', async ($, on) => {
@@ -682,15 +686,14 @@ describe('plugin', () => {
     world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
     // 🔄 first: a copy of the file's own text rides with the next message; what was read stays.
-    world.taps = ['docs/CLAUDE.md', '🔄 Send a copy at end', 'Done']
-    await inspect($)
-    expect(world.cards[1]?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', '🔄 Send a copy at end', 'Back'])
-    expect(world.cards[2]?.question).toStartWith('docs/CLAUDE.md copied to the end. ')
+    const at = exchange(world, 1).start + 1
+    const cards = await open($, world, at, ['🔄 Send a copy at end'])
+    expect(cards[1]?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', '🔄 Send a copy at end', 'Back'])
+    expect(cards[2]?.question).toStartWith('docs/CLAUDE.md copied to the end. ')
     const submitted = await $.prompt.submit({ text: 'Again', wait: false, origin: { kind: 'composer' } })
     expect(submitted.context?.[0]).toBe(`\n${rule.trimEnd()}`)
     // 🗑: later reads are refused, and Claude Code's own injection of it is left out.
-    world.taps = ['docs/CLAUDE.md', '🗑 Stop later reads', 'Yes, stop them', 'Done']
-    await inspect($)
+    await open($, world, at, ['🗑 Stop later reads', 'Yes, stop them'])
     const denied = await $.tool.call({ tool: 'Read', file_path: '/repo/docs/CLAUDE.md' } as never)
     expect(String((denied as { deny?: string }).deny)).toContain('docs/CLAUDE.md is left out of the context')
     const injected = await $.prompt.attachment({ type: 'nested_memory', text: `Contents of /repo/docs/CLAUDE.md:\n\n${rule}`, origin: { kind: 'engine' } })
@@ -708,10 +711,11 @@ describe('plugin', () => {
     world.api.push({ role: 'assistant', content: [{ type: 'text', text: 'ok' }] })
     world.api.push({ role: 'user', content: [{ type: 'tool_result', text: content, content } as never] })
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
-    expect(await pieceTitle($, world, 'docs/CLAUDE.md')).toBe(`docs/CLAUDE.md [not measured] · ${int(shown.trimEnd().length)} tok`)
+    const ex = exchange(world, 1)
+    expect((await open($, world, ex.start + 1, ['Back']))[1]?.question).toBe(`docs/CLAUDE.md [${range(ex)}] · ${int(shown.trimEnd().length)} tok`)
   })
 
-  test('a rule joined into a tool result is sized exactly from the API counts, its tags and blank lines included; its place is not measured', async ($, on) => {
+  test('a rule joined into a tool result is sized exactly from the API counts, its tags and blank lines included; placed as its call and results', async ($, on) => {
     const world = engine(on)
     world.isDebug = true
     on('tool.register', ($, e) => ({ value: { tool: `mcp__prompt-inspector__${e.name}` } }))
@@ -728,13 +732,13 @@ describe('plugin', () => {
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
     const end = SYSTEM + chars(world.api)
     // From the end of the body (the blank lines are the rule's), to where its closing tag ends.
-    expect(await pieceTitle($, world, 'src/CLAUDE.md')).toBe(`src/CLAUDE.md [not measured] · ${int(rule.length)} tok`)
+    const ex = exchange(world, 1)
+    expect((await open($, world, ex.start + 1, ['Back']))[1]?.question).toBe(`src/CLAUDE.md [${range(ex)}] · ${int(rule.length)} tok`)
     // 🗑: Claude Code sends the read again without it, and it leaves the list (only what is in the context is listed).
-    world.taps = ['src/CLAUDE.md', '🗑 Delete', 'Yes, delete', 'Done']
-    await inspect($)
+    await open($, world, ex.start + 1, ['🗑 Delete', 'Yes, delete'])
     expect((await $.prompt.attachment(NESTED)).text).toBeNull()
-    // Until Claude Code sends the read again without it, it is listed as deleted, the size it takes out.
-    expect(await pieceTitle($, world, 'src/CLAUDE.md')).toBe(`src/CLAUDE.md [deleted] · ${int(rule.length)} tok`)
+    // Until Claude Code sends the read again without it, it is listed where it is, being removed, with the size it takes out.
+    expect((await open($, world, ex.start + 1, ['Back']))[1]?.question).toBe(`src/CLAUDE.md [${range(ex)}] · ${int(rule.length)} tok`)
     const last = world.api[world.api.length - 1] as unknown as { content: { type: string; text: string; content: string }[] }
     last.content = [{ type: 'tool_result', text: body + tail, content: body + tail }]
     world.cacheRead = end - (rule.length + tail.length) - 10
@@ -757,45 +761,11 @@ describe('plugin', () => {
     world.api.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'r1', text: content, content }, { type: 'tool_result', tool_use_id: 'r2', text: '1\tconst x = 1', content: '1\tconst x = 1' }] } as never)
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
     const labels = await everyLabel($, world)
-    expect(labels).toContain('notes/a.txt [not measured]')
+    const ex = exchange(world, 1)
+    expect(labels).toContain(`notes/a.txt [${range(ex)}]`)
     // Source code Claude reads to work is not a file you gave it.
     expect(labels.some(l => l.startsWith('src/app.ts'))).toBe(false)
-    expect(await pieceTitle($, world, 'notes/a.txt')).toBe(`notes/a.txt [not measured] · ${int(shown.trimEnd().length)} tok`)
-  })
-
-  test('a text file of yours Claude reads moves out of its tool result into a text block of its own, placed exactly', async ($, on) => {
-    const world = engine(on)
-    on('tool.call', { tool: 'Read' }, () => ({ result: 'read' }) as never)
-    await firstMessage($, world)
-    await $.turn.start({ text: 'Read it', turnId: 't2' })
-    await $.tool.call({ tool: 'Read', file_path: '/repo/notes/a.txt', tool_use_id: 'r1' } as never)
-    const shown = '1\tMeeting at noon.\n2\tBring the slides.\n3\t'
-    const row = { type: 'user', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'r1', content: shown }] }
-    const stored = (await $.session.append({ door: 'tool-result', origin: { kind: 'tool', tool: 'Read' }, uuid: 'u1', message: row } as never)) as unknown as { message: { content: unknown[] } }
-    expect(stored.message.content).toEqual([
-      { type: 'tool_result', tool_use_id: 'r1', content: 'notes/a.txt: its text follows this result.' },
-      { type: 'text', text: `${shown.trimEnd()}\n` },
-    ])
-    // The next request carries it as text: its exact range.
-    await request($, world, [`${shown.trimEnd()}\n`])
-    expect(await everyLabel($, world)).toContain(`notes/a.txt [${range(where(world, shown.trimEnd()))}]`)
-  })
-
-  test('a file of yours a command prints whole moves out of its result into a text block of its own, placed exactly', async ($, on) => {
-    const world = engine(on)
-    world.disk['/repo/notes.md'] = 'gamma notes\nsecond gamma\n'
-    on('tool.call', { tool: 'Bash' }, () => ({ result: 'ran' }) as never)
-    await firstMessage($, world)
-    await $.turn.start({ text: 'Show it', turnId: 't2' })
-    await $.tool.call({ tool: 'Bash', command: 'cat notes.md', tool_use_id: 'b1' } as never)
-    const row = { type: 'user', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'b1', content: 'gamma notes\nsecond gamma\n' }] }
-    const stored = (await $.session.append({ door: 'tool-result', origin: { kind: 'tool', tool: 'Bash' }, uuid: 'u2', message: row } as never)) as unknown as { message: { content: unknown[] } }
-    expect(stored.message.content).toEqual([
-      { type: 'tool_result', tool_use_id: 'b1', content: 'notes.md: its text follows this result.' },
-      { type: 'text', text: 'gamma notes\nsecond gamma\n' },
-    ])
-    await request($, world, ['gamma notes\nsecond gamma\n'])
-    expect(await everyLabel($, world)).toContain(`notes.md [${range(where(world, 'gamma notes\nsecond gamma'))}]`)
+    expect((await open($, world, ex.start + 1, ['Back']))[1]?.question).toBe(`notes/a.txt [${range(ex)}] · ${int(shown.trimEnd().length)} tok`)
   })
 
   test('a PDF Claude read is listed by its path, its output sized on its own; it has no text to send as a copy', async ($, on) => {
@@ -808,12 +778,11 @@ describe('plugin', () => {
     world.api.push({ role: 'assistant', content: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/repo/files/report.pdf' }, text: '' }] } as never)
     world.api.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'r1', text: '', content: [{ type: 'text', text: header }, page, page, reminder] }] } as never)
     for await (const chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: world.api.length })) void chunk
-    expect(await everyLabel($, world)).toContain('files/report.pdf [not measured]')
-    world.taps = ['files/report.pdf', 'Back', 'Done']
-    await inspect($)
-    const card = world.cards[world.cards.length - 2]
+    const ex = exchange(world, 1)
+    expect(await everyLabel($, world)).toContain(`files/report.pdf [${range(ex)}]`)
+    const card = (await open($, world, ex.start + 1, ['Back']))[1]
     // The tool's output, its note and pages, counted on its own: the reminder joined after it is not the file.
-    expect(card?.question).toBe(`files/report.pdf [not measured] · ${int(header.length + 200)} tok`)
+    expect(card?.question).toBe(`files/report.pdf [${range(ex)}] · ${int(header.length + 200)} tok`)
     expect(card?.options.map(o => o.label)).toEqual(['🗑 Stop later reads', 'Back'])
   })
 

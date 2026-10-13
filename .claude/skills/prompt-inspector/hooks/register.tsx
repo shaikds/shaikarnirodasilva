@@ -279,8 +279,9 @@ async function countAllMessages($: Engine, model: string, lists: readonly WireMe
 
 /**
  * The tokens that follow a request's last text (its closing), by the role of
- * its last message: asked once per model with a request of the inspector's own
- * whose cache mark ends its last text, so only the closing is left uncached.
+ * its last message (a user message, a system turn, or a user message ending with a
+ * tool result: role `tool_result`): asked once per model with a request of the
+ * inspector's own whose cache mark ends it, so only the closing is left uncached.
  * Null while not known.
  */
 async function closingOf($: Engine, model: string, role: string): Promise<number | null> {
@@ -290,12 +291,16 @@ async function closingOf($: Engine, model: string, role: string): Promise<number
   // A text the cache keeps (a few thousand tokens); after it, a short last text of this role.
   const long = 'The inspector measures every injected piece exactly. '.repeat(400).trimEnd()
   const mark = { type: 'ephemeral' }
+  const call = { type: 'tool_use', id: 'toolu_01Probe', name: 'Read', input: { file_path: '/probe' } }
+  const tools = [{ name: 'Read', description: 'Reads a file.', input_schema: { type: 'object', properties: { file_path: { type: 'string' } } } }]
   const messages =
     role === 'system'
       ? [{ role: 'user', content: [{ type: 'text', text: long }] }, { role: 'system', content: [{ type: 'text', text: 'Done.', cache_control: mark }] }]
-      : [{ role: 'user', content: [{ type: 'text', text: long, cache_control: mark }] }]
+      : role === 'tool_result'
+        ? [{ role: 'user', content: [{ type: 'text', text: long }] }, { role: 'assistant', content: [call] }, { role: 'user', content: [{ type: 'tool_result', tool_use_id: call.id, content: 'Done.', cache_control: mark }] }]
+        : [{ role: 'user', content: [{ type: 'text', text: long, cache_control: mark }] }]
   try {
-    const r = await apiCall($, '/v1/messages', { model, max_tokens: 1, system: [{ type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." }], messages }, ['claude-code-20250219'])
+    const r = await apiCall($, '/v1/messages', { model, max_tokens: 1, system: [{ type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." }], tools, messages }, ['claude-code-20250219'])
     const usage = r.json?.usage as ModelUsage | undefined
     if (usage === undefined || usage.cache_read_input_tokens + usage.cache_creation_input_tokens === 0) {
       countErrors = [...countErrors, `closing: ${r.status} ${r.text.slice(0, 120)}`].slice(-10)
@@ -360,12 +365,18 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   }
   const plans: Plan[] = []
   const sized: string[] = []
+  const exchanges: Piece[] = []
   for (const p of wanted) {
     const text = texts[p.hash]
     if (text === undefined) continue
     // One inside a tool result is sized where it sits only (its text alone may be an id).
     if (p.tokens === null && !isInToolResult(p)) sized.push(text)
     const isRetry = ['counting failed', 'sent outside', 'not found', 'the closing'].some(why => p.lost?.startsWith(why) ?? false)
+    // Inside a tool result: placed as the call and its results (step 1b).
+    if (isInToolResult(p) && p.zone !== 'system' && p.step !== null && p.at === null && p.was === null && !Object.values(LOST).includes(p.lost ?? '')) {
+      exchanges.push(p)
+      continue
+    }
     if (p.zone === 'system' || p.step === null || p.at !== null || p.was !== null || (p.lost !== null && !isRetry)) continue
     if (isRetry) patch(p, { lost: null })
     const s = stepById.get(p.step)
@@ -488,6 +499,49 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
   }
   await settle(plans)
 
+  // 1b. A piece inside a tool result: no place inside one can be told (the API wraps a result in tokens of its own and
+  // reports only their sum; no cut between results is a request it takes). Its range is Claude's call and the results
+  // that hold it: from where the request before ended (the cache read proves it unchanged) to where the results end
+  // (the request as sent, counted whole and cut just after them, and the closing after a message ending with a result).
+  for (const p of exchanges) {
+    const s = stepById.get(p.step ?? -1)
+    const kept = s === undefined ? null : tailOf(s)
+    const text = texts[p.hash] ?? ''
+    if (s === undefined || kept === null || text === '') continue
+    const user = kept.tail[kept.first]?.content ?? []
+    const j = user.findIndex(b => b.type === 'tool_result' && (String(b.tool_use_id) === text || JSON.stringify(b.content ?? '').includes(JSON.stringify(text).slice(1, -1))))
+    if (j < 0) continue
+    // Quoted by the inspector's own report: not where it was sent.
+    const call = (kept.tail[kept.first - 1]?.content ?? []).find(b => b.type === 'tool_use' && b.id === user[j]?.tool_use_id)
+    if (String(call?.name ?? '').startsWith('mcp__prompt-inspector')) {
+      patch(p, { step: null, at: null, lost: null, isEarlier: true })
+      continue
+    }
+    const before = steps.find(x => x.id === s.id - 1)
+    const closeBefore = before?.lastRole === undefined ? null : await closingOf($, before.model, before.lastRole)
+    const results = user.reduce((k, b, i) => (b.type === 'tool_result' ? i : k), j)
+    const toEnd = cutTail(kept.tail, { message: kept.first, block: results + 1, offset: 0 })
+    const counts = await countAllMessages($, model, [kept.tail, toEnd])
+    const whole = counts(kept.tail)
+    const upTo = counts(toEnd)
+    const closeResult = await closingOf($, s.model, 'tool_result')
+    if (before === undefined || before.isWhole !== true || closeBefore === null) {
+      patch(p, { lost: `${IN_TOOL_RESULT}; the request before its call was not seen` })
+      continue
+    }
+    if (whole === null || upTo === null || closeResult === null) {
+      patch(p, { lost: `counting failed${countErrors.length > 0 ? ` (${countErrors[countErrors.length - 1]})` : ''}; Refresh tries again` })
+      continue
+    }
+    const start = before.total - closeBefore
+    const end = s.total - whole + upTo - closeResult
+    if (s.cacheRead < start || end <= start) {
+      patch(p, { lost: `${IN_TOOL_RESULT}; what came before its call changed` })
+      continue
+    }
+    patch(p, { at: { start, end, block: tailFlat(s, kept.tail, { message: kept.first, block: results, offset: 0 }).block, offset: 0, key: 'tool:result', isExchange: true }, lost: null, step: s.id })
+  }
+
   // 2. Carry each placed piece to the last request, and where the first message begins.
   const out = await gone($)
   type Placed = Piece & { at: Position; step: number; tokens: number }
@@ -562,9 +616,25 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
     const flat = flatOf(sent, now.origin)
     const adrift = group.flatMap(p => {
       const text = texts[p.hash] ?? ''
-      const at = text === '' ? null : locateInTail(now.messages, 0, text)
+      const at = text === '' || isInToolResult(p) ? null : locateInTail(now.messages, 0, text)
 
       return at === null ? [] : [{ p, text, at }]
+    })
+    // Inside a tool result: its call and results, from the end of the message before the call to the end of the results.
+    const inResults = group.flatMap(p => {
+      const text = texts[p.hash] ?? ''
+      if (!isInToolResult(p) || text === '') return []
+      const escaped = JSON.stringify(text).slice(1, -1)
+      for (let m = now.messages.length - 1; m >= 2; m--) {
+        const blocks = now.messages[m]?.content ?? []
+        const j = blocks.findIndex(b => b.type === 'tool_result' && (String(b.tool_use_id) === text || JSON.stringify(b.content ?? '').includes(escaped)))
+        if (j < 0 || now.messages[m]?.role !== 'user' || now.messages[m - 1]?.role !== 'assistant' || now.messages[m - 2]?.role === 'assistant') continue
+        const last = blocks.reduce((k, b, i) => (b.type === 'tool_result' ? i : k), j)
+
+        return [{ p, m, first: cutTail(now.messages, { message: m - 1, block: 0, offset: 0 }), end: cutTail(now.messages, { message: m, block: last + 1, offset: 0 }), flat: flat({ message: m, block: last, offset: 0 }) }]
+      }
+
+      return []
     })
     // Block ends before the first block the request changed (the diff with the request before says which), nearest first.
     const change = s.change
@@ -581,9 +651,9 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
         if (msg.content[k]?.type === 'text' && isClean && flat(at).block < firstChange) bounds.push(at)
       }
     }
-    if (adrift.length === 0 || bounds.length === 0) continue
+    if ((adrift.length === 0 && inResults.length === 0) || bounds.length === 0) continue
     const cuts = bounds.map(b => cutTail(now.messages, b))
-    const countCuts = await countAllMessages($, model, [now.messages, ...cuts])
+    const countCuts = await countAllMessages($, model, [now.messages, ...cuts, ...inResults.flatMap(x => [x.first, x.end])])
     const whole = countCuts(now.messages)
     // Whether an answer of text alone costs 2 tokens more is the API's to say: the proof says which, or nothing is placed.
     let proof: { at: WireAt; perAnswer: number } | null = null
@@ -601,6 +671,14 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
     if (from === null) continue
     const after = adrift.filter(x => x.at.message > from.at.message || (x.at.message === from.at.message && x.at.block > from.at.block))
     await settle(after.map(x => plan(x.p, s, now.messages, x.at, x.text, false, flat(x.at), from.perAnswer * plainAnswersAfter(now.messages, x.at.message))))
+    for (const x of inResults.filter(x => x.m - 2 >= from.at.message)) {
+      const before = now.messages[x.m - 2]?.role ?? ''
+      const [c1, c2, close1, close2] = [countCuts(x.first), countCuts(x.end), await closingOf($, s.model, before), await closingOf($, s.model, 'tool_result')]
+      if (whole === null || c1 === null || c2 === null || close1 === null || close2 === null) continue
+      const start = s.total - whole + c1 - close1 - from.perAnswer * plainAnswersAfter(now.messages, x.m - 2)
+      const end = s.total - whole + c2 - close2 - from.perAnswer * plainAnswersAfter(now.messages, x.m)
+      if (end > start) patch(x.p, { at: { start, end, block: x.flat.block, offset: 0, key: 'tool:result', isExchange: true }, lost: null, step: s.id })
+    }
   }
   const regrouped = new Set([...groups.values()].flat().map(p => p.key))
   if (regrouped.size > 0) await carryAll(wanted.filter(p => regrouped.has(p.key)).map(p => ({ ...p, ...(patches.get(p.key) ?? {}) })).filter(isPlaced), false)
@@ -690,12 +768,6 @@ function promoterOf(pieces: readonly Piece[]): (inner: string, isJoined: boolean
     return !isJoined && !USER_CONTEXT.test(inner)
   }
 }
-
-/** Reads of a file in flight: the call's id and the file's path (its result moves a file of yours out to text). */
-const readsInFlight = new Map<string, string>()
-
-/** Commands in flight: the call's id and the command (a file of yours it prints whole moves out to text). */
-const commandsInFlight = new Map<string, string>()
 
 /** 🗑: the group leaves the prompt from the next request on (a skill: its later uses stop). A queued move is cancelled. */
 async function remove($: Engine, group: string): Promise<void> {
@@ -847,6 +919,7 @@ async function filesInContext($: Engine, known: ReadonlySet<string>): Promise<Ro
       isMoved: false,
       isCopy: false,
       isWholeBlock: false,
+      isExchange: false,
       was: null,
       note: 'not measured',
       isActionable: false,
@@ -1177,9 +1250,9 @@ function isInBlock(message: ApiMessage | undefined, text: string, isText: boolea
 /** A piece inside a tool result: its exact size, never a place (IN_TOOL_RESULT); or why not even that. */
 function withPlace(p: Piece, at: { size: number } | string | undefined): Piece {
   if (at === undefined) return p
-  if (typeof at === 'string') return { ...p, at: null, lost: `${IN_TOOL_RESULT} (${at})` }
+  if (typeof at === 'string') return { ...p, at: null, lost: `${IN_TOOL_RESULT} (${at})`, inResult: true }
 
-  return { ...p, at: null, tokens: at.size, lost: IN_TOOL_RESULT }
+  return { ...p, at: null, tokens: at.size, lost: IN_TOOL_RESULT, inResult: true }
 }
 
 /**
@@ -1218,7 +1291,7 @@ async function findLate($: Engine, text: string, messages: readonly ApiMessage[]
 const IN_TOOL_RESULT = 'inside a tool result, whose closing tokens the API does not report'
 
 /** A piece sized inside a tool result (or one that could not be). */
-const isInToolResult = (p: Piece) => p.lost?.startsWith(IN_TOOL_RESULT) ?? false
+const isInToolResult = (p: Piece) => p.inResult === true || (p.lost?.startsWith(IN_TOOL_RESULT) ?? false)
 
 /** The exact tokens of a piece inside a tool result's content (its place there cannot be proven: IN_TOOL_RESULT). */
 async function sizeInResult(place: (content: string, blockEnd: number) => Promise<{ start: number; end: number } | string>, content: string): Promise<{ size: number } | string> {
@@ -1835,17 +1908,10 @@ export const register: Register = on => {
   on('tool.call', { tool: 'Read' }, async ($, e, next) => {
     const path = typeof e.file_path === 'string' ? e.file_path : ''
     if (path === '' || e.agentId !== undefined) return next(e)
-    if (typeof e.tool_use_id === 'string') readsInFlight.set(e.tool_use_id, path)
     const removed = await read($, removedAtom)
     if (!removed.some(g => g.startsWith('file:'))) return next(e)
     const name = await shortPath($, path.startsWith('/') ? path : `${await $.session.root()}/${path}`)
     if (removed.includes(`file:${name}`)) return { deny: `${name} is left out of the context for this test (prompt inspector).` }
-
-    return next(e)
-  })
-
-  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
-    if (e.agentId === undefined && typeof e.tool_use_id === 'string' && typeof e.command === 'string') commandsInFlight.set(e.tool_use_id, e.command)
 
     return next(e)
   })
@@ -2097,60 +2163,6 @@ export const register: Register = on => {
 
     // Only 🗑 stops later uses; a skill moved by 🔄 keeps its text (its copy rides once).
     return (await read($, removedAtom)).includes(group) ? { text: `(prompt-inspector deleted the ${e.skill} skill's instructions.)` } : result
-  })
-
-  // A text file of yours Claude reads, or a command prints whole: its text moves out of the tool's result into a text
-  // block of its own right after it, as the tool showed it. Inside a tool result its place can't be proven; as text it is
-  // placed exactly. (A picture or a PDF stays: the engine keeps no media moved out of a result.)
-  on('session.append', { door: 'tool-result' }, async ($, e, next) => {
-    if (e.agentId !== undefined) return next(e)
-    const blocks = e.message.content as ApiBlock[]
-    const i = blocks.findIndex(b => b.type === 'tool_result')
-    const block = blocks[i]
-    const id = block === undefined ? '' : String(block.tool_use_id)
-    const readPath = readsInFlight.get(id)
-    const command = commandsInFlight.get(id)
-    if (block === undefined || (readPath === undefined && command === undefined)) return next(e)
-    readsInFlight.delete(id)
-    commandsInFlight.delete(id)
-    if (block.is_error === true) return next(e)
-    const message = await read($, messageAtom)
-    const before = blocks.slice(0, i)
-    const after = blocks.slice(i + 1)
-    const content = resultText(block)
-    if (content === null) return next(e)
-    const open = content.indexOf('<system-reminder>')
-    const output = (open < 0 ? content : content.slice(0, open)).trimEnd()
-    const rest = content.slice(output.length)
-    let path: string | null = null
-    if (readPath !== undefined) {
-      // The Read tool shows a text as numbered lines; anything else (a note that the file is unchanged) is not the file.
-      if (/^ *\d+\t/.test(content) && !MEDIA.test(readPath) && (await isYourFile($, readPath))) path = readPath
-    } else if (command !== undefined && output !== '') {
-      // A command that printed one file of yours whole (`cat notes.md`): the file named in it whose text is the output.
-      const root = await $.session.root()
-      for (const word of command.split(/[\s;&|<>()'"`]+/).filter(w => /^[\w./~-]+$/.test(w))) {
-        const full = word.startsWith('/') ? word : `${root}/${word.replace(/^\.\//, '')}`
-        if (MEDIA.test(full) || !(await isYourFile($, full))) continue
-        try {
-          if (((await $.fs.read(full)) as string).trimEnd() === output) {
-            path = full
-            break
-          }
-        } catch {
-          // Not a file: not looked at.
-        }
-      }
-    }
-    if (path === null) return next(e)
-    const rel = await shortPath($, path)
-    // A line break ends it: a text after it (another file's) can't share a token with its last characters.
-    const moved = [...before, { ...block, content: `${rel}: its text follows this result.${rest.trim() === '' ? '' : rest}` }, { type: 'text', text: `${output}\n` }, ...after]
-    const result = await next({ ...e, message: { ...e.message, content: moved as never } })
-    const fields: Fields = { key: `file:${rel}@${result.uuid ?? e.uuid}`, group: `file:${rel}`, kind: 'rule', zone: 'conversation', label: rel, isYours: true, attachment: 'file' }
-    await record($, [{ piece: piece(fields, output, message), text: output }])
-
-    return result
   })
 
   on('command.run', { command: 'inspect' }, async ($, e) => {
