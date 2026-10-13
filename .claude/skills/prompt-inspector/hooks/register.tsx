@@ -654,8 +654,9 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
         const at = { message: m, block: k, offset: typeof t === 'string' ? t.length : 0 }
         if (b?.type === 'text' && isClean && flat(at).block < firstChange) bounds.push({ at, block: k, role: msg.role })
         // After the last of the results the message opens with (a cut between two results is no request the API takes).
+        // The last result may be the block changed: a reminder Claude Code joined into it (sent after the results) was taken out.
         const isLastResult = b?.type === 'tool_result' && msg.content[k + 1]?.type !== 'tool_result'
-        if (isLastResult && flat(at).block < firstChange) bounds.push({ at: { message: m, block: k + 1, offset: 0 }, block: k, role: 'tool_result' })
+        if (isLastResult && flat(at).block <= firstChange) bounds.push({ at: { message: m, block: k + 1, offset: 0 }, block: k, role: 'tool_result' })
       }
     }
     if ((adrift.length === 0 && inResults.length === 0) || bounds.length === 0) continue
