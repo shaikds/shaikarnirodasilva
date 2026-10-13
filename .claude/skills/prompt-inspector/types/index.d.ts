@@ -21,6 +21,11 @@ export type Position = {
   key: string
   /** It is its whole block, as sent: Claude Code sends some reminders reworded, found by their opening. */
   isWholeBlock?: boolean
+  /**
+   * It is inside a tool result, where no place can be told: the range is Claude's call and the results that hold it,
+   * from the end of what came before the call to the end of the results.
+   */
+  isExchange?: boolean
 }
 
 /** One injected piece of the prompt, and where it is. */
@@ -56,6 +61,8 @@ export type Piece = {
   lost: string | null
   /** For a copy riding with a later message (🔄): the group of the piece it copies. */
   copyOf: string | null
+  /** It came inside a tool result: its text, or for pages and pictures the call's id, is found in that result. */
+  inResult?: boolean
 }
 
 /** One block that differs between a request and the one before it. */

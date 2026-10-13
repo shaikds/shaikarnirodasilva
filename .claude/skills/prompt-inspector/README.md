@@ -13,7 +13,7 @@ end of the context. Then you can send the same message again and compare the ans
 
 Your instruction files count wherever their text reaches the context: injected by Claude Code (a `CLAUDE.md` of a folder Claude reads in), read by Claude itself (`files/CLAUDE.md` opened with the Read tool), or printed by a command (`cat sub/CLAUDE.md`). Each is listed by its path, with its exact range. **🔄** sends a copy to the end of the context, where the copy gets its own exact range. A file whose text is not in the context is not listed.
 
-Your other files count the same way: any file of yours Claude opens with the Read tool (a `.txt`, `.md`, `.csv`, a PDF, a picture; anything but source code), in the project or one you uploaded, any file a command prints whole (`cat notes.md`), and any file you send with your message (`@notes/a.txt`). A text file Claude reads, or a command prints whole, is moved out of the tool's reply into a block of text of its own right after it (the reply says so; Claude reads the same text), where its range is exact. A file you send comes as its own text, with its exact range. A PDF or a picture stays inside its tool result (Claude Code keeps no picture moved out of one): its size is exact, its place inside the result is not measured (below). It has no 🔄: no text to send as a copy. A file printed together with other output, or a `CLAUDE.md` Claude Code brings in with a read of source code, stays inside that tool result too: size only.
+Your other files count the same way: any file of yours Claude opens with the Read tool (a `.txt`, `.md`, `.csv`, a PDF, a picture; anything but source code), in the project or one you uploaded, any file a command prints (`cat notes.md`), and any file you send with your message (`@notes/a.txt`). A file you send comes as its own text, with its exact range. A file Claude reads or a command prints stays inside the tool's result, as Claude Code sent it: no place inside a tool result can be told, so its range is Claude's call and the results that hold it (from the end of what came before the call to the end of the results, both exact), shown with the file's own exact size. A PDF or a picture has no 🔄: no text to send as a copy.
 
 Both open a card, on any device including the phone:
 
@@ -58,8 +58,8 @@ context.
   and a piece's range is its text as it shows (white space at its edges belongs to what is beside it).
 - Claude Code sends some of its own reminders reworded; those are found by most of their lines and
   placed as the whole block they were sent in (the card says so).
-- **Checked against the API.** Every kind of range (a CLAUDE.md, a rule, a skill line, a file read or
-  printed, a file you sent, a 🔄 copy, ranges after 🗑, 🔄 and a compaction) was checked by replaying
+- **Checked against the API.** Every kind of range (a CLAUDE.md, a rule, a skill line, a file you
+  sent, a 🔄 copy, a call and its results, ranges after 🗑, 🔄 and a compaction) was checked by replaying
   the real request cut at the piece's edge, with the cache mark there: the API's cached part ends on
   the same token.
 - **It stays.** A range stays the same until something before it changes: each request's cache read
@@ -75,12 +75,14 @@ context.
 - **Compaction.** After a compaction, what it summarized away leaves the list, and what is still in
   the context (the files Claude Code brings back with the summary, your CLAUDE.md files) is placed
   again from the next request.
-- **Inside a tool result** (a picture, a PDF, a file printed with other output) only the size is
-  exact. The API wraps a tool result in tokens of its own before and after its content and reports
-  only their sum: a cache mark inside a tool result is refused, and one on it holds to its end. Its
-  size comes from `count_tokens` (the content with and without it).
-- What can't be proven says `not measured` and why, never a guess: a place inside a tool result,
-  text sent before the inspector started (a session resumed in a new process too), a request in
+- **Inside a tool result** (a file Claude read, a command's output, a picture, a PDF) no place can be
+  told: the API wraps a tool result in tokens of its own before and after its content and reports
+  only their sum, and no request cut between two results is accepted. So the range shown is Claude's
+  call and its results: it starts where the request before ended (the cache read proves it
+  unchanged) and ends where the results end (counted the same way as a piece). The piece's own size
+  comes from `count_tokens` (the result with and without it).
+- What can't be proven says `not measured` and why, never a guess: text sent before the inspector
+  started (a session resumed in a new process too), a request in
   which a server tool ran. Sizes are always exact. System-prompt sections show their size; their
   position inside tools + system prompt is not reported by the API.
 - Debug mode runs a self-test of these facts against the model (`exact` when they hold).

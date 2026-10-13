@@ -724,6 +724,8 @@ export type Row = {
   isCopy: boolean
   /** Its range is the whole block it was sent in (Claude Code sent it reworded). */
   isWholeBlock: boolean
+  /** Its range is Claude's call and the results that hold it (inside a tool result no place can be told); `tokens` is its own. */
+  isExchange: boolean
   /** Where it was in the last request that carried it, once taken out. */
   was: { start: number; end: number } | null
   /** Why there is no range. */
@@ -768,12 +770,13 @@ export function layout(pieces: readonly Piece[], steps: readonly Step[], removed
       isYours: p.isYours,
       start: isHere && p.at !== null ? p.at.start : null,
       end: isHere && p.at !== null ? p.at.end : null,
-      tokens: p.at !== null ? p.at.end - p.at.start : p.tokens,
+      tokens: p.at !== null && p.at.isExchange !== true ? p.at.end - p.at.start : p.tokens,
       message: p.zone === 'system' ? null : p.message,
       isDeleted,
       isMoved,
       isCopy,
       isWholeBlock: p.at?.isWholeBlock === true,
+      isExchange: p.at?.isExchange === true,
       was: p.was,
       note,
       isActionable: true,
@@ -808,6 +811,7 @@ export function withFillers(rows: readonly Row[], total: number | null, systemEn
     isMoved: false,
     isCopy: false,
     isWholeBlock: false,
+    isExchange: false,
     was: null,
     note: null,
     isActionable: false,
@@ -842,6 +846,7 @@ export function describe(r: Row): string {
   if (r.isDeleted && range === null && r.was === null) return `deleted · leaves with your next message · ${size}${from}`
   if (r.isDeleted) return range === null ? `deleted${was} · ${size}${from}` : `${range} · being removed · ${size}${from}`
   if (r.isMoved) return range === null ? `moved to the end${was} · ${size}${from}` : `${range} · being moved to the end · ${size}${from}`
+  if (range !== null && r.isExchange) return `${range} · Claude's call and its results, which hold it · ${size}${from}`
   if (range !== null) return `${range} · ${size}${from}${r.isWholeBlock ? ' · the whole block it was sent in (reworded)' : ''}`
 
   return `${r.note ?? 'not measured'} · ${size}${from}`
