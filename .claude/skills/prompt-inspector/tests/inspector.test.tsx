@@ -642,7 +642,7 @@ describe('plugin', () => {
     expect((await everyLabel($, world, 'all')).some(l => l.includes('rename the helper'))).toBe(false)
   })
 
-  test('what was in the conversation before the inspector started reads not measured', async ($, on) => {
+  test('what was in the conversation before the inspector started is counted, not listed', async ($, on) => {
     const world = engine(on)
     world.history = [{ role: 'user', text: 'earlier prompt', toolUses: [] }]
     world.api = [{ role: 'user', content: [{ type: 'text', text: 'earlier prompt' }] }]
@@ -650,9 +650,10 @@ describe('plugin', () => {
     await $.prompt.attachment(NESTED)
     await $.turn.start({ text: 'Now', turnId: 't' })
     await request($, world, ['Now'])
-    world.taps = ['src/CLAUDE.md', 'Back', 'Done']
+    world.taps = ['Done']
     await inspect($)
-    expect(labels(world.cards[0])?.some(l => l.startsWith("src/CLAUDE.md [not measured"))).toBe(true)
+    expect(labels(world.cards[0])?.some(l => l.startsWith('src/CLAUDE.md'))).toBe(false)
+    expect(world.cards[0]?.question).toContain('1 more in the context from before the inspector started.')
   })
 
   test('a file of yours printed into a tool result: its exact size, placed as the call and results that hold it; one never in the context is not listed', async ($, on) => {

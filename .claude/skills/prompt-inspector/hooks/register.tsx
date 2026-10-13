@@ -639,39 +639,44 @@ async function measure($: Engine, scope: 'yours' | 'all'): Promise<void> {
     // Block ends before the first block the request changed (the diff with the request before says which), nearest first.
     const change = s.change
     const firstChange = change.kind === 'known' ? Math.min(...change.blocks.map(c => c.at), change.brokenAt ?? Infinity) : Infinity
-    const bounds: WireAt[] = []
+    // Each a cut, the last block it keeps, and the role its closing is that of (a message ending with tool results has its own).
+    const bounds: { at: WireAt; block: number; role: string }[] = []
     for (let m = now.messages.length - 1; m >= 0 && bounds.length < 12 && firstChange !== Infinity; m--) {
       const msg = now.messages[m]
       if (msg === undefined || msg.role === 'assistant') continue
       for (let k = msg.content.length - 1; k >= 0 && bounds.length < 12; k--) {
-        const t = msg.content[k]?.text
+        const b = msg.content[k]
+        const t = b?.text
         // White space ending a message is dropped where it sits as it is in the cut; inside a message it costs a token there.
         const isClean = typeof t === 'string' && t.trim() !== '' && (k === msg.content.length - 1 || !/\s$/.test(t))
         const at = { message: m, block: k, offset: typeof t === 'string' ? t.length : 0 }
-        if (msg.content[k]?.type === 'text' && isClean && flat(at).block < firstChange) bounds.push(at)
+        if (b?.type === 'text' && isClean && flat(at).block < firstChange) bounds.push({ at, block: k, role: msg.role })
+        // After the last of the results the message opens with (a cut between two results is no request the API takes).
+        const isLastResult = b?.type === 'tool_result' && msg.content[k + 1]?.type !== 'tool_result'
+        if (isLastResult && flat(at).block < firstChange) bounds.push({ at: { message: m, block: k + 1, offset: 0 }, block: k, role: 'tool_result' })
       }
     }
     if ((adrift.length === 0 && inResults.length === 0) || bounds.length === 0) continue
-    const cuts = bounds.map(b => cutTail(now.messages, b))
+    const cuts = bounds.map(b => cutTail(now.messages, b.at))
     const countCuts = await countAllMessages($, model, [now.messages, ...cuts, ...inResults.flatMap(x => [x.first, x.end])])
     const whole = countCuts(now.messages)
     // Whether an answer of text alone costs 2 tokens more is the API's to say: the proof says which, or nothing is placed.
-    let proof: { at: WireAt; perAnswer: number } | null = null
+    let proof: { message: number; block: number; perAnswer: number } | null = null
     for (const [i, b] of bounds.entries()) {
       const c = countCuts(cuts[i] ?? [])
-      const close = await closingOf($, s.model, now.messages[b.message]?.role ?? '')
+      const close = await closingOf($, s.model, b.role)
       if (whole === null || c === null || close === null) continue
-      const perAnswer = [2, 0].find(n => s.total - whole + c - close - n * plainAnswersAfter(now.messages, b.message) === s.cacheRead)
+      const perAnswer = [2, 0].find(n => s.total - whole + c - close - n * plainAnswersAfter(now.messages, b.at.message) === s.cacheRead)
       if (perAnswer !== undefined) {
-        proof = { at: b, perAnswer }
+        proof = { message: b.at.message, block: b.block, perAnswer }
         break
       }
     }
     const from = proof
     if (from === null) continue
-    const after = adrift.filter(x => x.at.message > from.at.message || (x.at.message === from.at.message && x.at.block > from.at.block))
+    const after = adrift.filter(x => x.at.message > from.message || (x.at.message === from.message && x.at.block > from.block))
     await settle(after.map(x => plan(x.p, s, now.messages, x.at, x.text, false, flat(x.at), from.perAnswer * plainAnswersAfter(now.messages, x.at.message))))
-    for (const x of inResults.filter(x => x.m - 2 >= from.at.message)) {
+    for (const x of inResults.filter(x => x.m - 2 >= from.message)) {
       const before = now.messages[x.m - 2]?.role ?? ''
       const [c1, c2, close1, close2] = [countCuts(x.first), countCuts(x.end), await closingOf($, s.model, before), await closingOf($, s.model, 'tool_result')]
       if (whole === null || c1 === null || c2 === null || close1 === null || close2 === null) continue
@@ -929,9 +934,17 @@ async function filesInContext($: Engine, known: ReadonlySet<string>): Promise<Ro
   return rows
 }
 
-async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]; total: number | null}> {
+/**
+ * The rows a view lists, and how many pieces in the context came before the inspector started (in a session resumed in
+ * a new process too): no request it saw first carried them, so none can be placed. They are counted, not listed.
+ */
+async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]; total: number | null; earlier: number }> {
   const steps = await read($, requestsAtom)
-  const { rows, total } = layout(await read($, injectionsAtom), steps, new Set(await read($, removedAtom)), new Set(Object.keys(await read($, movedAtom))))
+  const all = layout(await read($, injectionsAtom), steps, new Set(await read($, removedAtom)), new Set(Object.keys(await read($, movedAtom))))
+  const isEarlier = (r: Row) => r.note?.startsWith('sent before the inspector started') ?? false
+  const earlierRows = all.rows.filter(r => isEarlier(r) && (scope === 'all' || (r.isYours && r.kind !== 'context')))
+  const total = all.total
+  const rows = all.rows.filter(r => !isEarlier(r) && !(r.note?.startsWith('arrives') ?? false))
   // Yours: only what is in the context now; each at its exact place, or says why not. What has not been sent yet is not listed.
   if (scope === 'yours') {
     // A file already listed at its exact place is not listed again by a copy that could not be placed.
@@ -960,14 +973,15 @@ async function rowsFor($: Engine, scope: 'yours' | 'all'): Promise<{ rows: Row[]
     // A file Claude Code brought back whole (after a compaction) holds the piece it was read as: listed once, as brought back.
     const isInside = (r: Row, o: Row) => o !== r && o.label === r.label && r.start !== null && r.end !== null && o.start !== null && o.end !== null && o.start <= r.start && r.end <= o.end && o.end - o.start > r.end - r.start
     const once = shown.filter(r => !shown.some(o => isInside(r, o)))
-    const extra = await filesInContext($, new Set(once.map(x => x.label)))
+    // Files of yours whose text is in the context with no injection the inspector saw: from before it started.
+    const extra = await filesInContext($, new Set([...once, ...earlierRows].map(x => x.label)))
 
-    return { rows: [...once, ...extra], total }
+    return { rows: once, total, earlier: earlierRows.length + extra.length }
   }
   const start = await read($, promptStartAtom)
   const isProven = start !== null && steps.every(s => s.id <= start.step || s.cacheRead >= start.at)
 
-  return { rows: withFillers(rows, total, isProven && start !== null ? start.at : null), total }
+  return { rows: withFillers(rows, total, isProven && start !== null ? start.at : null), total, earlier: earlierRows.length }
 }
 
 /** The card for one piece: 🗑 (with a confirmation) or 🔄; answers what to say on the list card. */
@@ -1017,7 +1031,7 @@ async function inspect($: Engine, scope: 'yours' | 'all'): Promise<string> {
       await measure($, scope)
       measuredAt = seen
     }
-    const { rows, total } = await rowsFor($, scope)
+    const { rows, total, earlier } = await rowsFor($, scope)
     const pages = Math.max(1, Math.ceil(rows.length / PAGE))
     page = page % pages
     const shown = rows.slice(page * PAGE, page * PAGE + PAGE)
@@ -1025,7 +1039,8 @@ async function inspect($: Engine, scope: 'yours' | 'all'): Promise<string> {
     const title = scope === 'all' ? 'Everything injected' : 'Your rules & skills'
     const size = total === null ? 'no request measured yet' : `last request ${int(total)} tokens`
     const empty = rows.length === 0 ? (scope === 'all' ? ' Nothing recorded yet.' : ' None of yours is in the context.') : ''
-    const question = `${said}${title} · ${size} · ${rows.length} pieces, page ${page + 1}/${pages}.${empty} Tap one, or type a token position.`
+    const before = earlier === 0 ? '' : ` ${earlier} more in the context from before the inspector started.`
+    const question = `${said}${title} · ${size} · ${rows.length} pieces, page ${page + 1}/${pages}.${empty}${before} Tap one, or type a token position.`
     const choices = rows.length === 0 ? ['Refresh', DONE] : [...labels, ...(pages > 1 ? [MORE] : []), DONE]
     const answer = await ask($, question, scope === 'all' ? 'Inspect all' : 'Inspect', choices)
     said = ''
@@ -1349,10 +1364,12 @@ async function recordFiles($: Engine, message: ApiMessage, asked: ApiMessage | u
   for (const b of asked?.content ?? []) {
     if (b.type !== 'tool_use') continue
     for (const m of JSON.stringify(b.input ?? {}).matchAll(/[\w./~-]*(?:CLAUDE(?:\.local)?\.md|\.claude\/rules\/[\w./-]+\.md)/g)) named.add(m[0])
+    // Any file of yours a command names (`cat notes.md`): what it prints of it is looked for in its output.
+    if (b.name === 'Bash') for (const word of String((b.input as { command?: unknown } | undefined)?.command ?? '').split(/[\s;&|<>()'"`]+/)) if (/^[\w./~-]+\.\w+$/.test(word)) named.add(word)
   }
   for (const name of named) {
     const path = name.startsWith('/') ? name : `${root}/${name.replace(/^\.\//, '')}`
-    if (files.some(f => f.path === path) || /\/\.claude\/skills\/prompt-inspector\/|\/node_modules\//.test(path)) continue
+    if (files.some(f => f.path === path) || /\/\.claude\/skills\/prompt-inspector\/|\/node_modules\//.test(path) || MEDIA.test(path) || !(await isYourFile($, path))) continue
     try {
       const text = (await $.fs.read(path)) as string
       if (text.trim() !== '') files.push({ path, rel: await shortPath($, path), text })
@@ -1597,6 +1614,7 @@ async function report($: Engine): Promise<Record<string, unknown>> {
       return (await read($, injectionsAtom)).filter(p => p.isYours || p.copyOf !== null).map(p => ({ key: p.key, label: p.label, step: p.step, at: p.at, lost: p.lost, tokens: p.tokens, text: kept[p.hash] ?? null }))
     })(),
     yours: yours.rows.map(r => `${cardLabel(r)}  [${describe(r)}]`),
+    earlier: yours.earlier,
     all: all.rows.slice(0, (await $.fs.exists(`${await $.session.root()}/.claude/prompt-inspector.brief`)) ? 3 : undefined).map(r => `${cardLabel(r)}  [${describe(r)}]`),
   }
 }
