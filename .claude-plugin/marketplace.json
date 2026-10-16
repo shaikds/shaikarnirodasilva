@@ -1,0 +1,5 @@
+{
+  "name": "shaikds-mods",
+  "owner": { "name": "shaikds" },
+  "plugins": [{ "name": "context-map", "source": "./context-map" }]
+}

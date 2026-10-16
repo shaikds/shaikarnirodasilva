@@ -1,0 +1,1 @@
+{ "name": "context-map", "version": "0.1.0", "description": "Pane listing every injected file, skill, rule, agent and MCP tool with its start-end token range in the context window", "types": "./types/index.d.ts" }
