@@ -122,7 +122,7 @@ async function refresh($: any) {
       const rd = await read($, reads)
       await update($, map, () => layout(b, rl, rd))
     const cells: Cell[][] = (b.gridRows ?? []).map((row: any[]) =>
-      row.map(q => ({ color: q.color, glyph: glyph(q) })),
+      row.map(q => ({ color: q.color, glyph: glyph(q), name: q.categoryName })),
     )
     const rowsOut: LegendRow[] = (b.categories ?? [])
       .filter((c: any) => c.kind !== 'deferred')
@@ -167,6 +167,14 @@ export const register: Register = on => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  // A client that draws plugin UI joined: open the pane so it is placed there at once.
+  on('session.attach', async ($, e, next) => {
+    await update($, isShown, () => true)
+    await $.ui.open({ id: PANE, title: 'Context map' })
+    await refresh($)
+    return next(e)
+  })
+
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'context-map',
@@ -190,11 +198,11 @@ export const register: Register = on => {
     const dots = ['🟦', '🟪', '🟩', '🟨', '🟧', '🟥', '🟫']
     const mark: Record<string, string> = {}
     leg.forEach((l, i) => {
-      mark[l.color] = l.kind === 'free' ? '⬜' : l.kind === 'buffer' ? '⬛' : (dots[i % dots.length] ?? '🟦')
+      mark[l.name] = l.kind === 'free' ? '⬜' : l.kind === 'buffer' ? '⬛' : (dots[i % dots.length] ?? '🟦')
     })
-    const picture = cells.map(row => row.map(c => mark[c.color] ?? '⬜').join(''))
+    const picture = cells.map(row => row.map(c => mark[c.name] ?? '⬜').join(''))
     const key = leg.map(
-      l => `${mark[l.color]} ${l.name}: ${fmtK(l.tokens)} tokens (${l.pct.toFixed(1)}%)`,
+      l => `${mark[l.name]} ${l.name}: ${fmtK(l.tokens)} tokens (${l.pct.toFixed(1)}%)`,
     )
     const lines = rows.map(
       r => `${r.depth > 0 ? '  ' : ''}${r.label} [${fmt(r.start)}-${fmt(r.end)}]`,

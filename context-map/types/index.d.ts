@@ -1,4 +1,4 @@
-export type Cell = { color: string; glyph: string }
+export type Cell = { color: string; glyph: string; name: string }
 export type LegendRow = { name: string; tokens: number; pct: number; color: string; kind: string }
 
 export type MapRow = {
