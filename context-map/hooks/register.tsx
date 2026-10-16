@@ -183,11 +183,36 @@ export const register: Register = on => {
     const rows = await read($, map)
     const used = await read($, total)
     const size = await read($, win)
-    const msg = await read($, note)
+    const model = await read($, note)
+    const cells = await read($, grid)
+    const leg = await read($, legend)
+    // No surface draws plugin UI here, so the reply itself carries the picture.
+    const dots = ['🟦', '🟪', '🟩', '🟨', '🟧', '🟥', '🟫']
+    const mark: Record<string, string> = {}
+    leg.forEach((l, i) => {
+      mark[l.color] = l.kind === 'free' ? '⬜' : l.kind === 'buffer' ? '⬛' : (dots[i % dots.length] ?? '🟦')
+    })
+    const picture = cells.map(row => row.map(c => mark[c.color] ?? '⬜').join(''))
+    const key = leg.map(
+      l => `${mark[l.color]} ${l.name}: ${fmtK(l.tokens)} tokens (${l.pct.toFixed(1)}%)`,
+    )
     const lines = rows.map(
       r => `${r.depth > 0 ? '  ' : ''}${r.label} [${fmt(r.start)}-${fmt(r.end)}]`,
     )
-    return { text: [`Context ${fmt(used)} / ${fmt(size)} tokens. ${msg}`, ...lines].join('\n') }
+    const pct = size ? Math.round((used / size) * 100) : 0
+    return {
+      text: [
+        'Context Usage',
+        `${model} · ${fmtK(used)}/${fmtK(size)} tokens (${pct}%)`,
+        '',
+        ...picture,
+        '',
+        ...key,
+        '',
+        'Token map (start-end, estimates):',
+        ...lines,
+      ].join('\n'),
+    }
   })
 
   on('turn.complete', async ($, e, next) => {
