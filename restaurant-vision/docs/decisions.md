@@ -39,3 +39,12 @@
 | Languages | Python on edge and cloud (FastAPI), shared data models. Dashboard and waiter PWA in React + TypeScript |
 | Detection model | Permissive licenses only (YOLOX / RT-DETR, Apache/MIT; ByteTrack MIT). Pluggable detector interface. No Ultralytics / AGPL |
 | UI languages | Hebrew (RTL) + English, i18n-ready |
+
+## Round 4: scope and accounts (answered)
+
+| Topic | Decision |
+|---|---|
+| Build scope now | End-to-end working MVP (edge engine, cloud, dashboard, waiter PWA) with tests, running on sample/simulated video |
+| Accounts | Organization -> sites (branches) -> roles: owner (all sites), manager (one site), waiter (alerts only) |
+| Offline | Alerts keep working over the restaurant LAN/WiFi when internet drops; edge buffers and syncs later |
+| Pilot | No pilot restaurant yet. Generic POS adapter interface now, concrete POS integration in phase 2 |
