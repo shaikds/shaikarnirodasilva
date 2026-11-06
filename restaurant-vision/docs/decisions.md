@@ -21,3 +21,12 @@
 - Most restaurants already have computers and cameras.
   - Implication: software-first. The edge agent should install on an existing PC (likely Windows), with a dedicated box only as a fallback/premium option.
   - To verify in round 2: which PCs (POS terminal vs back-office PC), OS, always-on, specs, and whether the NVR is reachable on the same LAN.
+
+## Round 2: product (answered)
+
+| Topic | Decision |
+|---|---|
+| Staff metrics | Table and zone level only. No per-waiter attribution |
+| MVP features | All four: table state + waiter-needed alerts; entrance queue + walk-aways; diner count + turnover; ROI dashboard + shift report |
+| Camera coverage | Setup tool shows uncovered tables and recommends adding a cheap ceiling camera |
+| Staff alerts | Web app (PWA) on the waiter's phone with push and an "acknowledged" button |
