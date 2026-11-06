@@ -30,3 +30,12 @@
 | MVP features | All four: table state + waiter-needed alerts; entrance queue + walk-aways; diner count + turnover; ROI dashboard + shift report |
 | Camera coverage | Setup tool shows uncovered tables and recommends adding a cheap ceiling camera |
 | Staff alerts | Web app (PWA) on the waiter's phone with push and an "acknowledged" button |
+
+## Round 3: technical (answered)
+
+| Topic | Decision |
+|---|---|
+| Edge host | Install on an existing always-on PC (Windows or Linux, prefer back-office over POS). Fallback: cheap mini PC (Intel N100) with the same software |
+| Languages | Python on edge and cloud (FastAPI), shared data models. Dashboard and waiter PWA in React + TypeScript |
+| Detection model | Permissive licenses only (YOLOX / RT-DETR, Apache/MIT; ByteTrack MIT). Pluggable detector interface. No Ultralytics / AGPL |
+| UI languages | Hebrew (RTL) + English, i18n-ready |
