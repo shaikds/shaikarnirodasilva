@@ -16,9 +16,10 @@ Document shape (JSON Schema 2020-12):
 * Schemas describe the **serialized** form (what is on the wire): fields with defaults are
   listed as required because they are always present in output. Partial-update models
   (``SiteSettingsPatch``, ``UserUpdate``) keep their fields optional.
-* TS-friendly tweaks: no per-property ``title`` (avoids spurious named aliases) and
-  homogeneous tuples such as ``Point`` are emitted as fixed-length arrays
-  (``items`` + ``minItems``/``maxItems``) so they become ``[number, number]``.
+* TS-friendly tweaks: no per-property ``title`` (avoids spurious named aliases), homogeneous
+  tuples such as ``Point`` are emitted as fixed-length arrays (``items`` +
+  ``minItems``/``maxItems``) so they become ``[number, number]``, and a ``$ref`` carrying a
+  description is wrapped in ``allOf`` so the referenced type keeps its name.
 * Validation rules that JSON Schema cannot express (cross-field checks, polygon >= 3 points
   with non-zero area) live only in the Python models.
 """
@@ -57,6 +58,33 @@ class _TsFriendlyGenerator(GenerateJsonSchema):
         return json_schema
 
 
+def _wrap_ref_siblings(node: Any) -> Any:
+    """Rewrite ``{"$ref": X, "description": ...}`` as ``{"allOf": [{"$ref": X}], ...}``.
+
+    json-schema-to-typescript turns a ``$ref`` with sibling keywords into a numbered copy of the
+    referenced type (``Estimate2``); wrapped in ``allOf`` it keeps the original name and the
+    description. ``default`` next to a ``$ref`` is dropped (it only adds ``& string`` noise).
+    """
+    if isinstance(node, list):
+        return [_wrap_ref_siblings(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    node = {key: _wrap_ref_siblings(value) for key, value in node.items()}
+    if "$ref" in node and len(node) > 1:
+        siblings = {k: v for k, v in node.items() if k not in ("$ref", "default")}
+        if not siblings:
+            return {"$ref": node["$ref"]}
+        return {"allOf": [{"$ref": node["$ref"]}], **siblings}
+    if (
+        "default" in node
+        and "anyOf" in node
+        and any(isinstance(item, dict) and "$ref" in item for item in node["anyOf"])
+    ):
+        # Nullable refs (``X | None = None``): the default adds nothing for TS either.
+        del node["default"]
+    return node
+
+
 def public_types() -> dict[str, Any]:
     """Name -> type of every model, enum and union included in the schema."""
     found: dict[str, Any] = {}
@@ -86,7 +114,7 @@ def build_json_schema() -> dict[str, Any]:
                 raise RuntimeError(f"{name} was exported as {ref}; names must be unique")
         else:
             defs[name] = {"title": name, **schema}
-    defs = dict(sorted(defs.items()))
+    defs = {name: _wrap_ref_siblings(schema) for name, schema in sorted(defs.items())}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "RvContracts",

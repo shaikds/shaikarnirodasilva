@@ -19,6 +19,8 @@ Modules:
 Every pydantic model rejects unknown fields and is immutable; see :mod:`rv_contracts._base`.
 """
 
+from typing import TYPE_CHECKING, Any
+
 from ._base import (
     ID_PATTERN,
     SCHEMA_MAJOR,
@@ -153,7 +155,6 @@ from .geometry import (
     segment_side,
 )
 from .ids import new_event_id, new_uuid7, uuid7_timestamp
-from .schema_export import build_json_schema, export_json_schema
 from .vision import (
     AnalyticsModule,
     AppearanceHints,
@@ -167,6 +168,21 @@ from .vision import (
     Tracker,
     TrackFrame,
 )
+
+if TYPE_CHECKING:
+    from .schema_export import build_json_schema, export_json_schema
+
+_LAZY = frozenset({"build_json_schema", "export_json_schema"})
+
+
+def __getattr__(name: str) -> Any:
+    # Imported lazily so that ``python -m rv_contracts.schema_export`` runs cleanly.
+    if name in _LAZY:
+        from . import schema_export
+
+        return getattr(schema_export, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     # version, base types
