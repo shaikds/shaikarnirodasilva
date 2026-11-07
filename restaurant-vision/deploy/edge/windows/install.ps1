@@ -188,6 +188,7 @@ Invoke-Checked "sc.exe" @("failureflag", $ServiceName, "1")
 # Only SYSTEM, Administrators and the service account; children inherit from these folders.
 Invoke-Checked "icacls.exe" @($DataRoot, "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", "/Q")
 if (-not $RunAsLocalSystem) {
+    Invoke-Checked "icacls.exe" @($InstallDir, "/grant", "$($account):(OI)(CI)RX", "/Q")
     Invoke-Checked "icacls.exe" @($DataRoot, "/grant", "$($account):(OI)(CI)RX", "/Q")
     foreach ($dir in @($DataDir, $LogDir)) {
         Invoke-Checked "icacls.exe" @($dir, "/grant", "$($account):(OI)(CI)M", "/Q")
