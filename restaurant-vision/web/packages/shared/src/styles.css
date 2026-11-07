@@ -1,0 +1,114 @@
+/*
+ * Restaurant Vision design tokens. Every color is an RGB triplet so Tailwind can apply
+ * opacity (`bg-primary/10`). Contrast: text tokens on their paired backgrounds meet WCAG AA
+ * (>= 4.5:1) in both themes; see the table-state tokens' comments.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --rv-bg: 246 247 249; /* #f6f7f9 */
+    --rv-surface: 255 255 255;
+    --rv-surface-2: 240 242 245;
+    --rv-border: 218 223 230;
+    --rv-fg: 23 32 46; /* #17202e: 15.9:1 on bg */
+    --rv-muted: 84 96 114; /* #546072: 6.1:1 on bg */
+    --rv-primary: 15 108 110; /* #0f6c6e teal: 6.0:1 vs white */
+    --rv-primary-fg: 255 255 255;
+    --rv-primary-soft: 224 242 241;
+    --rv-danger: 180 35 24; /* #b42318 */
+    --rv-danger-soft: 254 228 226;
+    --rv-warning: 147 85 6; /* #935506 */
+    --rv-warning-soft: 254 240 199;
+    --rv-success: 6 118 71; /* #067647 */
+    --rv-success-soft: 220 250 230;
+    --rv-info: 23 92 211; /* #175cd3 */
+    --rv-info-soft: 225 237 255;
+    --rv-focus: 23 92 211;
+
+    /* Table states: text on background >= 7:1, stroke distinguishes on the floor plan. */
+    --rv-state-empty-bg: 236 239 243; /* neutral gray */
+    --rv-state-empty-fg: 52 64 84;
+    --rv-state-empty-stroke: 152 162 179;
+    --rv-state-seated-bg: 254 239 199; /* amber */
+    --rv-state-seated-fg: 122 46 14;
+    --rv-state-seated-stroke: 220 104 3;
+    --rv-state-attended-bg: 211 248 223; /* green */
+    --rv-state-attended-fg: 8 74 46;
+    --rv-state-attended-stroke: 3 152 85;
+    --rv-state-bussing-bg: 209 233 255; /* blue */
+    --rv-state-bussing-fg: 25 65 133;
+    --rv-state-bussing-stroke: 46 144 250;
+  }
+
+  :root.dark {
+    color-scheme: dark;
+    --rv-bg: 13 17 23;
+    --rv-surface: 22 27 34;
+    --rv-surface-2: 30 36 45;
+    --rv-border: 48 56 68;
+    --rv-fg: 230 235 241;
+    --rv-muted: 160 171 186; /* 8.4:1 on bg */
+    --rv-primary: 94 205 196; /* #5ecdc4 */
+    --rv-primary-fg: 6 32 33;
+    --rv-primary-soft: 16 52 54;
+    --rv-danger: 253 162 155;
+    --rv-danger-soft: 72 22 20;
+    --rv-warning: 253 212 120;
+    --rv-warning-soft: 70 45 10;
+    --rv-success: 117 224 167;
+    --rv-success-soft: 12 58 38;
+    --rv-info: 132 187 255;
+    --rv-info-soft: 20 44 84;
+    --rv-focus: 132 187 255;
+
+    --rv-state-empty-bg: 44 51 62;
+    --rv-state-empty-fg: 220 226 234;
+    --rv-state-empty-stroke: 120 132 150;
+    --rv-state-seated-bg: 78 50 12;
+    --rv-state-seated-fg: 254 223 137;
+    --rv-state-seated-stroke: 247 144 9;
+    --rv-state-attended-bg: 10 64 40;
+    --rv-state-attended-fg: 166 244 197;
+    --rv-state-attended-stroke: 50 213 131;
+    --rv-state-bussing-bg: 18 52 98;
+    --rv-state-bussing-fg: 178 221 255;
+    --rv-state-bussing-stroke: 83 177 253;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-bg font-sans text-fg antialiased;
+    min-width: 320px;
+  }
+
+  :focus-visible {
+    outline: 3px solid rgb(var(--rv-focus));
+    outline-offset: 2px;
+  }
+
+  /* Numbers and timers never reorder inside RTL text. */
+  .rv-num {
+    font-variant-numeric: tabular-nums;
+    unicode-bidi: isolate;
+    direction: ltr;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

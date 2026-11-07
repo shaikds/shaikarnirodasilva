@@ -1,0 +1,55 @@
+{
+  "name": "@rv/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./mock": "./src/mock/index.ts",
+    "./mock/browser": "./src/mock/browser.ts",
+    "./mock/node": "./src/mock/node.ts",
+    "./test-utils": "./src/test/utils.tsx",
+    "./vite": "./src/vite/index.ts",
+    "./i18n/resources": "./src/i18n/resources/index.ts",
+    "./contracts": "./src/contracts/index.ts",
+    "./styles.css": "./src/styles.css",
+    "./tailwind-preset": "./tailwind-preset.js"
+  },
+  "scripts": {
+    "gen:types": "node scripts/gen-types.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.106.1",
+    "clsx": "2.1.1",
+    "i18next": "24.2.3",
+    "lucide-react": "0.577.0",
+    "msw": "2.15.0",
+    "react-i18next": "15.7.4",
+    "zustand": "5.0.16"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.1",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "4.7.0",
+    "jsdom": "26.1.0",
+    "json-schema-to-typescript": "15.0.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tailwindcss": "3.4.19",
+    "vite": "6.4.5",
+    "vitest": "3.2.7"
+  }
+}
