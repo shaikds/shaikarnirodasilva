@@ -168,4 +168,5 @@ if __name__ == "__main__":
         servicemanager.PrepareToHostSingle(RestaurantVisionEdgeService)
         servicemanager.StartServiceCtrlDispatcher()
     else:
-        win32serviceutil.HandleCommandLine(RestaurantVisionEdgeService)
+        # install / update / remove / start / stop / debug; non-zero exit on failure.
+        sys.exit(win32serviceutil.HandleCommandLine(RestaurantVisionEdgeService))

@@ -49,6 +49,18 @@ export interface DrawingState {
   points: Pt[];
 }
 
+/** An automatic table suggestion drawn as a dashed outline with its confidence. */
+export interface SuggestionShape {
+  id: string;
+  polygon: Pt[];
+  /** Badge text, e.g. "71%". */
+  badge: string;
+  /** Accessible name. */
+  label: string;
+}
+
+export const SUGGESTION_COLOR = '#db2777';
+
 /** Visual override per zone (live view: color table zones by state). */
 export interface ZoneLook {
   stroke: string;
@@ -70,6 +82,9 @@ export interface ZoneCanvasProps {
   drawing?: DrawingState | null;
   readOnly?: boolean;
   look?: (zone: Zone) => ZoneLook | null;
+  suggestions?: readonly SuggestionShape[];
+  activeSuggestionId?: string | null;
+  onSuggestionClick?: (id: string) => void;
   onSelect?: (zoneId: string | null) => void;
   onSelectVertex?: (index: number | null) => void;
   /** New points for a zone (polygon vertices or line endpoints). */
@@ -132,6 +147,9 @@ export function ZoneCanvas({
   drawing = null,
   readOnly = false,
   look,
+  suggestions = [],
+  activeSuggestionId = null,
+  onSuggestionClick,
   onSelect,
   onSelectVertex,
   onZonePoints,
@@ -276,6 +294,18 @@ export function ZoneCanvas({
         : pointInPolygon(p, pts);
       if (insideSelected) {
         startDrag(e, selected, 'shape', -1, p, pts);
+        return;
+      }
+    }
+
+    if (onSuggestionClick) {
+      const sid = hitTestShapes(
+        suggestions.map((sg) => ({ id: sg.id, points: sg.polygon, closed: true })),
+        p,
+        size,
+      );
+      if (sid) {
+        onSuggestionClick(sid);
         return;
       }
     }
@@ -437,6 +467,14 @@ export function ZoneCanvas({
               look={look?.(z) ?? null}
             />
           ))}
+
+          {suggestions.length > 0 && (
+            <g data-testid="suggestions">
+              {suggestions.map((sg) => (
+                <SuggestionOutline key={sg.id} suggestion={sg} size={size} active={sg.id === activeSuggestionId} />
+              ))}
+            </g>
+          )}
 
           {selected && !readOnly && !drawing && (
             <g data-testid="vertex-handles">
@@ -619,6 +657,54 @@ function ZoneShape({
         strokeLinejoin="round"
       />
       <Label x={cx} y={cy} text={look?.label ?? title} sub={look?.sublabel ?? sublabel} color={zone.kind === 'privacy' ? '#111827' : stroke} />
+    </g>
+  );
+}
+
+function SuggestionOutline({
+  suggestion,
+  size,
+  active,
+}: {
+  suggestion: SuggestionShape;
+  size: Size;
+  active: boolean;
+}) {
+  const px = suggestion.polygon.map((q) => toPixels(q, size));
+  if (px.length < 3) return null;
+  const d = px.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`).join(' ') + ' Z';
+  // Badge at the top of the outline, kept inside the picture.
+  const top = px.reduce((a, b) => (b[1] < a[1] ? b : a));
+  const [cx] = toPixels(centroid(suggestion.polygon), size);
+  const w = 44;
+  const h = 20;
+  const bx = Math.min(size.width - w - 2, Math.max(2, cx - w / 2));
+  const by = Math.max(2, top[1] - h - 4);
+  return (
+    <g data-suggestion-id={suggestion.id} aria-label={suggestion.label} role="img">
+      <path
+        d={d}
+        fill={SUGGESTION_COLOR}
+        fillOpacity={active ? 0.3 : 0.12}
+        stroke="#fff"
+        strokeWidth={active ? 6 : 5}
+        strokeLinejoin="round"
+        strokeDasharray="10 6"
+      />
+      <path
+        d={d}
+        fill="none"
+        stroke={SUGGESTION_COLOR}
+        strokeWidth={active ? 4 : 2.5}
+        strokeLinejoin="round"
+        strokeDasharray="10 6"
+      />
+      <g className="pointer-events-none" aria-hidden="true">
+        <rect x={bx} y={by} width={w} height={h} rx={10} fill={SUGGESTION_COLOR} stroke="#fff" strokeWidth={1.5} />
+        <text x={bx + w / 2} y={by + h / 2 + 0.5} textAnchor="middle" dominantBaseline="middle" fontSize={12} fontWeight={700} fill="#fff">
+          {suggestion.badge}
+        </text>
+      </g>
     </g>
   );
 }

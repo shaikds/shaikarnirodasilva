@@ -24,6 +24,8 @@ import type {
   PairIn,
   PairOut,
   SetupStatus,
+  SuggestTablesIn,
+  SuggestTablesOut,
 } from './types';
 
 export const PIN_HEADER = 'X-Setup-Pin';
@@ -158,6 +160,11 @@ export function createLocalApi(options: LocalApiOptions) {
     calibrateUniform: (body: CalibrateIn) =>
       setup<CalibrateOut>('/local/uniform/calibrate', { method: 'POST', body }),
     pair: (body: PairIn) => setup<PairOut>('/local/pair', { method: 'POST', body }),
+    suggestTables: (cameraId: string, body: SuggestTablesIn = {}) =>
+      setup<SuggestTablesOut>(`/local/cameras/${enc(cameraId)}/suggest-tables`, {
+        method: 'POST',
+        body,
+      }),
   };
 }
 

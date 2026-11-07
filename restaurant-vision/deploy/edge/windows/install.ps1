@@ -76,7 +76,7 @@ function Test-Python([string[]]$Command) {
     try {
         $exe = $Command[0]
         $pre = @($Command | Select-Object -Skip 1)
-        $out = & $exe @pre -c "import sys; print('%d.%d' % sys.version_info[:2]); print(sys.version_info >= (3, 11)); print(sys.executable)" 2>$null
+        $out = @(& $exe @pre -c "import sys; print('%d.%d' % sys.version_info[:2]); print(sys.version_info >= (3, 11)); print(sys.executable)" 2>$null)
         if ($LASTEXITCODE -eq 0 -and $out.Count -ge 3 -and $out[1] -eq "True") { return $out[2] }
     } catch { }
     return $null

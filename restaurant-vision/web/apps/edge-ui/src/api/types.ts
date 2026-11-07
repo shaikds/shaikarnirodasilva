@@ -97,3 +97,25 @@ export interface DiscoveryOut {
 /** PIN length limits (`rv_edge/runtime/setup_pin.py`). */
 export const PIN_MIN_LEN = 4;
 export const PIN_MAX_LEN = 64;
+
+/** One table the edge proposes (`POST /local/cameras/{id}/suggest-tables`). Normalized coords. */
+export interface TableSuggestion {
+  suggestion_id: string;
+  polygon: [number, number][];
+  table_box: [number, number, number, number];
+  seats_est: number;
+  confidence: number;
+}
+
+/** Why the edge could not (fully) suggest tables. */
+export type SuggestNote = 'simulated_camera' | 'no_model' | 'no_frame';
+
+export interface SuggestTablesIn {
+  min_confidence?: number;
+}
+
+export interface SuggestTablesOut {
+  camera_id: string;
+  suggestions: TableSuggestion[];
+  note: SuggestNote | null;
+}
