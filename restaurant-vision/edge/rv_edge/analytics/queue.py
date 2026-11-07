@@ -25,10 +25,18 @@ Per track (staff tracks are ignored, e.g. a host standing at the host stand):
   appearance, and the state lives only in RAM.
 
 Parties: a joining track belongs to the party of a waiting member that joined within
-``party_window_s`` (5 s) and stands within ``party_distance``. A party's walk-away is one
+``party_window_s`` (5 s) and stands within ``party_distance``. In a crowded queue a large party
+can still be split (its members spread out to free spots), so a party that finishes as a
+walk-away is held up to ``merge_window_s`` while any party that joined within
+``party_window_s`` of it is still waiting; if that one walks away too in the meantime, both
+are reported as one walk-away. Distinct parties that arrive back to back stay distinct unless
+they also walk away together. Tracks that vanish less than ``min_member_s`` after joining
+(false detections, passers-by) are discarded and can never be taken over, so they cannot graft
+a stale wait or party onto a real person. A party's walk-away is one
 ``queue.walkaway`` event, emitted when its last member is resolved, if the longest wait of the
 members who left is >= ``walkaway_min_wait_s``: ``party_size_est`` = members who left (plus
-members dropped as lost, unless someone of the party was seated).
+members dropped as lost, unless someone of the party was seated). It is stamped when it is
+emitted, normally the moment the last member is resolved.
 
 ``long_queue`` (warn) is raised when people >= ``long_queue_people`` or the longest current
 wait >= ``long_queue_wait_s``, and resolved (``state_change``) only once *both* fall back
@@ -73,6 +81,14 @@ class QueueParams:
 
     party_window_s: float = 5.0
     party_distance: float = 0.15
+    """Max distance between a joining track and a party member's entry point or position."""
+    merge_window_s: float = 10.0
+    """A finished walk-away is held up to this long while a party that joined the queue within
+    ``party_window_s`` of it is still waiting; if that party walks away meanwhile, both are
+    reported as one walk-away (one party split when joining)."""
+    min_member_s: float = 2.0
+    """A track that vanishes less than this after joining is discarded without an outcome
+    (false detection or a passer-by); it can never be taken over."""
     exit_grace_s: float = 10.0
     vanish_s: float = 3.0
     door_margin: float = 0.05
@@ -99,11 +115,22 @@ class QueueParams:
 
 @dataclass(slots=True, eq=False)
 class _Party:
+    entered_at: float
+    """When its first member joined the queue."""
     waiting: int = 0
     """Members not yet resolved (waiting or lost)."""
     left_waits: list[float] = field(default_factory=list)
     dropped: int = 0
     seated: int = 0
+    completed_at: float | None = None
+    """When its last member was resolved (set while held for a possible merge)."""
+
+    def absorb(self, other: _Party) -> None:
+        """Merge the outcome of ``other`` (the same party, split when joining)."""
+        self.entered_at = min(self.entered_at, other.entered_at)
+        self.left_waits += other.left_waits
+        self.dropped += other.dropped
+        self.seated += other.seated
 
 
 @dataclass(slots=True, eq=False)
@@ -116,6 +143,11 @@ class _Member:
     last_seen_ts: float
     last_anchor: Point2
     lost_at: float | None = None
+
+    @property
+    def lifetime(self) -> float:
+        """Seconds between joining the queue and the last sighting."""
+        return self.last_seen_ts - self.entered_at
 
 
 def _dist(a: Point2, b: Point2) -> float:
@@ -134,6 +166,8 @@ class _QueueZone:
         self.alert_id: str | None = None
         self.latest: QueueLive | None = None
         self.last_frame_ts: float | None = None
+        self.held: list[_Party] = []
+        """Completed walk-away parties held briefly in case the rest of the party follows."""
 
     def line_distance(self, p: Point2) -> float:
         return min((line.distance(p) for line in self.lines), default=math.inf)
@@ -291,11 +325,13 @@ class QueueModule:
                 ):
                     events += self._left(qz, member, t)
             elif t - member.last_seen_ts >= p.vanish_s:
-                if self._near_door(qz, member):
+                if member.lifetime < p.min_member_s:  # a false detection or a passer-by
+                    events += self._finish(qz, member, t)
+                elif self._near_door(qz, member):
                     events += self._left(qz, member, t)
                 else:
                     member.lost_at = t
-        return events
+        return events + self._release(qz, t)
 
     def _take_over(
         self,
@@ -321,6 +357,8 @@ class QueueModule:
             switched = m.lost_at is None and prev_t is not None and m.last_seen_ts == prev_t
             if not (switched or (in_zone and m.lost_at is not None)):
                 continue
+            if m.lifetime < self.params.min_member_s:
+                continue
             d = _dist(m.last_anchor, anchor)
             if d <= self.params.handoff_distance and d < best_d:
                 best, best_d = m, d
@@ -334,15 +372,15 @@ class QueueModule:
 
     def _join(self, qz: _QueueZone, key: TrackKey, t: float, anchor: Point2) -> None:
         p = self.params
-        mates = [
-            m
-            for m in qz.members.values()
-            if m.lost_at is None
-            and abs(t - m.entered_at) <= p.party_window_s
-            and _dist(m.last_anchor, anchor) <= p.party_distance
-        ]
-        mate = min(mates, key=lambda m: _dist(m.last_anchor, anchor), default=None)
-        party = _Party() if mate is None else mate.party
+        best: _Member | None = None
+        best_d = math.inf
+        for m in qz.members.values():
+            if m.lost_at is not None or abs(t - m.entered_at) > p.party_window_s:
+                continue
+            d = _dist(m.last_anchor, anchor)
+            if d <= p.party_distance and d < best_d:
+                best, best_d = m, d
+        party = _Party(entered_at=t) if best is None else best.party
         party.waiting += 1
         qz.members[key] = _Member(key, party, t, t, anchor, t, anchor)
 
@@ -377,20 +415,46 @@ class QueueModule:
         party.waiting -= 1
         if party.waiting > 0 or not party.left_waits:
             return []
-        longest = max(party.left_waits)
-        if longest < self._config.thresholds.walkaway_min_wait_s:
+        window = self.params.party_window_s
+        for held in qz.held:  # the rest of the same party left moments ago: one walk-away
+            if abs(held.entered_at - party.entered_at) <= window:
+                held.absorb(party)
+                return self._release(qz, t)
+        party.completed_at = t
+        qz.held.append(party)
+        return self._release(qz, t)
+
+    def _release(self, qz: _QueueZone, t: float) -> list[EdgeEvent]:
+        """Emit held walk-aways once no party that joined with them is still waiting, or
+        after ``merge_window_s``."""
+        if not qz.held:
             return []
-        size = len(party.left_waits) + (party.dropped if party.seated == 0 else 0)
-        return [
-            make_event(
-                QueueWalkaway,
-                self._config.site_id,
-                t,
-                zone_id=qz.zone.zone_id,
-                waited_s=longest,
-                party_size_est=size,
+        p = self.params
+        waiting = {id(m.party): m.party for m in qz.members.values()}.values()
+        events: list[EdgeEvent] = []
+        for party in list(qz.held):
+            assert party.completed_at is not None
+            expired = t - party.completed_at >= p.merge_window_s
+            if not expired and any(
+                abs(other.entered_at - party.entered_at) <= p.party_window_s for other in waiting
+            ):
+                continue
+            qz.held.remove(party)
+            longest = max(party.left_waits)
+            if longest < self._config.thresholds.walkaway_min_wait_s:
+                continue
+            size = len(party.left_waits) + (party.dropped if party.seated == 0 else 0)
+            events.append(
+                make_event(
+                    QueueWalkaway,
+                    self._config.site_id,
+                    t,
+                    zone_id=qz.zone.zone_id,
+                    waited_s=longest,
+                    party_size_est=size,
+                )
             )
-        ]
+        return events
 
     # --- ticks ------------------------------------------------------------------------
 
@@ -403,6 +467,7 @@ class QueueModule:
         for qz in self._zones.values():
             for key in [k for k, ts in qz.done.items() if now - ts > forget]:
                 del qz.done[key]
+            out += self._release(qz, now)
             out += self._long_queue(qz, now)
         if self._zones and self._timer.due(now):
             for qz in self._zones.values():

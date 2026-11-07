@@ -164,7 +164,7 @@ function AddUserForm({ orgId, sites, onDone }: { orgId: string; sites: SiteRef[]
   };
   return (
     <Card title={t('users.addTitle')} className="mb-4">
-      <form onSubmit={onSubmit} noValidate className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <TextField label={t('users.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={touched ? errors.name : undefined} maxLength={64} />
         <TextField label={t('users.email')} type="email" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={touched ? errors.email : undefined} />
         <TextField

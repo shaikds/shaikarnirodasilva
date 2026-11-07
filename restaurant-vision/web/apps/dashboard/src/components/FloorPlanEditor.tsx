@@ -151,7 +151,7 @@ export function FloorPlanEditor({ site, tables }: { site: SiteSettings; tables: 
   return (
     <Card>
       <p className="mb-3 max-w-3xl text-sm text-muted">{t('settings.floorPlan.intro')}</p>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
         <div className="min-w-0 overflow-x-auto">
           <svg
             ref={svgRef}

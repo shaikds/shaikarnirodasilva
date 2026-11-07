@@ -62,7 +62,7 @@ export function AnalyticsPage() {
     <>
       <PageHeader title={t('analytics.title')} subtitle={meta.name} actions={<RangePicker value={rangeKey} onChange={setRangeKey} />} />
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card title={t('analytics.occupancyByHour')} description={t('analytics.occupancyDesc')}>
           <ColumnChart
             data={byHourOfDay(occupancy.data, meta.timezone)}
@@ -90,12 +90,12 @@ export function AnalyticsPage() {
         </Card>
 
         <Card title={t('analytics.queueTitle')} description={t('analytics.queueDesc')} className="xl:col-span-2">
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <StatTile label={t('analytics.avgWait')} value={f.dur(s?.queue_avg_wait_s)} />
             <StatTile label={t('analytics.maxWait')} value={f.dur(s?.queue_max_wait_s)} />
             <StatTile label={t('analytics.walkawaysTotal')} value={f.num(s?.walkaways)} />
           </div>
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div>
               <h3 className="mb-1 text-sm font-medium text-muted">{t('analytics.queuePeople')}</h3>
               <LineAreaChart
@@ -122,7 +122,7 @@ export function AnalyticsPage() {
         </Card>
 
         <Card title={t('analytics.tablesTitle')} description={t('analytics.tablesDesc')} className="xl:col-span-2">
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div>
               <h3 className="mb-1 text-sm font-medium text-muted">{t('analytics.sessions')}</h3>
               <ColumnChart

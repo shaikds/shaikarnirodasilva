@@ -92,7 +92,7 @@ export function DetailsForm({ site }: { site: SiteSettings }) {
   };
   return (
     <Card>
-      <form onSubmit={onSubmit} noValidate className="grid max-w-2xl gap-4 sm:grid-cols-2">
+      <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 max-w-2xl gap-4 sm:grid-cols-2">
         <TextField label={t('settings.details.name')} value={form.name} maxLength={64} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} />
         <SelectField label={t('settings.details.timezone')} dir="ltr" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
           {[...new Set([form.timezone, ...TIMEZONES])].map((tz) => (
@@ -161,10 +161,10 @@ export function ThresholdsForm({ site }: { site: SiteSettings }) {
   return (
     <form onSubmit={onSubmit} noValidate aria-label={t('settings.tabs.thresholds')}>
       <p className="mb-4 max-w-3xl text-sm text-muted">{t('settings.thresholds.intro')}</p>
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {THRESHOLD_GROUPS.map((group) => (
           <Card key={group.id} title={t(`settings.thresholds.groups.${group.id}`)} level={3}>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {group.fields.map((f) => (
                 <TextField
                   key={f.key}

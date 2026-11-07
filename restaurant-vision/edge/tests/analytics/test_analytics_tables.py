@@ -33,15 +33,17 @@ def lifecycle() -> Scenario:
 def test_full_session_lifecycle_exact_sequence() -> None:
     sc = lifecycle()
     events = sc.run(800)
+    # Transitions are confirmed after the thresholds, but the session and the alert timers are
+    # backdated to the evidence: guests first seen at 10.0, last seen at 299.75.
     assert sc.summary() == [
         (30.0, "state", "t3", "empty", "seated", 1),
-        (210.0, "raised", "waiter_needed", "t3"),
-        (255.0, "state", "t3", "seated", "attended", 1),
+        (190.0, "raised", "waiter_needed", "t3"),  # 10.0 + first_visit_timeout_s
+        (255.0, "state", "t3", "seated", "attended", 1),  # visit from 250, confirmed at 255
         (255.0, "resolved", "waiter_needed", "staff_visit"),
         # last seen 299.75 + 3 s hold -> absent from 303.0; + leave_confirm_s 45
         (348.0, "state", "t3", "attended", "needs_bussing", 0),
-        (348.0, "closed", "t3", 30.0, 348.0, 1, 220.0, 1),
-        (648.0, "raised", "bussing_needed", "t3"),
+        (348.0, "closed", "t3", 10.0, 299.75, 1, 240.0, 1),
+        (599.75, "raised", "bussing_needed", "t3"),  # 299.75 + bussing_timeout_s
         (710.0, "state", "t3", "needs_bussing", "empty", 0),
         (710.0, "resolved", "bussing_needed", "staff_visit"),
     ]
@@ -69,8 +71,9 @@ def test_leave_confirm_boundary() -> None:
     assert m.state is TableState.SEATED
     assert sc.summary(sc.run(148.0)) == [
         (148.0, "state", "t3", "seated", "needs_bussing", 0),
-        (148.0, "closed", "t3", 30.0, 148.0, 1, None, 0),
+        (148.0, "closed", "t3", 10.0, 99.75, 1, None, 0),
     ]
+    assert m.state_since == T0 + 99.75  # since_ts: when the guests really left
 
 
 def test_staff_visit_boundary_and_gap_tolerance() -> None:
@@ -108,9 +111,35 @@ def test_unknown_role_counts_as_guest() -> None:
 
 def test_waiter_needed_boundary_and_once_per_session() -> None:
     sc = Scenario(crisp_config()).add(person(**GUEST_T3, from_t=10))
-    assert sc.summary(sc.run(209.75)) == [(30.0, "state", "t3", "empty", "seated", 1)]
-    assert sc.summary(sc.run(210.0)) == [(210.0, "raised", "waiter_needed", "t3")]
+    # the deadline runs from the backdated seating (10.0), not the confirmation (30.0)
+    assert sc.summary(sc.run(189.75)) == [(30.0, "state", "t3", "empty", "seated", 1)]
+    m = sc.eng.tables.machine("t3")
+    assert m is not None and m.state_since == T0 + 10.0
+    assert sc.summary(sc.run(190.0)) == [(190.0, "raised", "waiter_needed", "t3")]
     assert sc.summary(sc.run(2000.0)) == []  # never re-raised while the condition persists
+
+
+def test_overdue_alert_fires_at_confirmation() -> None:
+    """A deadline that passed while seating was still being confirmed fires at once."""
+    sc = Scenario(crisp_config(first_visit_timeout_s=15.0)).add(person(**GUEST_T3, from_t=10))
+    assert sc.summary(sc.run(29.75)) == []
+    assert sc.summary(sc.run(30.0)) == [
+        (30.0, "state", "t3", "empty", "seated", 1),
+        (30.0, "raised", "waiter_needed", "t3"),  # deadline 25.0 already passed
+    ]
+
+
+def test_visit_between_arrival_and_confirmation_counts() -> None:
+    """A waiter who came after the guests but before seating was confirmed attended them."""
+    sc = Scenario(crisp_config()).add(person(**GUEST_T3, from_t=10), staff("t3", 15, 22))
+    sc.run(40)
+    assert sc.summary() == [
+        (30.0, "state", "t3", "empty", "seated", 1),
+        (30.0, "state", "t3", "seated", "attended", 1),
+    ]
+    m = sc.eng.tables.machine("t3")
+    assert m is not None and m.session is not None
+    assert (m.session.first_visit_at, m.state_since) == (T0 + 15.0, T0 + 15.0)
 
 
 def test_waiter_needed_resolved_by_guests_leaving() -> None:
@@ -118,9 +147,9 @@ def test_waiter_needed_resolved_by_guests_leaving() -> None:
     sc.run(400)
     assert sc.summary() == [
         (30.0, "state", "t3", "empty", "seated", 1),
-        (210.0, "raised", "waiter_needed", "t3"),
+        (190.0, "raised", "waiter_needed", "t3"),
         (298.0, "state", "t3", "seated", "needs_bussing", 0),
-        (298.0, "closed", "t3", 30.0, 298.0, 1, None, 0),
+        (298.0, "closed", "t3", 10.0, 249.75, 1, None, 0),
         (298.0, "resolved", "waiter_needed", "state_change"),
     ]
 
@@ -140,7 +169,7 @@ def test_checkin_needed_episodes() -> None:
     # guests leave (last seen 2099.75 -> absent 2103.0 -> needs_bussing 2148.0)
     assert sc.summary(sc.run(2148.0)) == [
         (2148.0, "state", "t3", "attended", "needs_bussing", 0),
-        (2148.0, "closed", "t3", 30.0, 2148.0, 1, 70.0, 2),
+        (2148.0, "closed", "t3", 10.0, 2099.75, 1, 90.0, 2),
         (2148.0, "resolved", "checkin_needed", "state_change"),
     ]
 
@@ -161,11 +190,11 @@ def test_bussing_alert_boundary_and_resolved_by_new_guests() -> None:
     sc = Scenario(crisp_config())
     sc.add(person(**GUEST_T3, from_t=10, to_t=300))
     sc.add(person(**GUEST_T3, from_t=700, to_t=900, offset=(0.02, 0.0)))
-    sc.run(647.75)
+    sc.run(599.5)
     assert "bussing_needed" not in {s[2] for s in sc.summary() if s[1] == "raised"}
     events = sc.run(720)
     assert sc.summary(events) == [
-        (648.0, "raised", "bussing_needed", "t3"),
+        (599.75, "raised", "bussing_needed", "t3"),  # last seen 299.75 + 300
         (720.0, "state", "t3", "needs_bussing", "seated", 1),
         (720.0, "resolved", "bussing_needed", "state_change"),
     ]
@@ -182,9 +211,9 @@ def test_turnover_two_sessions() -> None:
     tail = sc.summary()[9:]
     assert tail == [
         (1020.0, "state", "t3", "empty", "seated", 2),
-        (1200.0, "raised", "waiter_needed", "t3"),
+        (1180.0, "raised", "waiter_needed", "t3"),
         (1348.0, "state", "t3", "seated", "needs_bussing", 0),
-        (1348.0, "closed", "t3", 1020.0, 1348.0, 2, None, 0),
+        (1348.0, "closed", "t3", 1000.0, 1299.75, 2, None, 0),
         (1348.0, "resolved", "waiter_needed", "state_change"),
     ]
     closed = of_type(sc.events, TableSessionClosed)
@@ -202,12 +231,12 @@ def test_bussed_while_departure_is_confirmed() -> None:
     sc.run(500)
     assert sc.summary()[2:] == [
         (348.0, "state", "t3", "attended", "needs_bussing", 0),
-        (348.0, "closed", "t3", 30.0, 348.0, 1, 70.0, 2),
+        (348.0, "closed", "t3", 10.0, 299.75, 1, 90.0, 2),
         (348.0, "state", "t3", "needs_bussing", "empty", 0),
     ]
 
 
-def test_max_guests_and_first_visit_before_seating_is_clamped() -> None:
+def test_max_guests_and_first_visit_delay_from_backdated_seating() -> None:
     sc = Scenario(crisp_config())
     sc.add(person(**GUEST_T3, from_t=10, to_t=300))
     sc.add(person(**GUEST_T3, from_t=60, to_t=120, offset=(-0.03, 0.0)))
@@ -218,7 +247,7 @@ def test_max_guests_and_first_visit_before_seating_is_clamped() -> None:
         (32.0, "state", "t3", "seated", "attended", 1),
     ]
     closed = of_type(sc.events, TableSessionClosed)[0]
-    assert (closed.max_guests, closed.first_visit_delay_s, closed.visits) == (2, 0.0, 1)
+    assert (closed.max_guests, closed.first_visit_delay_s, closed.visits) == (2, 17.0, 1)
 
 
 def test_staff_visit_while_empty_is_ignored() -> None:
@@ -265,14 +294,16 @@ def test_median_window_timings_with_default_thresholds() -> None:
     sc.run(500)
     m = sc.eng.tables.machine("t3")
     assert m is not None
-    # held until 302.75; zeros from 303.0 form a majority of the 120-sample window at 317.75
+    # held until 302.75; zeros from 303.0 form a majority of the 120-sample window at 317.75.
+    # The median's lag only delays the confirmations: times are backdated to the sightings.
     assert sc.summary() == [
         (40.0, "state", "t3", "empty", "seated", 1),
-        (220.0, "raised", "waiter_needed", "t3"),
+        (190.0, "raised", "waiter_needed", "t3"),
         (362.75, "state", "t3", "seated", "needs_bussing", 0),
-        (362.75, "closed", "t3", 40.0, 362.75, 1, None, 0),
+        (362.75, "closed", "t3", 10.0, 299.75, 1, None, 0),
         (362.75, "resolved", "waiter_needed", "state_change"),
     ]
+    assert (m.signals.arrived_at, m.signals.departed_at) == (T0 + 10.0, T0 + 299.75)
 
 
 def test_median_ignores_short_false_positives_and_partial_occlusion() -> None:
@@ -281,7 +312,10 @@ def test_median_ignores_short_false_positives_and_partial_occlusion() -> None:
     sc.add(person(**GUEST_T3, from_t=10), person(**GUEST_T3, from_t=10, offset=(0.02, 0)))
     sc.add(person(**GUEST_T3, from_t=10, offset=(-0.02, 0), gaps=[(25.0, 33.0)]))
     sc.run(200)
-    assert sc.summary() == [(40.0, "state", "t3", "empty", "seated", 3)]
+    assert sc.summary() == [
+        (40.0, "state", "t3", "empty", "seated", 3),
+        (190.0, "raised", "waiter_needed", "t3"),
+    ]
     crisp = Scenario(crisp_config())
     crisp.add(person(**GUEST_T3, from_t=10), person(**GUEST_T3, from_t=10, offset=(0.02, 0)))
     crisp.add(person(**GUEST_T3, from_t=10, offset=(-0.02, 0), gaps=[(25.0, 33.0)]))
@@ -320,7 +354,7 @@ def test_camera_without_frames_freezes_presence_but_alert_timers_run() -> None:
         sc._record(sc.eng.on_tick(T0 + 30 + i))
     assert sc.summary() == [
         (20.0, "state", "t3", "empty", "seated", 1),
-        (200.0, "raised", "waiter_needed", "t3"),
+        (180.0, "raised", "waiter_needed", "t3"),  # seated at 0.0 + 180 s, raised by a tick
     ]
 
 
@@ -334,7 +368,7 @@ def test_quick_clearing_counts_as_bussing_despite_the_median_lag() -> None:
     sc.run(400)
     assert sc.summary()[2:] == [
         (362.75, "state", "t3", "attended", "needs_bussing", 0),
-        (362.75, "closed", "t3", 40.0, 362.75, 1, 60.0, 2),
+        (362.75, "closed", "t3", 10.0, 299.75, 1, 90.0, 2),
         (362.75, "state", "t3", "needs_bussing", "empty", 0),
     ]
     # someone seen at the cleared table before the departure is confirmed cancels it

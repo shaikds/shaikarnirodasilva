@@ -35,6 +35,23 @@ stops delivering frames freezes its tables instead of emptying them); alert time
 and on ``on_tick``. A table that was bussed while the guests' departure was still being
 confirmed goes ``needs_bussing -> empty`` right after entering ``needs_bussing`` (same ts).
 
+Timestamps are backdated to the evidence. The confirmation delays (``seat_confirm_s``,
+``leave_confirm_s``, plus about ``count_window_s / 2`` of median lag) only decide *that* the
+state changed; *when* it changed is taken from the sightings:
+
+* seating: the first guest sighting of the presence episode (sightings less than
+  :data:`EPISODE_GAP_S` apart form one episode) -> ``session.seated_at``, the ``seated`` state's
+  ``since_ts`` and the ``waiter_needed`` deadline (``seated_at + first_visit_timeout_s``);
+* attended: when the waiter arrived (``since_ts``);
+* departure: the last guest sighting before the smoothed count dropped to 0 -> ``left_at``,
+  ``needs_bussing``'s ``since_ts`` and the ``bussing_needed`` deadline.
+
+A deadline that already passed at confirmation fires at once. A staff visit that started
+after the guests arrived but was confirmed before seating was confirmed counts as the first
+visit. ``table.state_changed`` events keep ``ts`` = confirmation time (the contract has no
+separate "since" field; see :attr:`TableStateMachine.state_since`), so the event stream stays
+in emission order.
+
 Alerts (each raised at most once per condition episode, auto-resolved):
 
 * ``waiter_needed`` (urgent): ``seated`` for ``first_visit_timeout_s`` without a visit; once
@@ -80,6 +97,10 @@ from .zones import PolygonZone, TrackKey
 
 STAFF_GAP_S = 2.0
 """A staff visit survives detection gaps of up to this many seconds."""
+
+EPISODE_GAP_S = 10.0
+"""Guest sightings separated by at most this long belong to one presence episode (bridges
+occlusions when estimating when guests really arrived)."""
 
 _MAX_CASCADE = 4
 _NO_KEYS: tuple[TrackKey, ...] = ()
@@ -130,16 +151,28 @@ class TableSignals:
         *,
         hold_s: float = GUEST_HOLD_S,
         staff_gap_s: float = STAFF_GAP_S,
+        episode_gap_s: float = EPISODE_GAP_S,
     ) -> None:
         self._guests = SmoothedCount(window_s, hold_s)
         self.staff_gap_s = staff_gap_s
+        self.episode_gap_s = episode_gap_s
         self.present_since: float | None = None
         """Start of the current run of smoothed count >= 1 (None while absent)."""
         self.absent_since: float | None = None
         """Start of the current run of smoothed count 0 (None while present)."""
         self.raw_absent_since: float | None = None
         """Start of the current run of held (unsmoothed) count 0, None while someone is seen."""
+        self.arrived_at: float | None = None
+        """Backdated start of the current presence run: the first guest sighting of the
+        sighting episode that made the smoothed count turn on (set with ``present_since``)."""
+        self.departed_at: float | None = None
+        """Backdated end of the last presence run: the last guest sighting before the smoothed
+        count turned off (set with ``absent_since``)."""
+        self.last_visit: StaffVisit | None = None
+        """The latest confirmed staff visit, in any state."""
         self.last_ts: float | None = None
+        self._episode_start: float | None = None
+        self._episode_last: float | None = None
         self._staff_start = 0.0
         self._staff_last: float | None = None
         self._visit_fired = False
@@ -174,13 +207,22 @@ class TableSignals:
     ) -> FrameSignals:
         """Ingest one frame of the primary camera: guest and staff tracks inside the zone."""
         count = self._guests.update(ts, guests, drop=staff)
+        if guests:
+            last = self._episode_last
+            if last is None or ts - last > self.episode_gap_s:
+                self._episode_start = ts
+            self._episode_last = ts
         if count >= 1:
             if self.present_since is None:
                 self.present_since = ts
+                start = self._episode_start
+                self.arrived_at = ts if start is None else min(start, ts)
             self.absent_since = None
         else:
             if self.absent_since is None:
                 self.absent_since = ts
+                last = self._episode_last
+                self.departed_at = ts if last is None else min(last, ts)
             self.present_since = None
         if self._guests.raw >= 1:
             self.raw_absent_since = None
@@ -197,7 +239,7 @@ class TableSignals:
         visit = None
         if not self._visit_fired and ts - start >= visit_min_s:
             self._visit_fired = True
-            visit = StaffVisit(started_at=start, confirmed_at=ts)
+            visit = self.last_visit = StaffVisit(started_at=start, confirmed_at=ts)
         bussed = False
         absent = self.raw_absent_since
         if (
@@ -276,8 +318,9 @@ class SeatedState(TableStateHandler):
         self, m: TableStateMachine, t: float, sig: FrameSignals
     ) -> _Transition | None:
         m.note_bussing(sig)
-        if sig.visit is not None:
-            m.record_visit(sig.visit, t)
+        visit = sig.visit or m.take_retro_visit()
+        if visit is not None:
+            m.record_visit(visit, t)
             return _Transition(ATTENDED, ResolveReason.STAFF_VISIT)
         if m.absent_for(t) >= m.thresholds.leave_confirm_s:
             return _Transition(NEEDS_BUSSING, ResolveReason.STATE_CHANGE)
@@ -350,6 +393,7 @@ class TableStateMachine:
         """Last moment staff attended the table (``attended`` check-in timer)."""
         self.pre_bussed = False
         """A bussing visit happened while the guests' departure was being confirmed."""
+        self._retro_visit: StaffVisit | None = None
         self._open: dict[AlertKind, str] = {}
         self._raised: set[AlertKind] = set()
         self._out: list[EdgeEvent] = []
@@ -400,9 +444,16 @@ class TableStateMachine:
     def _go(self, transition: _Transition, t: float) -> None:
         prev, target = self._state, transition.target
         count = self.signals.count
+        since = t
         if target is SEATED:
-            self.session = TableSession(session_id=new_uuid7(), seated_at=t, max_guests=count)
+            since = self._backdate(self.signals.arrived_at, self.state_since, t)
+            self.session = TableSession(
+                session_id=new_uuid7(), seated_at=since, max_guests=count
+            )
             self._raised.discard(AlertKind.WAITER_NEEDED)
+            visit = self.signals.last_visit
+            # a waiter who arrived after the guests but before seating was confirmed
+            self._retro_visit = visit if visit is not None and visit.started_at > since else None
         session = self.session
         assert session is not None  # every state but empty belongs to a session
         site_id = self._ctx.site_id
@@ -418,7 +469,10 @@ class TableStateMachine:
                 session_id=session.session_id,
             )
         )
+        if target is ATTENDED:  # attended since the waiter arrived
+            since = self._backdate(session.first_visit_at, session.seated_at, t)
         if target is NEEDS_BUSSING:
+            since = self._backdate(self.signals.departed_at, session.seated_at, t)
             first = session.first_visit_at
             self._out.append(
                 make_event(
@@ -428,7 +482,7 @@ class TableStateMachine:
                     table_id=self.table_id,
                     session_id=session.session_id,
                     seated_at=session.seated_at,
-                    left_at=t,
+                    left_at=since,
                     max_guests=session.max_guests,
                     first_visit_delay_s=None if first is None else first - session.seated_at,
                     visits=session.visits,
@@ -438,12 +492,26 @@ class TableStateMachine:
             self._raised.discard(AlertKind.BUSSING_NEEDED)
         self._resolve_open(t, transition.cause)
         self._state = target
-        self.state_since = t
+        self.state_since = since
         if target is EMPTY:
             self.session = None
             self.pre_bussed = False
 
+    @staticmethod
+    def _backdate(moment: float | None, floor: float | None, t: float) -> float:
+        """``moment`` clamped to ``[floor, t]``; ``t`` when unknown."""
+        if moment is None:
+            return t
+        if floor is not None:
+            moment = max(moment, floor)
+        return min(moment, t)
+
     # --- helpers used by the states ---------------------------------------------------
+
+    def take_retro_visit(self) -> StaffVisit | None:
+        """A visit confirmed before seating was, but after the guests arrived (once)."""
+        visit, self._retro_visit = self._retro_visit, None
+        return visit
 
     def note_bussing(self, sig: FrameSignals) -> None:
         """Remember a bussing visit seen before ``needs_bussing`` was confirmed."""
@@ -489,6 +557,7 @@ class TableStateMachine:
         self.state_since = None
         self.session = None
         self.pre_bussed = False
+        self._retro_visit = None
         self._raised.clear()
         out, self._out = self._out, []
         return out

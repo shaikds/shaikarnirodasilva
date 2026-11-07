@@ -204,3 +204,42 @@ def test_queue_without_entrance_line_counts_every_exit_as_leaving() -> None:
     # no line to cross: walking towards the dining room is just leaving the zone
     # last inside at 101.0 (x 0.55; the zone edge is at x ~0.59), visible outside for 10 s
     assert sc.summary() == [(111.0, "walkaway", "z-queue", 91.0, 1)]
+
+
+def stand_back(enter: float, spot: tuple[float, float] = (0.3, 0.45)) -> list[tuple[float, Any]]:
+    """Enter at the zone's near edge, then walk deeper into the queue within 2 s."""
+    return [(enter, (0.3, 0.9)), (enter + 2.0, spot)]
+
+
+def test_party_split_when_joining_is_merged_when_walking_away() -> None:
+    # a and b move deeper in before c arrives (2.5 s after b, 0.45 away from them): c starts
+    # its own party at the door, but all three walk out together -> one walk-away of 3
+    a = walker([*stand_back(10), (100, (0.3, 0.45)), (102, (0.02, 0.45))], camera=E, to_t=102)
+    b = walker([*stand_back(10.5, (0.35, 0.47)), (100, (0.35, 0.47)), (102, (0.02, 0.47))],
+               camera=E, to_t=102)
+    c = walker([(13, (0.3, 0.9)), (100, (0.3, 0.9)), (102, (0.02, 0.9))], camera=E, to_t=102)
+    sc = run(a, b, c)
+    assert sc.summary() == [(104.75, "walkaway", "z-queue", 91.5, 3)]
+
+
+def test_back_to_back_parties_stay_distinct() -> None:
+    x1 = walker([*stand_back(10), (100, (0.3, 0.45)), (102, (0.02, 0.45))], camera=E, to_t=102)
+    x2 = walker([*stand_back(10.5, (0.35, 0.47)), (100, (0.35, 0.47)), (102, (0.02, 0.47))],
+                camera=E, to_t=102)
+    y = queuer(13.5, 200, IN, spot=(0.3, 0.9), gone=210)  # arrives 3 s later, stays
+    sc = run(x1, x2, y, until=250)
+    # x is held up to merge_window_s (10 s) in case y follows; y stays, so x is reported alone
+    assert sc.summary() == [
+        (114.75, "walkaway", "z-queue", 91.5, 2),
+        (201.5, "seated", "z-queue", 188.0),
+    ]
+
+
+def test_false_detection_cannot_graft_its_wait_onto_a_real_person() -> None:
+    blip = person(SPOT, camera=E, from_t=50, to_t=50.25)  # one-frame false positive
+    sc = run(blip, queuer(60, 100, IN, gone=110))
+    assert sc.summary() == [(101.5, "seated", "z-queue", 41.5)]  # not 51.5 from the blip
+    # a real track appearing in the very next frame does not take the blip over either
+    real = walker([(50.25, SPOT), (100, SPOT), (102, IN)], camera=E, to_t=110)
+    sc = run(person(SPOT, camera=E, from_t=50, to_t=50.25), real)
+    assert sc.summary() == [(101.5, "seated", "z-queue", 51.25)]  # not 51.5

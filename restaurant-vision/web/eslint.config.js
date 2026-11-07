@@ -9,7 +9,7 @@ import tseslint from 'typescript-eslint';
 // RTL support: only logical Tailwind utilities (ms-/me-/ps-/pe-/start-/end-/text-start ...).
 // Physical ones (ml-, pr-, left-, text-right, rounded-l, border-r ...) break Hebrew layouts.
 const PHYSICAL_TW =
-  String.raw`(^|\s|:)-?(ml|mr|pl|pr|left|right|scroll-ml|scroll-mr|scroll-pl|scroll-pr|rounded-l|rounded-r|rounded-tl|rounded-tr|rounded-bl|rounded-br|border-l|border-r|text-left|text-right|float-left|float-right|clear-left|clear-right)(-|\s|$)`;
+  String.raw`(^|\s|:)-?((ml|mr|pl|pr|left|right|scroll-m[lr]|scroll-p[lr])-|(rounded-[lr]|rounded-[tb][lr]|border-[lr]|text-left|text-right|float-left|float-right|clear-left|clear-right)(-|\s|$))`;
 // Only strings that look like class lists (lowercase utilities, no prose punctuation).
 // esquery regexes cannot contain "/", hence \x2f.
 const CLASS_LIST = String.raw`^[-a-z0-9:\x2f\[\]._%#!&>*=()\s]+$`;

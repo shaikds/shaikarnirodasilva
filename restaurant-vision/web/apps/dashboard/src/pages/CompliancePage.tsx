@@ -23,7 +23,7 @@ export function CompliancePage() {
   return (
     <>
       <PageHeader title={t('compliance.title')} subtitle={t('compliance.intro')} />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card title={t('compliance.principlesTitle')}>
           <ul className="flex flex-col gap-3">
             {PRINCIPLES.map((p) => (

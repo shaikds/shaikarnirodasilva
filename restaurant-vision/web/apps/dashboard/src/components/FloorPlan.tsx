@@ -13,39 +13,10 @@ import {
   type TableLive,
 } from '@rv/shared';
 import { Users } from 'lucide-react';
+import { layoutTables } from '../lib/floorLayout';
 
-export const CELL = 100;
+const CELL = 100;
 const GAP = 12;
-
-export interface PlacedTable {
-  table: TableLive;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  placed: boolean;
-}
-
-/** Positions every table: floor-plan items first, then unplaced tables in rows below. */
-export function layoutTables(tables: TableLive[], plan: FloorPlanItem[]) {
-  const byId = new Map(plan.map((p) => [p.table_id, p]));
-  const placed: PlacedTable[] = [];
-  const unplaced: TableLive[] = [];
-  for (const t of tables) {
-    const p = byId.get(t.table_id);
-    if (p) placed.push({ table: t, x: p.x, y: p.y, w: p.w, h: p.h, placed: true });
-    else unplaced.push(t);
-  }
-  let cols = Math.max(6, ...placed.map((p) => p.x + p.w));
-  let rows = Math.max(0, ...placed.map((p) => p.y + p.h));
-  const startRow = rows > 0 ? rows + 1 : 0;
-  unplaced.forEach((t, i) => {
-    placed.push({ table: t, x: i % cols, y: startRow + Math.floor(i / cols), w: 1, h: 1, placed: false });
-  });
-  cols = Math.max(cols, ...placed.map((p) => p.x + p.w));
-  rows = Math.max(rows, ...placed.map((p) => p.y + p.h));
-  return { items: placed, cols, rows, unplacedCount: unplaced.length };
-}
 
 /** Elapsed display: a stopwatch where waiting matters, a compact duration otherwise. */
 function useTimerText() {
@@ -57,7 +28,7 @@ function useTimerText() {
   };
 }
 
-export function useTableAriaLabel() {
+function useTableAriaLabel() {
   const { t } = useTranslation();
   const f = useFormatters();
   return (table: TableLive, now: number): string => {
@@ -92,96 +63,138 @@ export function FloorPlan({ tables, layout, now, siteName }: FloorPlanProps) {
   const height = Math.max(1, rows) * CELL;
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      role="group"
-      aria-label={t('live.floorPlanAria', { site: siteName, count: tables.length })}
-      className="h-auto w-full select-none"
-      style={{ maxHeight: '70vh' }}
-    >
-      {items.map(({ table, x, y, w, h, placed }) => {
-        const style = TABLE_STATE_STYLE[table.state];
-        const Icon = style.icon;
-        const col = rtl ? cols - x - w : x;
-        const rx = col * CELL + GAP / 2;
-        const ry = y * CELL + GAP / 2;
-        const rw = w * CELL - GAP;
-        const rh = h * CELL - GAP;
-        const cx = rx + rw / 2;
-        const cy = ry + rh / 2;
-        const timer = timerText(table, now);
-        const alerts = table.open_alert_ids.length;
-        const iconX = rtl ? rx + rw - 26 : rx + 8;
-        const badgeX = rtl ? rx + 14 : rx + rw - 14;
-        return (
-          <g
-            key={table.table_id}
-            role="img"
-            aria-label={ariaLabel(table, now)}
-            tabIndex={0}
-            data-state={table.state}
-            data-table-id={table.table_id}
-            className="cursor-default"
-          >
-            <rect
-              x={rx}
-              y={ry}
-              width={rw}
-              height={rh}
-              rx={14}
-              style={{ fill: style.fill, stroke: style.stroke }}
-              strokeWidth={table.state === 'empty' ? 2 : 3}
-              strokeDasharray={placed ? undefined : '6 4'}
-            />
-            <Icon x={iconX} y={ry + 8} width={18} height={18} style={{ color: style.text }} aria-hidden="true" />
-            <text
-              x={cx}
-              y={cy - (h > 1 ? 14 : 8)}
-              textAnchor="middle"
-              fontSize={22}
-              fontWeight={700}
-              style={{ fill: style.text }}
+    // Scrolls inside the card on narrow screens: cells never shrink below ~56 px.
+    <div className="-mx-4 overflow-x-auto px-4">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        role="group"
+        aria-label={t('live.floorPlanAria', { site: siteName, count: tables.length })}
+        className="h-auto w-full select-none"
+        style={{ minWidth: cols * 56, maxHeight: '70vh' }}
+      >
+        {items.map(({ table, x, y, w, h, placed }) => {
+          const style = TABLE_STATE_STYLE[table.state];
+          const Icon = style.icon;
+          const col = rtl ? cols - x - w : x;
+          const rx = col * CELL + GAP / 2;
+          const ry = y * CELL + GAP / 2;
+          const rw = w * CELL - GAP;
+          const rh = h * CELL - GAP;
+          const cx = rx + rw / 2;
+          // Rows: label, guests, timer; clear of the corner icon and alert badge.
+          const labelY = h > 1 ? ry + rh / 2 - 6 : ry + 48;
+          const guestsY = labelY + 20;
+          const timer = timerText(table, now);
+          const alerts = table.open_alert_ids.length;
+          const iconX = rtl ? rx + rw - 26 : rx + 8;
+          const badgeX = rtl ? rx + 14 : rx + rw - 14;
+          return (
+            <g
+              key={table.table_id}
+              role="img"
+              aria-label={ariaLabel(table, now)}
+              tabIndex={0}
+              data-state={table.state}
+              data-table-id={table.table_id}
+              className="cursor-default"
             >
-              {table.label}
-            </text>
-            {table.state !== 'empty' && table.state !== 'needs_bussing' && (
-              <g aria-hidden="true">
-                <Users x={cx - 22} y={cy + 4} width={14} height={14} style={{ color: style.text }} />
-                <text x={cx + 2} y={cy + 16} textAnchor="start" fontSize={15} fontWeight={600} style={{ fill: style.text }} direction="ltr">
-                  {table.guest_count}
-                </text>
-              </g>
-            )}
-            {timer && (
+              <rect
+                x={rx}
+                y={ry}
+                width={rw}
+                height={rh}
+                rx={14}
+                style={{ fill: style.fill, stroke: style.stroke }}
+                strokeWidth={table.state === 'empty' ? 2 : 3}
+                strokeDasharray={placed ? undefined : '6 4'}
+              />
+              <Icon
+                x={iconX}
+                y={ry + 7}
+                width={16}
+                height={16}
+                style={{ color: style.text }}
+                aria-hidden="true"
+              />
               <text
                 x={cx}
-                y={ry + rh - 10}
+                y={labelY}
                 textAnchor="middle"
-                fontSize={13}
-                style={{ fill: style.text, fontVariantNumeric: 'tabular-nums' }}
+                fontSize={20}
+                fontWeight={700}
+                style={{ fill: style.text }}
               >
-                {timer}
+                {table.label}
               </text>
-            )}
-            {alerts > 0 && (
-              <g aria-hidden="true">
-                <circle cx={badgeX} cy={ry + 14} r={11} style={{ fill: 'rgb(var(--rv-danger))' }} />
-                <text x={badgeX} y={ry + 19} textAnchor="middle" fontSize={13} fontWeight={700} style={{ fill: 'rgb(var(--rv-surface))' }}>
-                  {alerts}
+              {table.state !== 'empty' && table.state !== 'needs_bussing' && (
+                <g aria-hidden="true">
+                  <Users
+                    x={cx - 20}
+                    y={guestsY - 12}
+                    width={13}
+                    height={13}
+                    style={{ color: style.text }}
+                  />
+                  <text
+                    x={cx + 2}
+                    y={guestsY}
+                    textAnchor="start"
+                    fontSize={14}
+                    fontWeight={600}
+                    style={{ fill: style.text }}
+                    direction="ltr"
+                  >
+                    {table.guest_count}
+                  </text>
+                </g>
+              )}
+              {timer && (
+                <text
+                  x={cx}
+                  y={ry + rh - 8}
+                  textAnchor="middle"
+                  fontSize={12}
+                  style={{ fill: style.text, fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {timer}
                 </text>
-              </g>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+              )}
+              {alerts > 0 && (
+                <g aria-hidden="true">
+                  <circle
+                    cx={badgeX}
+                    cy={ry + 14}
+                    r={11}
+                    style={{ fill: 'rgb(var(--rv-danger))' }}
+                  />
+                  <text
+                    x={badgeX}
+                    y={ry + 19}
+                    textAnchor="middle"
+                    fontSize={13}
+                    fontWeight={700}
+                    style={{ fill: 'rgb(var(--rv-surface))' }}
+                  >
+                    {alerts}
+                  </text>
+                </g>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
 export function FloorLegend() {
   const { t } = useTranslation();
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2" aria-label={t('live.legend')} role="group">
+    <div
+      className="mt-3 flex flex-wrap items-center gap-2"
+      aria-label={t('live.legend')}
+      role="group"
+    >
       {TABLE_STATES.map((s) => (
         <TableStateChip key={s} state={s} size="sm" />
       ))}
@@ -197,10 +210,14 @@ export function FloorList({ tables, now }: { tables: TableLive[]; now: number })
     <ul className="divide-y divide-border">
       {tables.map((table) => (
         <li key={table.table_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-          <span className="min-w-[4.5rem] font-semibold">{t('common:table.name', { label: table.label })}</span>
+          <span className="min-w-[4.5rem] font-semibold">
+            {t('common:table.name', { label: table.label })}
+          </span>
           <TableStateChip state={table.state} size="sm" />
           {table.state !== 'empty' && table.state !== 'needs_bussing' && (
-            <span className="text-sm text-muted">{t('common:table.guests', { count: table.guest_count })}</span>
+            <span className="text-sm text-muted">
+              {t('common:table.guests', { count: table.guest_count })}
+            </span>
           )}
           <span className="ms-auto flex items-center gap-2 text-sm">
             {table.open_alert_ids.length > 0 && (

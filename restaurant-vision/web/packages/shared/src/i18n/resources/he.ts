@@ -74,7 +74,7 @@ export const commonHe = {
   },
   ackVia: {
     cloud: 'דרך האפליקציה',
-    local: 'דרך ה-Wi-Fi של המסעדה',
+    local: 'דרך ה־Wi-Fi של המסעדה',
   },
   connection: {
     idle: 'לא מחובר',

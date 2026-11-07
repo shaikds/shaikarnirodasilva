@@ -16,7 +16,8 @@ import {
 import { LayoutGrid, List, TriangleAlert } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FloorLegend, FloorList, FloorPlan, layoutTables } from '../components/FloorPlan';
+import { FloorLegend, FloorList, FloorPlan } from '../components/FloorPlan';
+import { layoutTables } from '../lib/floorLayout';
 import { AlertsPanel, DevicesPanel, OccupancyPanel, QueuePanel } from '../components/LivePanels';
 import { useSiteMeta } from '../lib/useSiteMeta';
 
@@ -57,7 +58,11 @@ export function SiteLivePage() {
   const meta = useSiteMeta(siteId);
   const config = useSiteConfig(siteId);
   const live = useSiteLive(siteId);
-  const [view, setView] = useState<View>(() => (safeGetItem(VIEW_KEY) === 'list' ? 'list' : 'plan'));
+  const [view, setView] = useState<View>(() => {
+    const stored = safeGetItem(VIEW_KEY);
+    if (stored === 'list' || stored === 'plan') return stored;
+    return typeof window !== 'undefined' && window.innerWidth < 640 ? 'list' : 'plan';
+  });
   const changeView = (v: View) => {
     setView(v);
     safeSetItem(VIEW_KEY, v);
@@ -95,7 +100,7 @@ export function SiteLivePage() {
           {t('live.stale')}
         </p>
       )}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <Card title={t('live.floorPlan')} className="min-w-0">
           {data.tables.length === 0 ? (
             <EmptyState title={t('live.noTables')} description={t('live.noTablesBody')} />

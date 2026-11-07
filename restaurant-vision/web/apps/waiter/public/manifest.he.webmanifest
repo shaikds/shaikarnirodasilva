@@ -1,0 +1,39 @@
+{
+  "lang": "he",
+  "dir": "rtl",
+  "name": "Restaurant Vision – התראות למלצרים",
+  "short_name": "RV מלצרים",
+  "description": "התראות שולחן בזמן אמת עם כפתור \"בטיפול\". אנונימי, בלי נתונים לפי עובד.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0f6c6e",
+  "background_color": "#f6f7f9",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "translations": {
+    "en": {
+      "name": "Restaurant Vision – Waiter alerts",
+      "short_name": "RV Waiter",
+      "description": "Live table alerts with an \"On it\" button. Anonymous, no per-employee data."
+    }
+  }
+}

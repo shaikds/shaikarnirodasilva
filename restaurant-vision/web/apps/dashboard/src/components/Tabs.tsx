@@ -41,7 +41,7 @@ export function Tabs<T extends string>({
 
   return (
     <div>
-      <div role="tablist" aria-label={label} className="mb-4 flex gap-1 overflow-x-auto border-b border-border" onKeyDown={onKeyDown}>
+      <div role="tablist" aria-label={label} className="mb-4 flex gap-1 overflow-x-auto border-b border-border">
         {tabs.map((tab, i) => (
           <button
             key={tab.id}
@@ -55,6 +55,7 @@ export function Tabs<T extends string>({
             aria-controls={`panel-${tab.id}`}
             tabIndex={tab.id === value ? 0 : -1}
             onClick={() => onChange(tab.id)}
+            onKeyDown={onKeyDown}
             className={cn(
               '-mb-px min-h-tap whitespace-nowrap border-b-2 px-3 text-sm font-medium',
               tab.id === value ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-fg',

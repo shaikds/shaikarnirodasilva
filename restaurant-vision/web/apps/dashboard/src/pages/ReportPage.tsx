@@ -54,7 +54,7 @@ export function RoiSection({ report }: { report: ShiftReport }) {
   const durOr = (v: number | null) => (v === null ? t('report.roi.unknown') : f.duration(v));
   return (
     <Card title={t('report.roi.title')} description={t('report.roi.subtitle')} className="mb-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="roi">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="roi">
         <StatTile
           label={t('report.roi.lostRevenue')}
           value={f.money(roi.lost_revenue.value, roi.currency)}
@@ -176,7 +176,7 @@ export function ReportPage() {
         <div className={report.isPlaceholderData ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
           <Kpis report={report.data} />
           <RoiSection report={report.data} />
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Card title={t('report.occupancyTitle')}>
               <ColumnChart
                 data={byHourOfDay(

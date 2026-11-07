@@ -14,9 +14,9 @@ export function LogoMark({ className = 'h-7 w-7' }: { className?: string }) {
 export function Logo() {
   const { t } = useTranslation();
   return (
-    <Link to="/" className="flex min-h-tap items-center gap-2 rounded-lg px-1 font-semibold">
+    <Link to="/" className="flex min-h-tap items-center gap-2 rounded-lg px-1 font-semibold" aria-label={t('common:app.name')}>
       <LogoMark />
-      <span className="truncate" lang="en">
+      <span className="hidden truncate sm:inline" lang="en">
         {t('common:app.name')}
       </span>
     </Link>

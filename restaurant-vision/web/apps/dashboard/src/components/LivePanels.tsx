@@ -94,7 +94,7 @@ export function QueuePanel({ live }: { live: LiveSnapshot }) {
   );
 }
 
-export function alertTarget(a: AlertView, t: (k: string, o?: Record<string, unknown>) => string): string {
+function alertTarget(a: AlertView, t: (k: string, o?: Record<string, unknown>) => string): string {
   return a.table_label ? t('common:table.name', { label: a.table_label }) : t('live.alerts.entrance');
 }
 

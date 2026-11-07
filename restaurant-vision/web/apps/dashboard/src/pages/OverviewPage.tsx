@@ -153,7 +153,7 @@ function NewSiteForm({ orgId, onDone }: { orgId: string; onDone: () => void }) {
 
   return (
     <Card title={t('overview.newSite.title')} className="mb-6">
-      <form onSubmit={onSubmit} noValidate className="grid gap-4 sm:grid-cols-2">
+      <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <TextField label={t('overview.newSite.name')} value={name} onChange={(e) => setName(e.target.value)} error={nameError} required maxLength={64} />
         <SelectField label={t('overview.newSite.timezone')} value={timezone} onChange={(e) => setTimezone(e.target.value)} dir="ltr">
           {TIMEZONES.map((tz) => (
@@ -236,7 +236,7 @@ export function OverviewPage() {
         </Card>
       ) : (
         <>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {sites.data.map((s) => (
               <SiteCard key={s.site_id} site={s} />
             ))}

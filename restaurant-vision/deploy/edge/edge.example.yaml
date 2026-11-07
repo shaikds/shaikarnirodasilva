@@ -1,0 +1,46 @@
+# Restaurant Vision edge settings (rv-edge). Installed as /etc/rv-edge/edge.yaml on Linux and in
+# the Docker image, and as C:\ProgramData\RestaurantVision\edge.yaml on Windows (the Windows
+# installer rewrites the paths below).
+#
+# Precedence: this file < RV_EDGE_<FIELD> environment variables < command-line flags.
+# Relative paths are relative to this file's directory. Unknown keys are rejected.
+# This file holds no secrets: the device token and camera RTSP URLs/credentials live in
+# <data_dir>/secrets.json (owner-only permissions) and never leave this PC.
+
+# Where the edge keeps its state: secrets.json (pairing token, camera credentials),
+# site_config.json (cameras, tables, zones) and outbox.sqlite3 (events waiting for the cloud).
+# Back this directory up; it must be readable only by the service account.
+data_dir: /var/lib/rv-edge
+
+# Cloud base URL. Normally left empty: `rv-edge pair --code ... --cloud URL` stores the URL it
+# paired with, which takes precedence over this value.
+cloud_url:
+
+# LAN API and setup wizard (edge-ui). Waiter phones use http://<this-pc-ip>:8787/local-alerts
+# when the internet is down. Open this port to the restaurant LAN only, never to the internet.
+local_host: 0.0.0.0
+local_port: 8787
+
+# Person detector: auto (YOLOX for real cameras, simulated for simulator scenarios),
+# yolox, or simulated.
+detector_backend: auto
+
+# YOLOX ONNX model. yolox_tiny (416x416) is the default and fits a shared office PC;
+# yolox_s (640x640) is more accurate and about 3x slower. Download with
+#   python edge/scripts/fetch_models.py --model tiny|s --dest /opt/rv-edge/models
+model_path: /opt/rv-edge/models/yolox_tiny.onnx
+
+# Back off frame processing when this process uses more than this share (percent) of the
+# whole machine's CPU, so the PC stays responsive for its other work.
+cpu_limit_pct: 70
+
+# Built edge-ui (setup wizard + local alerts page), served at http://<this-pc-ip>:8787/.
+edge_ui_dir: /opt/rv-edge/edge-ui
+
+# Optional pre-provisioned setup PIN hash (python -c "from rv_edge.runtime.setup_pin import
+# hash_pin; print(hash_pin('123456'))"). When unset, the first visitor of the setup wizard
+# chooses the PIN, so finish setup right after installing.
+# setup_pin_hash:
+
+# DEBUG, INFO, WARNING, ERROR
+log_level: INFO

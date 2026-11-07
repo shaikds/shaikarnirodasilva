@@ -1,0 +1,23 @@
+# Build-context filter for cloud.Dockerfile (BuildKit picks up <Dockerfile>.dockerignore).
+# Context = restaurant-vision/. Only contracts/, cloud/, web/, docs/compliance/ and one deploy
+# script are needed.
+*
+!contracts/
+!cloud/
+!web/
+!docs/compliance/
+!deploy/scripts/compliance_pdfs.py
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+**/*.sqlite3
+**/*.sqlite
+**/*.db
+**/.env
+**/*.tsbuildinfo

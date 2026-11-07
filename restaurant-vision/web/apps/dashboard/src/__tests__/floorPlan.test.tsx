@@ -2,7 +2,8 @@ import { TABLE_STATES, type TableLive } from '@rv/shared';
 import { TestProviders } from '@rv/shared/test-utils';
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { FloorList, FloorPlan, layoutTables } from '../components/FloorPlan';
+import { FloorList, FloorPlan } from '../components/FloorPlan';
+import { layoutTables } from '../lib/floorLayout';
 import { setupDashboardI18n } from '../test/utils';
 
 const NOW = 1_800_000_000;

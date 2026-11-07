@@ -42,7 +42,7 @@ function readVar(name: string, fallback: string): string {
 }
 
 /** Resolved token colors (SVG attributes cannot rely on CSS variables everywhere). */
-export function useChartColors(): ChartColors {
+function useChartColors(): ChartColors {
   const mode = useThemeStore((s) => s.mode);
   const [colors, setColors] = useState<ChartColors>(FALLBACK);
   useEffect(() => {

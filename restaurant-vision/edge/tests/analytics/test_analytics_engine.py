@@ -78,7 +78,7 @@ def test_configure_keeps_surviving_tables_and_drops_removed_ones() -> None:
     ]
     assert sc.eng.alerts.get(t8_alert) is None
     assert t3.state is TableState.SEATED and t3.session is not None
-    assert t3.session.session_id == session_id and t3.state_since == T0 + 30.0
+    assert t3.session.session_id == session_id and t3.state_since == T0 + 10.0
     assert [t.table_id for t in sc.eng.live().tables] == ["t1", "t2", "t3", "t4", "t5", "t6",
                                                           "t7"]
 
@@ -94,7 +94,7 @@ def test_configure_moving_the_primary_zone_to_another_camera() -> None:
     sc.configure(SiteConfig.model_validate(data))
     sc.run(400)
     assert sc.summary() == [(20.0, "state", "t5", "empty", "seated", 1),
-                            (200.0, "raised", "waiter_needed", "t5")]
+                            (180.0, "raised", "waiter_needed", "t5")]
     assert sc.eng.tables.guest_counts()["t5"] == 1  # now counted on the entrance camera
 
 
@@ -128,8 +128,10 @@ def test_configure_tables_and_queue_off_resolve_open_alerts() -> None:
     sc.configure(with_zones(cfg, remove=["z-queue"]))  # tables back on, queue zone gone
     assert sc.summary(sc.run(217)) == [
         (216.0, "resolved", "long_queue", "state_change"),
-        # machines restart from empty; the guest has been present for long: seated at once
+        # machines restart from empty; the guest has been present since 10.0: seated at once,
+        # and the backdated first-visit deadline (190.0) is long past
         (216.25, "state", "t3", "empty", "seated", 1),
+        (216.25, "raised", "waiter_needed", "t3"),
     ]
 
 
@@ -142,7 +144,7 @@ def test_modules_off_from_the_start() -> None:
     assert sc.summary() == [
         (30.0, "state", "t3", "empty", "seated", 1),
         (148.0, "state", "t3", "seated", "needs_bussing", 0),
-        (148.0, "closed", "t3", 30.0, 148.0, 1, None, 0),
+        (148.0, "closed", "t3", 10.0, 99.75, 1, None, 0),
     ]
     assert sc.eng.live().queues == []
     off = Scenario(with_modules(crisp_config(), alerts=False, queue=False, tables=False,
@@ -162,7 +164,7 @@ def test_live_state_contents() -> None:
     live = sc.eng.live()
     t3 = next(t for t in live.tables if t.table_id == "t3")
     assert (t3.label, t3.seats, t3.state, t3.guest_count, t3.since_ts, t3.open_alert_ids) == (
-        "3", 4, TableState.SEATED, 2, T0 + 30.0, [waiter])
+        "3", 4, TableState.SEATED, 2, T0 + 10.0, [waiter])
     t1 = live.tables[0]
     assert (t1.table_id, t1.label, t1.seats, t1.state, t1.since_ts) == (
         "t1", "1", 2, TableState.EMPTY, None)

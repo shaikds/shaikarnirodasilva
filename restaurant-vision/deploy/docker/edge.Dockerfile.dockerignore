@@ -1,0 +1,25 @@
+# Build-context filter for edge.Dockerfile (BuildKit picks up <Dockerfile>.dockerignore).
+# Context = restaurant-vision/. edge/models/*.onnx is kept on purpose: a verified local model
+# saves the download.
+*
+!contracts/
+!edge/
+!simulator/
+!web/
+!deploy/edge/edge.example.yaml
+edge/tests
+edge/var
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+**/*.sqlite3
+**/*.sqlite
+**/*.db
+**/.env
+**/*.tsbuildinfo
