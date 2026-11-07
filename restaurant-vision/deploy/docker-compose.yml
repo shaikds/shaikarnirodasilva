@@ -12,6 +12,7 @@
 #   RV_CLOUD_PORT (8000), RV_EDGE_PORT (8787), RV_SIM_SPEED (20), RV_ENVIRONMENT (dev)
 #   RV_PAIR_CODE (set by demo-up.sh), RV_SCENARIO (simulator/scenarios/demo_dinner.yaml)
 #   RV_PYTHON_IMAGE, RV_NODE_IMAGE, RV_POSTGRES_IMAGE (registry mirrors)
+#   RV_BUILD_EDGE_UI=false (build the edge image without the setup wizard UI)
 
 name: restaurant-vision
 
@@ -66,7 +67,9 @@ services:
     build:
       context: ..
       dockerfile: deploy/docker/edge.Dockerfile
-      args: *build-args
+      args:
+        <<: *build-args
+        BUILD_EDGE_UI: ${RV_BUILD_EDGE_UI:-true}
     image: restaurant-vision/edge:dev
     depends_on:
       cloud:

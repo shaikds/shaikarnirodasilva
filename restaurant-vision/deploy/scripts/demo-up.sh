@@ -18,7 +18,7 @@ ENV_FILE="$DEPLOY_DIR/.env"
 SITE_NAME="Tel Aviv"
 BUILD=1
 
-usage() { sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

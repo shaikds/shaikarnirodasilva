@@ -93,9 +93,8 @@ def render(src: Path, out: Path) -> list[Path]:
         parts = [src / f"{name}-{lang}.md" for lang in langs]
         if not all(p.is_file() for p in parts):
             continue
-        sections = [
-            _section(p, lang, new_page=i > 0) for i, (p, lang) in enumerate(zip(parts, langs))
-        ]
+        pairs = zip(parts, langs, strict=True)
+        sections = [_section(p, lang, new_page=i > 0) for i, (p, lang) in enumerate(pairs)]
         target = out / f"{name}.pdf"
         HTML(string=_document(_title(parts[0]), langs[0], sections)).write_pdf(target)
         written.append(target)

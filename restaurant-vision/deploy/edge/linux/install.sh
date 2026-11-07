@@ -75,11 +75,6 @@ if ! "$PYTHON" -c 'import ensurepip, venv' >/dev/null 2>&1; then
     die "the Python venv module is missing; install your distribution's python3-venv package"
   fi
 fi
-# OpenCV (headless) needs glib at runtime; present on desktops, missing on minimal servers.
-if command -v apt-get >/dev/null && ! ldconfig -p | grep -q 'libglib-2.0.so.0'; then
-  say "Installing libglib2.0-0 (OpenCV runtime)"
-  apt-get update -qq && apt-get install -y -qq libglib2.0-0
-fi
 
 # ------------------------------------------------------------------------ user and folders
 if ! id -u "$SVC_USER" >/dev/null 2>&1; then

@@ -1,0 +1,192 @@
+# Restaurant Vision CI: Python packages (contracts, edge, cloud, simulator), web workspace and
+# an analytics smoke run on a simulated restaurant. Only runs when restaurant-vision/ changes.
+name: restaurant-vision
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "restaurant-vision/**"
+      - ".github/workflows/restaurant-vision.yml"
+  pull_request:
+    paths:
+      - "restaurant-vision/**"
+      - ".github/workflows/restaurant-vision.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restaurant-vision-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: restaurant-vision
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "restaurant-vision/*/pyproject.toml"
+
+      - name: Install the four packages (editable) and dev tools
+        run: |
+          uv venv .venv --python "${{ matrix.python }}"
+          uv pip install --python .venv/bin/python \
+            -e ./contracts -e ./edge -e ./cloud -e ./simulator \
+            ruff mypy pytest pytest-asyncio pytest-cov types-PyYAML types-psutil
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Cache the YOLOX-tiny model
+        uses: actions/cache@v4
+        with:
+          path: restaurant-vision/edge/models
+          key: yolox-tiny-${{ hashFiles('restaurant-vision/edge/scripts/fetch_models.py') }}
+
+      - name: Fetch the YOLOX-tiny model (SHA-256 verified)
+        run: python edge/scripts/fetch_models.py --model tiny
+
+      - name: Ruff
+        run: |
+          ruff check contracts edge cloud simulator
+          ruff check --line-length 100 --select E,F,W,I,B,UP,SIM deploy
+
+      - name: Mypy
+        run: |
+          (cd contracts && mypy rv_contracts)
+          (cd edge && mypy rv_edge && mypy --strict rv_edge/analytics)
+          (cd cloud && mypy rv_cloud)
+          (cd simulator && mypy rv_sim)
+
+      - name: Pytest contracts
+        working-directory: restaurant-vision/contracts
+        run: pytest -q
+
+      - name: Pytest edge (coverage >= 80% on rv_edge.analytics)
+        working-directory: restaurant-vision/edge
+        run: pytest -q --cov=rv_edge.analytics --cov-report=term --cov-fail-under=80
+
+      - name: Pytest cloud (coverage >= 80% on rv_cloud)
+        working-directory: restaurant-vision/cloud
+        run: pytest -q --cov=rv_cloud --cov-report=term --cov-fail-under=80
+
+      - name: Pytest simulator
+        working-directory: restaurant-vision/simulator
+        run: pytest -q
+
+      - name: Contracts JSON Schema is up to date
+        run: python -m rv_contracts.schema_export --check web/packages/shared/src/contracts/schema.json
+
+  web:
+    name: Web (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: restaurant-vision/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: restaurant-vision/web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: restaurant-vision/web/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generated contract types match schema.json
+        run: |
+          pnpm gen:types
+          git diff --exit-code -- packages/shared/src/contracts/types.ts
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  smoke:
+    name: Smoke (simulated restaurant)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "restaurant-vision/*/pyproject.toml"
+
+      - name: Install contracts, edge and simulator
+        run: |
+          uv venv .venv --python 3.13
+          uv pip install --python .venv/bin/python ./contracts ./edge ./simulator
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: rv-sim eval (truth tracker and ByteTrack)
+        run: |
+          rv-sim eval simulator/scenarios/smoke.yaml --quiet --json smoke-fallback.json
+          rv-sim eval simulator/scenarios/smoke.yaml --quiet --tracker bytetrack --json smoke-bytetrack.json
+
+      - name: Accuracy gate
+        run: |
+          python - smoke-fallback.json smoke-bytetrack.json <<'EOF'
+          import json, sys
+
+          # Minimum scores on smoke.yaml. The scenario is scripted, so these are regressions,
+          # not a statement of real-world accuracy.
+          GATES = {
+              ("sessions", "precision"): 0.9,
+              ("sessions", "recall"): 0.9,
+              ("waiter_needed", "recall"): 0.9,
+              ("walkaways", "recall"): 0.5,
+          }
+          failed = False
+          for path in sys.argv[1:]:
+              scores = json.load(open(path))
+              for (section, metric), minimum in GATES.items():
+                  value = scores[section][metric]
+                  ok = value is not None and value >= minimum
+                  failed |= not ok
+                  print(f"{path}: {section}.{metric} = {value} (min {minimum}) {'ok' if ok else 'FAIL'}")
+          sys.exit(1 if failed else 0)
+          EOF
+
+      - name: Upload scores
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-scores
+          path: restaurant-vision/smoke-*.json
+          if-no-files-found: ignore
+
+      - name: Validate deploy files
+        run: |
+          shellcheck deploy/scripts/*.sh deploy/edge/linux/install.sh
+          docker compose -f deploy/docker-compose.yml --profile demo config --quiet
