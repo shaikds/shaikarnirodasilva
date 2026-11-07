@@ -48,3 +48,9 @@
 | Accounts | Organization -> sites (branches) -> roles: owner (all sites), manager (one site), waiter (alerts only) |
 | Offline | Alerts keep working over the restaurant LAN/WiFi when internet drops; edge buffers and syncs later |
 | Pilot | No pilot restaurant yet. Generic POS adapter interface now, concrete POS integration in phase 2 |
+
+## Founder input: automatic table detection
+
+- The setup wizard auto-detects tables (COCO "dining table" + "chair" from the same YOLOX model) and suggests a polygon and seat count per table; the installer accepts, edits or rejects. Best run when the restaurant is empty.
+- Still manual by nature: table numbers matching the POS, queue zone, entrance line, staff area, privacy masks.
+- Endpoint: `POST /local/cameras/{camera_id}/suggest-tables` (setup PIN, LAN only, returns polygons only, no image data).
