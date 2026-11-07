@@ -26,5 +26,7 @@ function syncLanguage(lng: string): void {
 export function installLanguageSync(): void {
   syncLanguage(i18n.language);
   i18n.on('languageChanged', syncLanguage);
-  navigator.serviceWorker?.addEventListener?.('controllerchange', () => syncLanguage(i18n.language));
+  navigator.serviceWorker?.addEventListener?.('controllerchange', () =>
+    syncLanguage(i18n.language),
+  );
 }

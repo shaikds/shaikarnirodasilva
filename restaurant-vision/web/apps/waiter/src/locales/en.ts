@@ -66,7 +66,8 @@ export const waiterEn = {
     enabled: 'Notifications are on for this phone.',
     disable: 'Turn off notifications',
     denied: 'Notifications are blocked. Allow them in the browser or phone settings.',
-    unsupported: 'This browser cannot show notifications. On iPhone, add the app to the Home Screen first.',
+    unsupported:
+      'This browser cannot show notifications. On iPhone, add the app to the Home Screen first.',
     failed: 'Could not turn on notifications. Try again.',
     offlineSection: 'When the internet is down',
     edgeUrl: 'Local alerts address (restaurant Wi-Fi)',

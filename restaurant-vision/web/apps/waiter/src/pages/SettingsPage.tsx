@@ -36,7 +36,13 @@ function NotificationsSetting({ siteId }: { siteId: string | undefined }) {
       setSubscriptionId(await enablePush(api, siteId));
     } catch (e) {
       const reason = e instanceof PushError ? e.reason : 'failed';
-      setError(reason === 'denied' ? t('settings.denied') : reason === 'unsupported' ? t('settings.unsupported') : t('settings.failed'));
+      setError(
+        reason === 'denied'
+          ? t('settings.denied')
+          : reason === 'unsupported'
+            ? t('settings.unsupported')
+            : t('settings.failed'),
+      );
     } finally {
       setState(pushPermission());
       setBusy(false);
@@ -152,8 +158,18 @@ export function SettingsPage() {
       <div className="flex flex-col gap-4">
         <Card title={t('settings.alertsSection')}>
           <div className="divide-y divide-border">
-            <Switch checked={sound} onChange={setSound} label={t('settings.sound')} description={t('settings.soundHelp')} />
-            <Switch checked={vib} onChange={setVibrate} label={t('settings.vibrate')} description={t('settings.vibrateHelp')} />
+            <Switch
+              checked={sound}
+              onChange={setSound}
+              label={t('settings.sound')}
+              description={t('settings.soundHelp')}
+            />
+            <Switch
+              checked={vib}
+              onChange={setVibrate}
+              label={t('settings.vibrate')}
+              description={t('settings.vibrateHelp')}
+            />
             <div className="py-3">
               <Button
                 variant="secondary"

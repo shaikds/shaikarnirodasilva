@@ -49,10 +49,14 @@ export function OccupancyPanel({ live, now }: { live: LiveSnapshot; now: number 
           >
             <div
               className="h-full rounded-full bg-primary"
-              style={{ width: `${o.tables_total ? (100 * o.tables_occupied) / o.tables_total : 0}%` }}
+              style={{
+                width: `${o.tables_total ? (100 * o.tables_occupied) / o.tables_total : 0}%`,
+              }}
             />
           </div>
-          <p className="mt-2 text-xs text-muted">{t('live.occupancy.updated', { time: f.relative(o.ts, now) })}</p>
+          <p className="mt-2 text-xs text-muted">
+            {t('live.occupancy.updated', { time: f.relative(o.ts, now) })}
+          </p>
         </>
       ) : (
         <p className="text-sm text-muted">{t('live.occupancy.none')}</p>
@@ -95,7 +99,9 @@ export function QueuePanel({ live }: { live: LiveSnapshot }) {
 }
 
 function alertTarget(a: AlertView, t: (k: string, o?: Record<string, unknown>) => string): string {
-  return a.table_label ? t('common:table.name', { label: a.table_label }) : t('live.alerts.entrance');
+  return a.table_label
+    ? t('common:table.name', { label: a.table_label })
+    : t('live.alerts.entrance');
 }
 
 function AlertRow({ alert, siteId, now }: { alert: AlertView; siteId: string; now: number }) {
@@ -108,7 +114,9 @@ function AlertRow({ alert, siteId, now }: { alert: AlertView; siteId: string; no
     <li className="flex items-center gap-3 py-2.5">
       <span
         aria-hidden="true"
-        className={acked ? 'text-muted' : alert.severity === 'urgent' ? 'text-danger' : 'text-warning'}
+        className={
+          acked ? 'text-muted' : alert.severity === 'urgent' ? 'text-danger' : 'text-warning'
+        }
       >
         <BellRing className="h-5 w-5" />
       </span>
@@ -181,7 +189,9 @@ function CameraRow({ camera, name }: { camera: CameraHealth; name: string }) {
       <Camera aria-hidden="true" className="h-4 w-4 text-muted" />
       <span className="min-w-0 flex-1 truncate">{name}</span>
       {camera.status !== 'offline' && (
-        <span className="text-xs text-muted">{t('live.devices.fps', { fps: f.number(camera.fps, 1) })}</span>
+        <span className="text-xs text-muted">
+          {t('live.devices.fps', { fps: f.number(camera.fps, 1) })}
+        </span>
       )}
       <Badge tone={CAMERA_TONE[camera.status]}>
         <Icon aria-hidden="true" className="h-3.5 w-3.5" />
@@ -191,7 +201,15 @@ function CameraRow({ camera, name }: { camera: CameraHealth; name: string }) {
   );
 }
 
-function DeviceBlock({ device, now, cameraNames }: { device: DeviceStatus; now: number; cameraNames: Map<string, string> }) {
+function DeviceBlock({
+  device,
+  now,
+  cameraNames,
+}: {
+  device: DeviceStatus;
+  now: number;
+  cameraNames: Map<string, string>;
+}) {
   const { t } = useTranslation();
   const f = useFmt();
   const online = isDeviceOnline(device, now);
@@ -207,18 +225,24 @@ function DeviceBlock({ device, now, cameraNames }: { device: DeviceStatus; now: 
         </Badge>
       </div>
       <p className="mt-1 text-xs text-muted">
-        {device.last_seen_at === null ? t('live.devices.never') : t('live.devices.lastSeen', { time: f.relative(device.last_seen_at, now) })}
+        {device.last_seen_at === null
+          ? t('live.devices.never')
+          : t('live.devices.lastSeen', { time: f.relative(device.last_seen_at, now) })}
         {device.version && ` · ${t('live.devices.version', { version: device.version })}`}
       </p>
       {online && (
         <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
           <div>
             <dt className="text-muted">{t('live.devices.cpu')}</dt>
-            <dd className="font-medium">{device.cpu_pct === null ? f.none : `${f.number(device.cpu_pct)}%`}</dd>
+            <dd className="font-medium">
+              {device.cpu_pct === null ? f.none : `${f.number(device.cpu_pct)}%`}
+            </dd>
           </div>
           <div>
             <dt className="text-muted">{t('live.devices.mem')}</dt>
-            <dd className="font-medium">{device.mem_mb === null ? f.none : `${f.number(device.mem_mb)} MB`}</dd>
+            <dd className="font-medium">
+              {device.mem_mb === null ? f.none : `${f.number(device.mem_mb)} MB`}
+            </dd>
           </div>
           <div>
             <dt className="text-muted">{t('live.devices.outbox')}</dt>
@@ -229,7 +253,11 @@ function DeviceBlock({ device, now, cameraNames }: { device: DeviceStatus; now: 
       {device.cameras.length > 0 ? (
         <ul className="mt-2">
           {device.cameras.map((c) => (
-            <CameraRow key={c.camera_id} camera={c} name={cameraNames.get(c.camera_id) ?? c.camera_id} />
+            <CameraRow
+              key={c.camera_id}
+              camera={c}
+              name={cameraNames.get(c.camera_id) ?? c.camera_id}
+            />
           ))}
         </ul>
       ) : (
@@ -239,7 +267,15 @@ function DeviceBlock({ device, now, cameraNames }: { device: DeviceStatus; now: 
   );
 }
 
-export function DevicesPanel({ live, now, cameraNames }: { live: LiveSnapshot; now: number; cameraNames: Map<string, string> }) {
+export function DevicesPanel({
+  live,
+  now,
+  cameraNames,
+}: {
+  live: LiveSnapshot;
+  now: number;
+  cameraNames: Map<string, string>;
+}) {
   const { t } = useTranslation();
   return (
     <Card title={t('live.devices.title')} level={2}>

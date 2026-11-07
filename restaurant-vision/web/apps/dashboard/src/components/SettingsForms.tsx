@@ -34,7 +34,17 @@ import { TIMEZONES } from '../lib/timezones';
 import { useFmt } from '../lib/useFmt';
 
 /** Save button + status line shared by the forms. */
-function SaveBar({ pending, saved, error, extra }: { pending: boolean; saved: boolean; error: unknown; extra?: ReactNode }) {
+function SaveBar({
+  pending,
+  saved,
+  error,
+  extra,
+}: {
+  pending: boolean;
+  saved: boolean;
+  error: unknown;
+  extra?: ReactNode;
+}) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -51,7 +61,9 @@ function SaveBar({ pending, saved, error, extra }: { pending: boolean; saved: bo
         )}
         {error != null && !pending && (
           <span className="text-danger">
-            {t('settings.saveFailed', { message: isApiError(error) ? error.message : t('common:errors.generic') })}
+            {t('settings.saveFailed', {
+              message: isApiError(error) ? error.message : t('common:errors.generic'),
+            })}
           </span>
         )}
       </span>
@@ -73,7 +85,10 @@ export function DetailsForm({ site }: { site: SiteSettings }) {
   const avg = Number(form.avg);
   const errors = {
     name: !form.name.trim() ? t('auth.errors.required') : undefined,
-    avg: form.avg.trim() === '' || !Number.isFinite(avg) || avg < 0 ? t('settings.thresholds.errors.positive') : undefined,
+    avg:
+      form.avg.trim() === '' || !Number.isFinite(avg) || avg < 0
+        ? t('settings.thresholds.errors.positive')
+        : undefined,
   };
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -92,20 +107,43 @@ export function DetailsForm({ site }: { site: SiteSettings }) {
   };
   return (
     <Card>
-      <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 max-w-2xl gap-4 sm:grid-cols-2">
-        <TextField label={t('settings.details.name')} value={form.name} maxLength={64} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} />
-        <SelectField label={t('settings.details.timezone')} dir="ltr" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
+      <form
+        onSubmit={onSubmit}
+        noValidate
+        className="grid grid-cols-1 max-w-2xl gap-4 sm:grid-cols-2"
+      >
+        <TextField
+          label={t('settings.details.name')}
+          value={form.name}
+          maxLength={64}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          error={errors.name}
+        />
+        <SelectField
+          label={t('settings.details.timezone')}
+          dir="ltr"
+          value={form.timezone}
+          onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+        >
           {[...new Set([form.timezone, ...TIMEZONES])].map((tz) => (
             <option key={tz} value={tz}>
               {tz}
             </option>
           ))}
         </SelectField>
-        <SelectField label={t('settings.details.locale')} value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value as Locale })}>
+        <SelectField
+          label={t('settings.details.locale')}
+          value={form.locale}
+          onChange={(e) => setForm({ ...form, locale: e.target.value as Locale })}
+        >
           <option value="he">{t('common:lang.he')}</option>
           <option value="en">{t('common:lang.en')}</option>
         </SelectField>
-        <SelectField label={t('settings.details.currency')} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value as Currency })}>
+        <SelectField
+          label={t('settings.details.currency')}
+          value={form.currency}
+          onChange={(e) => setForm({ ...form, currency: e.target.value as Currency })}
+        >
           {CURRENCIES.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -232,7 +270,11 @@ export function ModulesForm({ site, plan }: { site: SiteSettings; plan: Plan }) 
                   setModules({ ...modules, [k]: v });
                 }}
                 label={t(`settings.modules.${k}.label`)}
-                description={locked ? `${t(`settings.modules.${k}.help`)} ${t('settings.modules.proOnly')}` : t(`settings.modules.${k}.help`)}
+                description={
+                  locked
+                    ? `${t(`settings.modules.${k}.help`)} ${t('settings.modules.proOnly')}`
+                    : t(`settings.modules.${k}.help`)
+                }
               />
             );
           })}
@@ -254,16 +296,25 @@ function PairingCode({ code, expiresAt }: { code: string; expiresAt: number }) {
   return (
     <div className="mt-4 rounded-xl border border-primary/30 bg-primary-soft p-4">
       <p className="text-sm font-medium">{t('settings.devices.codeTitle')}</p>
-      <p className="my-2 font-mono text-3xl font-bold tracking-[0.3em]" dir="ltr" aria-live="polite">
+      <p
+        className="my-2 font-mono text-3xl font-bold tracking-[0.3em]"
+        dir="ltr"
+        aria-live="polite"
+      >
         {code}
       </p>
       {expired ? (
         <p className="text-sm text-danger">{t('settings.devices.expired')}</p>
       ) : (
-        <p className="text-sm text-muted">{t('settings.devices.codeHelp', { time: f.relative(expiresAt, now) })}</p>
+        <p className="text-sm text-muted">
+          {t('settings.devices.codeHelp', { time: f.relative(expiresAt, now) })}
+        </p>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <code dir="ltr" className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-surface px-3 py-2 text-xs">
+        <code
+          dir="ltr"
+          className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-surface px-3 py-2 text-xs"
+        >
           {command}
         </code>
         <Button
@@ -273,7 +324,11 @@ function PairingCode({ code, expiresAt }: { code: string; expiresAt: number }) {
             void navigator.clipboard?.writeText(command).then(() => setCopied(true));
           }}
         >
-          {copied ? <Check aria-hidden="true" className="h-4 w-4" /> : <Copy aria-hidden="true" className="h-4 w-4" />}
+          {copied ? (
+            <Check aria-hidden="true" className="h-4 w-4" />
+          ) : (
+            <Copy aria-hidden="true" className="h-4 w-4" />
+          )}
           {copied ? t('common:actions.copied') : t('common:actions.copy')}
         </Button>
       </div>
@@ -314,10 +369,16 @@ export function DevicesTab({ siteId, canPair }: { siteId: string; canPair: boole
                       {d.device_id}
                     </th>
                     <td className="px-3 py-2">
-                      <Badge tone={online ? 'success' : 'danger'}>{online ? t('common:device.online') : t('common:device.offline')}</Badge>
+                      <Badge tone={online ? 'success' : 'danger'}>
+                        {online ? t('common:device.online') : t('common:device.offline')}
+                      </Badge>
                     </td>
                     <td className="px-3 py-2">{d.version ?? f.none}</td>
-                    <td className="px-3 py-2">{d.last_seen_at === null ? t('live.devices.never') : f.relative(d.last_seen_at, now)}</td>
+                    <td className="px-3 py-2">
+                      {d.last_seen_at === null
+                        ? t('live.devices.never')
+                        : f.relative(d.last_seen_at, now)}
+                    </td>
                     <td className="px-3 py-2">{f.number(d.cameras.length)}</td>
                   </tr>
                 );
@@ -337,7 +398,9 @@ export function DevicesTab({ siteId, canPair }: { siteId: string; canPair: boole
               {t('common:errors.generic')}
             </p>
           )}
-          {pairing.data && <PairingCode code={pairing.data.code} expiresAt={pairing.data.expires_at} />}
+          {pairing.data && (
+            <PairingCode code={pairing.data.code} expiresAt={pairing.data.expires_at} />
+          )}
         </div>
       )}
     </Card>

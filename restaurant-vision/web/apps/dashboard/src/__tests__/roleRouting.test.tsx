@@ -18,9 +18,17 @@ const location = () => screen.getByTestId('location').textContent;
 
 describe('landingFor / canOpen', () => {
   it('maps roles to landing pages', () => {
-    expect(landingFor({ role: 'owner', siteId: null, siteIds: [] })).toEqual({ kind: 'path', path: '/' });
-    expect(landingFor({ role: 'manager', siteId: 's1', siteIds: ['s1'] })).toEqual({ kind: 'path', path: '/sites/s1/live' });
-    expect(landingFor({ role: 'waiter', siteId: 's1', siteIds: ['s1'] })).toEqual({ kind: 'waiter' });
+    expect(landingFor({ role: 'owner', siteId: null, siteIds: [] })).toEqual({
+      kind: 'path',
+      path: '/',
+    });
+    expect(landingFor({ role: 'manager', siteId: 's1', siteIds: ['s1'] })).toEqual({
+      kind: 'path',
+      path: '/sites/s1/live',
+    });
+    expect(landingFor({ role: 'waiter', siteId: 's1', siteIds: ['s1'] })).toEqual({
+      kind: 'waiter',
+    });
     expect(landingFor({ role: null, siteId: null, siteIds: [] })).toEqual({ kind: 'no-access' });
   });
 
@@ -82,8 +90,13 @@ describe('role-aware routing', () => {
   it('sends a waiter to the waiter app', async () => {
     signInAs(db, 'waiter@zayit.demo');
     renderApp('/');
-    expect(await screen.findByRole('heading', { name: 'Alerts live in the waiter app' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open the waiter app' })).toHaveAttribute('href', 'http://localhost:5174/');
+    expect(
+      await screen.findByRole('heading', { name: 'Alerts live in the waiter app' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open the waiter app' })).toHaveAttribute(
+      'href',
+      'http://localhost:5174/',
+    );
     expect(screen.queryByRole('heading', { name: 'Overview' })).not.toBeInTheDocument();
   });
 });

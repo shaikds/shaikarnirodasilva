@@ -1,12 +1,6 @@
 // Pure reducer: merges one EdgeEvent into a LiveSnapshot (the cached `GET /sites/{id}/live`).
 // Out-of-order events (edge outbox replays) never move state backwards.
-import type {
-  AlertView,
-  DeviceStatus,
-  EdgeEvent,
-  LiveSnapshot,
-  TableLive,
-} from '../contracts';
+import type { AlertView, DeviceStatus, EdgeEvent, LiveSnapshot, TableLive } from '../contracts';
 import { DEVICE_OFFLINE_AFTER_S } from '../contracts';
 
 function updateTable(
@@ -55,7 +49,9 @@ export function applyEvent(snapshot: LiveSnapshot, event: EdgeEvent): LiveSnapsh
         resolved_at: null,
         resolve_reason: null,
       };
-      const open_alerts = [...snapshot.open_alerts, alert].sort((a, b) => a.raised_at - b.raised_at);
+      const open_alerts = [...snapshot.open_alerts, alert].sort(
+        (a, b) => a.raised_at - b.raised_at,
+      );
       const tables = updateTable(snapshot.tables, event.table_id, (t) =>
         t.open_alert_ids.includes(event.alert_id)
           ? t
@@ -69,7 +65,12 @@ export function applyEvent(snapshot: LiveSnapshot, event: EdgeEvent): LiveSnapsh
       const open_alerts = snapshot.open_alerts.map((a) => {
         if (a.alert_id !== event.alert_id || a.status === 'acknowledged') return a;
         changed = true;
-        return { ...a, status: 'acknowledged' as const, acked_at: event.ack_at, ack_via: event.via };
+        return {
+          ...a,
+          status: 'acknowledged' as const,
+          acked_at: event.ack_at,
+          ack_via: event.via,
+        };
       });
       return changed ? { ...snapshot, open_alerts } : snapshot;
     }

@@ -6,7 +6,10 @@ import { Button } from './Button';
 export function ErrorFallback({ onRetry }: { onRetry?: () => void }) {
   const { t } = useTranslation('common');
   return (
-    <div role="alert" className="mx-auto flex max-w-lg flex-col items-center gap-3 rounded-xl border border-danger/40 bg-danger-soft p-6 text-center">
+    <div
+      role="alert"
+      className="mx-auto flex max-w-lg flex-col items-center gap-3 rounded-xl border border-danger/40 bg-danger-soft p-6 text-center"
+    >
       <TriangleAlert aria-hidden="true" className="h-8 w-8 text-danger" />
       <p className="text-base font-semibold">{t('errors.boundaryTitle')}</p>
       <p className="text-sm text-muted">{t('errors.boundaryBody')}</p>
@@ -56,7 +59,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   override render() {
     const { error } = this.state;
-    if (error) return this.props.fallback?.(this.reset, error) ?? <ErrorFallback onRetry={this.reset} />;
+    if (error)
+      return this.props.fallback?.(this.reset, error) ?? <ErrorFallback onRetry={this.reset} />;
     return this.props.children;
   }
 }

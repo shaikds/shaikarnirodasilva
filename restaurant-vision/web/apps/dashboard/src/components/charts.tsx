@@ -30,7 +30,12 @@ interface ChartColors {
   surface: string;
 }
 
-const FALLBACK: ChartColors = { series: '#2a78d6', grid: '#e5e7eb', axis: '#6b7280', surface: '#ffffff' };
+const FALLBACK: ChartColors = {
+  series: '#2a78d6',
+  grid: '#e5e7eb',
+  axis: '#6b7280',
+  surface: '#ffffff',
+};
 
 function readVar(name: string, fallback: string): string {
   try {
@@ -74,14 +79,26 @@ function ChartTooltip({
   seriesName,
   color,
   rtl,
-}: TooltipProps<number, string> & { format: (v: number) => string; seriesName: string; color: string; rtl: boolean }) {
+}: TooltipProps<number, string> & {
+  format: (v: number) => string;
+  seriesName: string;
+  color: string;
+  rtl: boolean;
+}) {
   if (!active || !payload?.length) return null;
   const value = payload[0]?.value;
   return (
-    <div dir={rtl ? 'rtl' : 'ltr'} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-card">
+    <div
+      dir={rtl ? 'rtl' : 'ltr'}
+      className="rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-card"
+    >
       <p className="text-base font-semibold">{typeof value === 'number' ? format(value) : '—'}</p>
       <p className="flex items-center gap-1.5 text-xs text-muted">
-        <span aria-hidden="true" className="inline-block h-0.5 w-3 rounded" style={{ background: color }} />
+        <span
+          aria-hidden="true"
+          className="inline-block h-0.5 w-3 rounded"
+          style={{ background: color }}
+        />
         {seriesName} · {label}
       </p>
     </div>
@@ -101,11 +118,24 @@ export interface SingleSeriesChartProps {
   dimmed?: boolean;
 }
 
-export function ColumnChart({ data, seriesName, categoryName, format, height = 240, dimmed }: SingleSeriesChartProps) {
+export function ColumnChart({
+  data,
+  seriesName,
+  categoryName,
+  format,
+  height = 240,
+  dimmed,
+}: SingleSeriesChartProps) {
   const c = useChartColors();
   const rtl = useRtl();
   return (
-    <ChartFrame data={data} seriesName={seriesName} categoryName={categoryName} format={format} dimmed={dimmed}>
+    <ChartFrame
+      data={data}
+      seriesName={seriesName}
+      categoryName={categoryName}
+      format={format}
+      dimmed={dimmed}
+    >
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }} accessibilityLayer>
           <CartesianGrid vertical={false} stroke={c.grid} strokeWidth={1} />
@@ -129,20 +159,42 @@ export function ColumnChart({ data, seriesName, categoryName, format, height = 2
           />
           <Tooltip
             cursor={{ fill: c.grid, opacity: 0.5 }}
-            content={<ChartTooltip format={format} seriesName={seriesName} color={c.series} rtl={rtl} />}
+            content={
+              <ChartTooltip format={format} seriesName={seriesName} color={c.series} rtl={rtl} />
+            }
           />
-          <Bar dataKey="value" name={seriesName} fill={c.series} maxBarSize={24} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+          <Bar
+            dataKey="value"
+            name={seriesName}
+            fill={c.series}
+            maxBarSize={24}
+            radius={[4, 4, 0, 0]}
+            isAnimationActive={false}
+          />
         </BarChart>
       </ResponsiveContainer>
     </ChartFrame>
   );
 }
 
-export function LineAreaChart({ data, seriesName, categoryName, format, height = 240, dimmed }: SingleSeriesChartProps) {
+export function LineAreaChart({
+  data,
+  seriesName,
+  categoryName,
+  format,
+  height = 240,
+  dimmed,
+}: SingleSeriesChartProps) {
   const c = useChartColors();
   const rtl = useRtl();
   return (
-    <ChartFrame data={data} seriesName={seriesName} categoryName={categoryName} format={format} dimmed={dimmed}>
+    <ChartFrame
+      data={data}
+      seriesName={seriesName}
+      categoryName={categoryName}
+      format={format}
+      dimmed={dimmed}
+    >
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }} accessibilityLayer>
           <CartesianGrid vertical={false} stroke={c.grid} strokeWidth={1} />
@@ -165,7 +217,9 @@ export function LineAreaChart({ data, seriesName, categoryName, format, height =
           />
           <Tooltip
             cursor={{ stroke: c.axis, strokeWidth: 1 }}
-            content={<ChartTooltip format={format} seriesName={seriesName} color={c.series} rtl={rtl} />}
+            content={
+              <ChartTooltip format={format} seriesName={seriesName} color={c.series} rtl={rtl} />
+            }
           />
           <Area
             type="monotone"
@@ -197,13 +251,16 @@ function ChartFrame({
 }: Omit<SingleSeriesChartProps, 'height'> & { children: ReactNode }) {
   const { t } = useTranslation();
   const rows = data.filter((d) => d.value !== null);
-  if (rows.length === 0) return <p className="py-8 text-center text-sm text-muted">{t('analytics.noData')}</p>;
+  if (rows.length === 0)
+    return <p className="py-8 text-center text-sm text-muted">{t('analytics.noData')}</p>;
   return (
     <div className={cn('transition-opacity', dimmed && 'opacity-60')}>
       {/* recharts lays out in LTR; RTL is handled by reversing the category axis. */}
       <div dir="ltr">{children}</div>
       <details className="mt-2 text-sm">
-        <summary className="cursor-pointer select-none text-xs font-medium text-primary">{t('analytics.dataTable')}</summary>
+        <summary className="cursor-pointer select-none text-xs font-medium text-primary">
+          {t('analytics.dataTable')}
+        </summary>
         <div className="mt-2 max-h-64 overflow-auto">
           <table className="w-full text-sm">
             <thead>

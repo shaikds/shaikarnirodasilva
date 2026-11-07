@@ -25,7 +25,8 @@ export function useFormatters() {
       lng,
       number: (v: number, digits = 0) => formatNumber(v, lng, digits),
       percent: (v: number, digits = 0) => formatPercent(v, lng, digits),
-      currency: (v: number, currency: Currency, digits = 0) => formatCurrency(v, currency, lng, digits),
+      currency: (v: number, currency: Currency, digits = 0) =>
+        formatCurrency(v, currency, lng, digits),
       duration: (s: number) => formatDuration(s, lng),
       elapsed: formatElapsed,
       relative: (ts: number, now?: number) => formatRelativeTime(ts, lng, now),

@@ -7,7 +7,8 @@ function keysOf(obj: object, prefix = ''): string[] {
     typeof v === 'object' && v !== null ? keysOf(v, `${prefix}${k}.`) : [`${prefix}${k}`],
   );
 }
-const comparable = (keys: string[]) => [...new Set(keys.filter((k) => !/_(two|many)$/.test(k)))].sort();
+const comparable = (keys: string[]) =>
+  [...new Set(keys.filter((k) => !/_(two|many)$/.test(k)))].sort();
 
 describe('waiter locales', () => {
   it('Hebrew and English have the same keys', () => {

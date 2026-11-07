@@ -2,7 +2,15 @@ import { LanguageSwitcher, ThemeToggle, useTranslation } from '@rv/shared';
 import type { ReactNode } from 'react';
 import { LogoMark } from './Logo';
 
-export function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+export function AuthLayout({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
   const { t } = useTranslation();
   return (
     <div className="flex min-h-screen flex-col">
@@ -20,7 +28,9 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
             <h1 className="text-2xl font-semibold">{title}</h1>
             {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
           </div>
-          <div className="rounded-xl border border-border bg-surface p-5 shadow-card sm:p-6">{children}</div>
+          <div className="rounded-xl border border-border bg-surface p-5 shadow-card sm:p-6">
+            {children}
+          </div>
           <p className="mt-6 text-center text-xs text-muted">{t('common:privacy.short')}</p>
         </div>
       </main>

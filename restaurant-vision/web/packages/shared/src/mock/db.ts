@@ -142,7 +142,11 @@ export class MockDb {
     }
   }
 
-  private addSiteRuntime(settings: SiteSettings, config: SiteConfig, installedAt: number): SiteRuntime {
+  private addSiteRuntime(
+    settings: SiteSettings,
+    config: SiteConfig,
+    installedAt: number,
+  ): SiteRuntime {
     const tables = new Map<string, TableRuntime>();
     for (const t of config.tables) {
       tables.set(t.table_id, {
@@ -180,7 +184,14 @@ export class MockDb {
 
   private seedLiveState(site: SiteRuntime): void {
     const now = this.now();
-    const states: TableState[] = ['empty', 'empty', 'seated', 'attended', 'attended', 'needs_bussing'];
+    const states: TableState[] = [
+      'empty',
+      'empty',
+      'seated',
+      'attended',
+      'attended',
+      'needs_bussing',
+    ];
     let i = 0;
     for (const t of site.tables.values()) {
       const state = i === 0 ? 'seated' : i === 1 ? 'attended' : pick(states, this.rand);
@@ -315,7 +326,9 @@ export class MockDb {
   }
 
   sitesFor(user: MockUser): SiteRuntime[] {
-    return [...this.sites.values()].filter((s) => this.roleForSite(user, s.settings.site_id) !== null);
+    return [...this.sites.values()].filter(
+      (s) => this.roleForSite(user, s.settings.site_id) !== null,
+    );
   }
 
   // ------------------------------------------------------------------ live view
@@ -395,7 +408,13 @@ export class MockDb {
   }
 
   private base<T extends EdgeEvent['type']>(siteId: string, type: T, ts = this.now()) {
-    return { type, event_id: uuidv7(ts * 1000, this.rand), site_id: siteId, ts, schema_version: '1.0' };
+    return {
+      type,
+      event_id: uuidv7(ts * 1000, this.rand),
+      site_id: siteId,
+      ts,
+      schema_version: '1.0',
+    };
   }
 
   // ------------------------------------------------------------------ alerts
@@ -441,7 +460,12 @@ export class MockDb {
   }
 
   /** Raises an alert now (tests and demos). */
-  raiseAlert(siteId: string, kind: AlertKind, tableId: string | null, severity: AlertSeverity = 'warn'): AlertView {
+  raiseAlert(
+    siteId: string,
+    kind: AlertKind,
+    tableId: string | null,
+    severity: AlertSeverity = 'warn',
+  ): AlertView {
     const site = this.sites.get(siteId);
     if (!site) throw new Error(`unknown site ${siteId}`);
     const table = tableId ? (site.tables.get(tableId) ?? null) : null;
@@ -472,7 +496,8 @@ export class MockDb {
   }
 
   alertSite(alertId: string): string | null {
-    for (const site of this.sites.values()) if (site.alerts.has(alertId)) return site.settings.site_id;
+    for (const site of this.sites.values())
+      if (site.alerts.has(alertId)) return site.settings.site_id;
     return null;
   }
 
@@ -490,7 +515,8 @@ export class MockDb {
       alert.status = 'resolved';
       alert.resolved_at = now;
       alert.resolve_reason = reason;
-      if (table) table.live.open_alert_ids = table.live.open_alert_ids.filter((id) => id !== alert.alert_id);
+      if (table)
+        table.live.open_alert_ids = table.live.open_alert_ids.filter((id) => id !== alert.alert_id);
       this.emit(site.settings.site_id, {
         ...this.base(site.settings.site_id, 'alert.resolved', now),
         alert_id: alert.alert_id,
@@ -500,7 +526,8 @@ export class MockDb {
     }
     // Drop old resolved alerts to keep memory flat.
     for (const [id, a] of site.alerts) {
-      if (a.status === 'resolved' && a.resolved_at !== null && now - a.resolved_at > 6 * 3600) site.alerts.delete(id);
+      if (a.status === 'resolved' && a.resolved_at !== null && now - a.resolved_at > 6 * 3600)
+        site.alerts.delete(id);
     }
   }
 
@@ -609,7 +636,11 @@ export class MockDb {
               const entered = site.queueEntries.shift()!;
               const zone = site.queue?.zone_id;
               if (zone) {
-                this.emit(siteId, { ...this.base(siteId, 'queue.seated', now), zone_id: zone, waited_s: now - entered });
+                this.emit(siteId, {
+                  ...this.base(siteId, 'queue.seated', now),
+                  zone_id: zone,
+                  waited_s: now - entered,
+                });
               }
             }
             this.setState(site, t, 'seated', guests);
@@ -618,7 +649,14 @@ export class MockDb {
         }
         case 'seated': {
           if (alertsOn && age > 25 && !this.hasAlert(site, t, 'waiter_needed')) {
-            this.createAlert(site, 'waiter_needed', t.live.guest_count >= 5 ? 'urgent' : 'warn', t, now, true);
+            this.createAlert(
+              site,
+              'waiter_needed',
+              t.live.guest_count >= 5 ? 'urgent' : 'warn',
+              t,
+              now,
+              true,
+            );
           }
           if (age > 6 && r() < (acked ? 0.3 : 0.04)) {
             t.visits += 1;
@@ -632,7 +670,12 @@ export class MockDb {
           if (r() < 0.012) {
             this.resolveAlerts(site, t, 'state_change');
             this.setState(site, t, 'needs_bussing', 0);
-          } else if (alertsOn && age > 40 && r() < 0.004 && !this.hasAlert(site, t, 'checkin_needed')) {
+          } else if (
+            alertsOn &&
+            age > 40 &&
+            r() < 0.004 &&
+            !this.hasAlert(site, t, 'checkin_needed')
+          ) {
             this.createAlert(site, 'checkin_needed', 'info', t, now, true);
           } else if (this.hasAlert(site, t, 'checkin_needed') && r() < (acked ? 0.3 : 0.05)) {
             t.visits += 1;
@@ -683,9 +726,15 @@ export class MockDb {
           avg_wait_s: site.queue.avg_wait_s,
         });
         const long = site.queue.people >= site.settings.thresholds.long_queue_people;
-        const openLong = [...site.alerts.values()].some((a) => a.kind === 'long_queue' && a.status !== 'resolved');
-        if (alertsOn && long && !openLong) this.createAlert(site, 'long_queue', 'warn', null, now, true);
-        if (openLong && site.queue.people <= Math.floor(site.settings.thresholds.long_queue_people / 2)) {
+        const openLong = [...site.alerts.values()].some(
+          (a) => a.kind === 'long_queue' && a.status !== 'resolved',
+        );
+        if (alertsOn && long && !openLong)
+          this.createAlert(site, 'long_queue', 'warn', null, now, true);
+        if (
+          openLong &&
+          site.queue.people <= Math.floor(site.settings.thresholds.long_queue_people / 2)
+        ) {
           this.resolveAlerts(site, null, 'state_change');
         }
       }
@@ -708,7 +757,12 @@ export class MockDb {
         d.outbox_depth = r() < 0.9 ? 0 : randInt(1, 12, r);
         d.cameras = d.cameras.map((c) => ({
           ...c,
-          fps: c.status === 'ok' ? 4.6 + Math.round(r() * 4) / 10 : c.status === 'degraded' ? 1.5 + r() : 0,
+          fps:
+            c.status === 'ok'
+              ? 4.6 + Math.round(r() * 4) / 10
+              : c.status === 'degraded'
+                ? 1.5 + r()
+                : 0,
           last_frame_age_s: c.status === 'offline' ? null : Math.round(r() * 5) / 10,
         }));
         this.emit(siteId, {
@@ -736,8 +790,15 @@ export class MockDb {
 
   // ------------------------------------------------------------------ admin mutations
 
-  createOrgWithOwner(input: { org_name: string; name: string; email: string; password: string; locale: 'he' | 'en' }): MockUser | null {
-    if ([...this.users.values()].some((u) => u.email.toLowerCase() === input.email.toLowerCase())) return null;
+  createOrgWithOwner(input: {
+    org_name: string;
+    name: string;
+    email: string;
+    password: string;
+    locale: 'he' | 'en';
+  }): MockUser | null {
+    if ([...this.users.values()].some((u) => u.email.toLowerCase() === input.email.toLowerCase()))
+      return null;
     const org: OrgInfo = { org_id: shortId('org', this.rand), name: input.org_name, plan: 'pro' };
     this.orgs.set(org.org_id, org);
     const user: MockUser = {
@@ -754,7 +815,10 @@ export class MockDb {
     return user;
   }
 
-  createSite(orgId: string, input: Pick<SiteSettings, 'name' | 'timezone' | 'locale' | 'currency' | 'avg_check_per_guest'>): SiteSettings {
+  createSite(
+    orgId: string,
+    input: Pick<SiteSettings, 'name' | 'timezone' | 'locale' | 'currency' | 'avg_check_per_guest'>,
+  ): SiteSettings {
     const siteId = shortId('site', this.rand);
     const settings: SiteSettings = {
       site_id: siteId,
@@ -784,7 +848,9 @@ export class MockDb {
   updateSite(siteId: string, patch: Partial<SiteSettings>): SiteSettings | null {
     const site = this.sites.get(siteId);
     if (!site) return null;
-    const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== null && v !== undefined));
+    const clean = Object.fromEntries(
+      Object.entries(patch).filter(([, v]) => v !== null && v !== undefined),
+    );
     site.settings = { ...site.settings, ...clean };
     site.config = {
       ...site.config,
@@ -798,8 +864,18 @@ export class MockDb {
     return structuredClone(site.settings);
   }
 
-  createUser(orgId: string, input: { email: string; name: string; password: string; locale: 'he' | 'en'; memberships: MembershipInfo[] }): MockUser | null {
-    if ([...this.users.values()].some((u) => u.email.toLowerCase() === input.email.toLowerCase())) return null;
+  createUser(
+    orgId: string,
+    input: {
+      email: string;
+      name: string;
+      password: string;
+      locale: 'he' | 'en';
+      memberships: MembershipInfo[];
+    },
+  ): MockUser | null {
+    if ([...this.users.values()].some((u) => u.email.toLowerCase() === input.email.toLowerCase()))
+      return null;
     const user: MockUser = { user_id: shortId('usr', this.rand), org_id: orgId, ...input };
     this.users.set(user.user_id, user);
     this.save();

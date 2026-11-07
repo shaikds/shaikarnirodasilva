@@ -58,7 +58,8 @@ export function createRvApi(client: ApiClient) {
     // ---------------------------------------------------------------- auth and tenancy
     signup: (body: SignupRequest) =>
       r<TokenPair>('/auth/signup', { method: 'POST', body, auth: false }),
-    login: (body: LoginRequest) => r<TokenPair>('/auth/login', { method: 'POST', body, auth: false }),
+    login: (body: LoginRequest) =>
+      r<TokenPair>('/auth/login', { method: 'POST', body, auth: false }),
     refreshTokens: (refresh_token: string) =>
       r<TokenPair>('/auth/refresh', { method: 'POST', body: { refresh_token }, auth: false }),
     me: (signal?: AbortSignal) => r<Me>('/me', { signal }),

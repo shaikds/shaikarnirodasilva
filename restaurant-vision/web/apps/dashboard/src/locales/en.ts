@@ -103,9 +103,11 @@ export const dashboardEn = {
     listView: 'List',
     viewLabel: 'Floor view',
     legend: 'Legend',
-    unplaced: '{{count}} tables are not on the floor plan yet; they are shown at the bottom. Arrange them in Settings.',
+    unplaced:
+      '{{count}} tables are not on the floor plan yet; they are shown at the bottom. Arrange them in Settings.',
     noTables: 'No tables yet',
-    noTablesBody: 'Tables are set up with the edge device setup wizard and appear here once it is paired.',
+    noTablesBody:
+      'Tables are set up with the edge device setup wizard and appear here once it is paired.',
     tableAria: '{{name}}: {{state}}. {{guests}}. {{since}}',
     tableAlerts_one: '{{count}} open alert',
     tableAlerts_other: '{{count}} open alerts',
@@ -169,7 +171,8 @@ export const dashboardEn = {
     sessions: 'Seatings',
     avgDwellMin: 'Avg dwell (min)',
     responseTitle: 'Waiter response time',
-    responseDesc: 'From "waiter needed" to the first visit at the table. Measured per table, never per employee.',
+    responseDesc:
+      'From "waiter needed" to the first visit at the table. Measured per table, never per employee.',
     p50: 'Median (p50)',
     p90: '90th percentile (p90)',
     medianOverTime: 'Median response over time (min)',
@@ -215,13 +218,16 @@ export const dashboardEn = {
       title: 'Return on investment',
       subtitle: 'Every figure in this section is an estimate, based on the method shown under it.',
       lostRevenue: 'Revenue lost to walk-aways',
-      lostRevenueMethod: 'Walk-aways ({{walkaways}}) × estimated party size × average check per guest ({{check}}).',
+      lostRevenueMethod:
+        'Walk-aways ({{walkaways}}) × estimated party size × average check per guest ({{check}}).',
       improvement: 'Faster first visit',
       improvementValue: '{{duration}} faster',
       improvementSlower: '{{duration}} slower',
-      improvementMethod: 'Median response in the first 7 days after installation ({{baseline}}) minus this shift’s median ({{current}}).',
+      improvementMethod:
+        'Median response in the first 7 days after installation ({{baseline}}) minus this shift’s median ({{current}}).',
       extraCovers: 'Extra guests served',
-      extraCoversMethod: 'Additional guests from faster table turns, counted only in hours when people were waiting at the entrance.',
+      extraCoversMethod:
+        'Additional guests from faster table turns, counted only in hours when people were waiting at the entrance.',
       extraRevenue: 'Extra revenue',
       extraRevenueMethod: 'Extra guests × average check per guest ({{check}}).',
       unknown: 'unknown',
@@ -249,7 +255,8 @@ export const dashboardEn = {
       avgCheckHint: 'Used only for ROI estimates.',
     },
     thresholds: {
-      intro: 'Timing rules the edge device uses to detect table states and raise alerts. Changes are sent to the edge device.',
+      intro:
+        'Timing rules the edge device uses to detect table states and raise alerts. Changes are sent to the edge device.',
       groups: {
         tables: 'Tables',
         alerts: 'Alerts',
@@ -270,31 +277,74 @@ export const dashboardEn = {
         afterSeat: 'Must be longer than the seat confirmation',
       },
       fields: {
-        seat_confirm_s: { label: 'Seat confirmation', help: 'Guests present this long before a table counts as seated.' },
-        leave_confirm_s: { label: 'Leave confirmation', help: 'No guests this long before the table needs bussing.' },
-        staff_visit_min_s: { label: 'Minimum staff visit', help: 'A staff member at the table this long counts as a visit.' },
-        first_visit_timeout_s: { label: '"Waiter needed" after', help: 'Seated without any visit this long raises an alert.' },
-        checkin_timeout_s: { label: '"Check-in needed" after', help: 'No visit this long after the last one raises an alert.' },
-        bussing_visit_min_s: { label: 'Bussing visit length', help: 'A staff visit this long clears the table.' },
-        bussing_timeout_s: { label: '"Bussing needed" after', help: 'A table waiting to be cleared this long raises an alert.' },
-        walkaway_min_wait_s: { label: 'Walk-away minimum wait', help: 'Guests leaving the queue after at least this long count as walk-aways.' },
-        long_queue_people: { label: 'Long queue: people', help: 'This many people waiting raises a long queue alert.' },
-        long_queue_wait_s: { label: 'Long queue: wait', help: 'The longest wait reaching this raises a long queue alert.' },
-        count_window_s: { label: 'Count smoothing window', help: 'Guest counts are smoothed over this window to ignore short occlusions.' },
-        snapshot_interval_s: { label: 'Update interval', help: 'How often occupancy and queue figures are sent.' },
-        track_id_ttl_h: { label: 'Anonymous ID rotation', help: 'Anonymous tracking IDs are replaced at least this often. At most 24 hours (privacy).' },
+        seat_confirm_s: {
+          label: 'Seat confirmation',
+          help: 'Guests present this long before a table counts as seated.',
+        },
+        leave_confirm_s: {
+          label: 'Leave confirmation',
+          help: 'No guests this long before the table needs bussing.',
+        },
+        staff_visit_min_s: {
+          label: 'Minimum staff visit',
+          help: 'A staff member at the table this long counts as a visit.',
+        },
+        first_visit_timeout_s: {
+          label: '"Waiter needed" after',
+          help: 'Seated without any visit this long raises an alert.',
+        },
+        checkin_timeout_s: {
+          label: '"Check-in needed" after',
+          help: 'No visit this long after the last one raises an alert.',
+        },
+        bussing_visit_min_s: {
+          label: 'Bussing visit length',
+          help: 'A staff visit this long clears the table.',
+        },
+        bussing_timeout_s: {
+          label: '"Bussing needed" after',
+          help: 'A table waiting to be cleared this long raises an alert.',
+        },
+        walkaway_min_wait_s: {
+          label: 'Walk-away minimum wait',
+          help: 'Guests leaving the queue after at least this long count as walk-aways.',
+        },
+        long_queue_people: {
+          label: 'Long queue: people',
+          help: 'This many people waiting raises a long queue alert.',
+        },
+        long_queue_wait_s: {
+          label: 'Long queue: wait',
+          help: 'The longest wait reaching this raises a long queue alert.',
+        },
+        count_window_s: {
+          label: 'Count smoothing window',
+          help: 'Guest counts are smoothed over this window to ignore short occlusions.',
+        },
+        snapshot_interval_s: {
+          label: 'Update interval',
+          help: 'How often occupancy and queue figures are sent.',
+        },
+        track_id_ttl_h: {
+          label: 'Anonymous ID rotation',
+          help: 'Anonymous tracking IDs are replaced at least this often. At most 24 hours (privacy).',
+        },
       },
     },
     modules: {
       intro: 'Turn analytics on or off for this branch.',
       occupancy: { label: 'Occupancy', help: 'Guests in the restaurant and tables occupied.' },
       queue: { label: 'Entrance queue', help: 'Waiting guests, wait times and walk-aways.' },
-      tables: { label: 'Table states', help: 'Empty, seated, attended and needs bussing per table.' },
+      tables: {
+        label: 'Table states',
+        help: 'Empty, seated, attended and needs bussing per table.',
+      },
       alerts: { label: 'Waiter alerts', help: 'Alerts to waiters’ phones with an “On it” button.' },
       proOnly: 'Included in the Pro plan.',
     },
     floorPlan: {
-      intro: 'Drag tables to arrange the schematic floor plan. With the keyboard: select a table, then use the arrow keys; Shift + arrows resize it.',
+      intro:
+        'Drag tables to arrange the schematic floor plan. With the keyboard: select a table, then use the arrow keys; Shift + arrows resize it.',
       gridAria: 'Floor plan editor, {{cols}} by {{rows}} grid',
       tableButton: '{{name}}, column {{x}}, row {{y}}, size {{w}} by {{h}}',
       selected: 'Selected: {{name}}',
@@ -313,10 +363,12 @@ export const dashboardEn = {
       overlap: 'Some tables overlap.',
     },
     devices: {
-      intro: 'Edge devices run the analytics inside the restaurant. Pair a new device with a one-time code.',
+      intro:
+        'Edge devices run the analytics inside the restaurant. Pair a new device with a one-time code.',
       generate: 'Generate pairing code',
       codeTitle: 'Pairing code',
-      codeHelp: 'On the edge computer run the command below, or enter the code in the setup wizard. The code expires {{time}}.',
+      codeHelp:
+        'On the edge computer run the command below, or enter the code in the setup wizard. The code expires {{time}}.',
       expired: 'This code has expired. Generate a new one.',
       columns: {
         device: 'Device',
@@ -329,7 +381,8 @@ export const dashboardEn = {
   },
   users: {
     title: 'Users & roles',
-    intro: 'Owners see all branches. Managers see one branch. Waiters only receive alerts. No metric is ever shown per person.',
+    intro:
+      'Owners see all branches. Managers see one branch. Waiters only receive alerts. No metric is ever shown per person.',
     columns: {
       name: 'Name',
       email: 'Email',
@@ -355,12 +408,14 @@ export const dashboardEn = {
   },
   compliance: {
     title: 'Compliance',
-    intro: 'Restaurant Vision is anonymous by design. Print the signage for guests and give the staff notice to employees before going live.',
+    intro:
+      'Restaurant Vision is anonymous by design. Print the signage for guests and give the staff notice to employees before going live.',
     principlesTitle: 'How privacy is protected',
     principles: {
       noFaces: 'No face recognition and no re-identification across cameras or days.',
       noVideo: 'Video is processed in memory inside the restaurant; no images leave the site.',
-      noStaff: 'Only table and zone figures: no metric is attributed to an employee, and “On it” presses are anonymous.',
+      noStaff:
+        'Only table and zone figures: no metric is attributed to an employee, and “On it” presses are anonymous.',
       rotation: 'Anonymous tracking IDs rotate at least daily.',
     },
     templatesTitle: 'Templates',

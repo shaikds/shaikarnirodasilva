@@ -1,6 +1,13 @@
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { applyDocumentLanguage, i18n, initI18n, LANGUAGE_STORAGE_KEY, setLanguage, storedLanguage } from '../i18n';
+import {
+  applyDocumentLanguage,
+  i18n,
+  initI18n,
+  LANGUAGE_STORAGE_KEY,
+  setLanguage,
+  storedLanguage,
+} from '../i18n';
 import { commonEn, commonHe } from '../i18n/resources';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
 

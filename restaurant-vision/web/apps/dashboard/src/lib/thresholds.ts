@@ -12,7 +12,10 @@ export interface ThresholdField {
   max: number;
 }
 
-export const THRESHOLD_GROUPS: { id: 'tables' | 'alerts' | 'queue' | 'system'; fields: ThresholdField[] }[] = [
+export const THRESHOLD_GROUPS: {
+  id: 'tables' | 'alerts' | 'queue' | 'system';
+  fields: ThresholdField[];
+}[] = [
   {
     id: 'tables',
     fields: [
@@ -51,10 +54,14 @@ export const THRESHOLD_GROUPS: { id: 'tables' | 'alerts' | 'queue' | 'system'; f
 export const THRESHOLD_FIELDS: ThresholdField[] = THRESHOLD_GROUPS.flatMap((g) => g.fields);
 
 export type ThresholdValues = Record<ThresholdKey, string>;
-export type ThresholdErrors = Partial<Record<ThresholdKey, { key: string; values?: Record<string, unknown> }>>;
+export type ThresholdErrors = Partial<
+  Record<ThresholdKey, { key: string; values?: Record<string, unknown> }>
+>;
 
 export function toValues(t: Thresholds): ThresholdValues {
-  return Object.fromEntries(THRESHOLD_FIELDS.map((f) => [f.key, String(t[f.key])])) as ThresholdValues;
+  return Object.fromEntries(
+    THRESHOLD_FIELDS.map((f) => [f.key, String(t[f.key])]),
+  ) as ThresholdValues;
 }
 
 /** Validates form values; returns i18n error descriptors per field (empty = valid). */
@@ -68,16 +75,25 @@ export function validateThresholds(values: ThresholdValues): ThresholdErrors {
       continue;
     }
     const v = Number(raw);
-    if (!Number.isFinite(v) || v <= 0) errors[f.key] = { key: 'settings.thresholds.errors.positive' };
-    else if (f.integer && !Number.isInteger(v)) errors[f.key] = { key: 'settings.thresholds.errors.integer' };
-    else if (v > f.max) errors[f.key] = { key: 'settings.thresholds.errors.max', values: { max: f.max } };
+    if (!Number.isFinite(v) || v <= 0)
+      errors[f.key] = { key: 'settings.thresholds.errors.positive' };
+    else if (f.integer && !Number.isInteger(v))
+      errors[f.key] = { key: 'settings.thresholds.errors.integer' };
+    else if (v > f.max)
+      errors[f.key] = { key: 'settings.thresholds.errors.max', values: { max: f.max } };
   }
-  if (!errors.first_visit_timeout_s && !errors.seat_confirm_s && num('first_visit_timeout_s') <= num('seat_confirm_s')) {
+  if (
+    !errors.first_visit_timeout_s &&
+    !errors.seat_confirm_s &&
+    num('first_visit_timeout_s') <= num('seat_confirm_s')
+  ) {
     errors.first_visit_timeout_s = { key: 'settings.thresholds.errors.afterSeat' };
   }
   return errors;
 }
 
 export function toThresholds(values: ThresholdValues): Thresholds {
-  return Object.fromEntries(THRESHOLD_FIELDS.map((f) => [f.key, Number(values[f.key])])) as unknown as Thresholds;
+  return Object.fromEntries(
+    THRESHOLD_FIELDS.map((f) => [f.key, Number(values[f.key])]),
+  ) as unknown as Thresholds;
 }

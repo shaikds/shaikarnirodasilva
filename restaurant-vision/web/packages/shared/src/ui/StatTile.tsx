@@ -22,14 +22,26 @@ const TONE: Record<NonNullable<StatTileProps['tone']>, string> = {
   success: 'border-s-4 border-s-success',
 };
 
-export function StatTile({ label, value, hint, icon, estimate, tone = 'default', className }: StatTileProps) {
+export function StatTile({
+  label,
+  value,
+  hint,
+  icon,
+  estimate,
+  tone = 'default',
+  className,
+}: StatTileProps) {
   const id = useId();
   const method = typeof estimate === 'object' ? estimate.method : null;
   return (
     <div
       role="group"
       aria-labelledby={id}
-      className={cn('flex flex-col gap-1 rounded-xl border border-border bg-surface p-4 shadow-card', TONE[tone], className)}
+      className={cn(
+        'flex flex-col gap-1 rounded-xl border border-border bg-surface p-4 shadow-card',
+        TONE[tone],
+        className,
+      )}
     >
       <div className="flex items-start justify-between gap-2">
         <span id={id} className="text-sm font-medium text-muted">

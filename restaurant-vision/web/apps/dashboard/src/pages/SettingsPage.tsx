@@ -1,4 +1,11 @@
-import { LoadingBlock, PageHeader, useMe, useSiteConfig, useSiteSettings, useTranslation } from '@rv/shared';
+import {
+  LoadingBlock,
+  PageHeader,
+  useMe,
+  useSiteConfig,
+  useSiteSettings,
+  useTranslation,
+} from '@rv/shared';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { FloorPlanEditor } from '../components/FloorPlanEditor';
 import { DetailsForm, DevicesTab, ModulesForm, ThresholdsForm } from '../components/SettingsForms';
@@ -39,7 +46,9 @@ export function SettingsPage() {
         {/* `key` remounts forms when the saved settings change underneath them. */}
         {tab === 'details' && <DetailsForm key={site.site_id} site={site} />}
         {tab === 'thresholds' && <ThresholdsForm key={site.site_id} site={site} />}
-        {tab === 'modules' && <ModulesForm key={site.site_id} site={site} plan={me.data?.org.plan ?? 'pro'} />}
+        {tab === 'modules' && (
+          <ModulesForm key={site.site_id} site={site} plan={me.data?.org.plan ?? 'pro'} />
+        )}
         {tab === 'floorPlan' &&
           (config.data ? (
             <FloorPlanEditor key={site.site_id} site={site} tables={config.data.tables} />

@@ -49,7 +49,11 @@ export function AlertsPage() {
   };
 
   return (
-    <Shell title={site.name} status={live.connection.status} banner={offline ? <OfflineBanner edgeUrl={edgeUrl} /> : null}>
+    <Shell
+      title={site.name}
+      status={live.connection.status}
+      banner={offline ? <OfflineBanner edgeUrl={edgeUrl} /> : null}
+    >
       <p aria-live="assertive" className="sr-only">
         {announcement}
       </p>
@@ -61,7 +65,9 @@ export function AlertsPage() {
       )}
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <h1 className="text-xl font-semibold">{t('alerts.title')}</h1>
-        {open.length > 0 && <span className="text-sm text-muted">{t('alerts.count', { count: open.length })}</span>}
+        {open.length > 0 && (
+          <span className="text-sm text-muted">{t('alerts.count', { count: open.length })}</span>
+        )}
       </div>
       {live.isLoading ? (
         <LoadingBlock />

@@ -25,10 +25,7 @@
       "purpose": "maskable"
     }
   ],
-  "categories": [
-    "business",
-    "productivity"
-  ],
+  "categories": ["business", "productivity"],
   "translations": {
     "en": {
       "name": "Restaurant Vision – Waiter alerts",

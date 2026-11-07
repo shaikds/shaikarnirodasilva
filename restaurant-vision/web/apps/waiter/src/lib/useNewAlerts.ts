@@ -32,7 +32,11 @@ export function useNewAlerts(alerts: AlertView[] | undefined, siteId: string | u
     if (sound) playAlertSound(urgent);
     if (vib) vibrate(urgent);
     const latest = fresh[fresh.length - 1]!;
-    setAnnouncement(t('alerts.newAlert', { what: `${alertTitle(latest, t)} · ${t(`common:alertKind.${latest.kind}`)}` }));
+    setAnnouncement(
+      t('alerts.newAlert', {
+        what: `${alertTitle(latest, t)} · ${t(`common:alertKind.${latest.kind}`)}`,
+      }),
+    );
     if (typeof document !== 'undefined' && document.hidden) {
       for (const a of fresh) {
         const { title, options } = buildNotification(a, currentLanguage());

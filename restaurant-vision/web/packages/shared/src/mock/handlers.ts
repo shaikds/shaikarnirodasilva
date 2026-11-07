@@ -22,7 +22,8 @@ import { MOCK_VAPID_PUBLIC_KEY, type MockUser } from './seed';
 
 const API = '*/api/v1';
 
-const detail = (status: number, message: string) => HttpResponse.json({ detail: message }, { status });
+const detail = (status: number, message: string) =>
+  HttpResponse.json({ detail: message }, { status });
 
 function bearer(request: Request): string | null {
   const h = request.headers.get('Authorization');
@@ -110,7 +111,13 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
     // ------------------------------------------------------------ auth
     http.post(`${API}/auth/signup`, async ({ request }) => {
       const body = (await request.json()) as SignupRequest;
-      if (!body.email || !body.password || body.password.length < 8 || !body.org_name || !body.name) {
+      if (
+        !body.email ||
+        !body.password ||
+        body.password.length < 8 ||
+        !body.org_name ||
+        !body.name
+      ) {
         return detail(422, 'Invalid signup data');
       }
       const user = db.createOrgWithOwner({ ...body, locale: body.locale ?? 'he' });
@@ -134,7 +141,9 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
         user: { user_id: user.user_id, email: user.email, name: user.name, locale: user.locale },
         org: db.orgs.get(user.org_id),
         memberships: user.memberships,
-        sites: db.sitesFor(user).map((s) => ({ site_id: s.settings.site_id, name: s.settings.name })),
+        sites: db
+          .sitesFor(user)
+          .map((s) => ({ site_id: s.settings.site_id, name: s.settings.name })),
       });
     }),
 
@@ -153,7 +162,8 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       const user = orgAccess(request, String(params.orgId), owner);
       if (user instanceof Response) return user;
       const body = (await request.json()) as SiteCreate;
-      if (!body.name?.trim() || !body.timezone) return detail(422, 'name and timezone are required');
+      if (!body.name?.trim() || !body.timezone)
+        return detail(422, 'name and timezone are required');
       return HttpResponse.json(
         db.createSite(user.org_id, {
           name: body.name.trim(),
@@ -178,14 +188,17 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       const patch = (await request.json()) as SiteSettingsPatch;
       if (db.roleForSite(user, siteId) === 'manager') {
         const keys = Object.keys(patch).filter((k) => patch[k as keyof SiteSettingsPatch] != null);
-        if (keys.some((k) => k !== 'thresholds')) return detail(403, 'Managers can change thresholds only');
+        if (keys.some((k) => k !== 'thresholds'))
+          return detail(403, 'Managers can change thresholds only');
       }
       const err = validThresholds(patch.thresholds);
       if (err) return detail(422, err);
-      if (patch.avg_check_per_guest != null && patch.avg_check_per_guest < 0) return detail(422, 'avg_check_per_guest must be >= 0');
+      if (patch.avg_check_per_guest != null && patch.avg_check_per_guest < 0)
+        return detail(422, 'avg_check_per_guest must be >= 0');
       if (patch.floor_plan) {
         const ids = new Set(db.sites.get(siteId)!.config.tables.map((t) => t.table_id));
-        if (patch.floor_plan.some((f) => !ids.has(f.table_id))) return detail(422, 'unknown table_id in floor_plan');
+        if (patch.floor_plan.some((f) => !ids.has(f.table_id)))
+          return detail(422, 'unknown table_id in floor_plan');
       }
       const { floor_plan, thresholds, modules, ...rest } = patch;
       return HttpResponse.json(
@@ -216,11 +229,14 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       const user = orgAccess(request, String(params.orgId), owner);
       if (user instanceof Response) return user;
       const body = (await request.json()) as UserCreate;
-      if (!body.email || !body.name || !body.password || body.password.length < 8) return detail(422, 'Invalid user');
+      if (!body.email || !body.name || !body.password || body.password.length < 8)
+        return detail(422, 'Invalid user');
       const err = validMemberships(db, user.org_id, body.memberships ?? []);
       if (err) return detail(422, err);
       const created = db.createUser(user.org_id, { ...body, locale: body.locale ?? 'he' });
-      return created ? HttpResponse.json(orgUser(created), { status: 201 }) : detail(409, 'Email already exists');
+      return created
+        ? HttpResponse.json(orgUser(created), { status: 201 })
+        : detail(409, 'Email already exists');
     }),
     http.patch(`${API}/orgs/:orgId/users/:userId`, async ({ request, params }) => {
       const user = orgAccess(request, String(params.orgId), owner);
@@ -337,7 +353,12 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       const s = db.sites.get(siteId)!;
       const { from, to } = rangeOf(new URL(request.url), db.now());
       return HttpResponse.json(
-        metrics.summary({ settings: s.settings, tables: s.config.tables, installedAt: s.installedAt }, from, to, db.now()),
+        metrics.summary(
+          { settings: s.settings, tables: s.config.tables, installedAt: s.installedAt },
+          from,
+          to,
+          db.now(),
+        ),
       );
     }),
     http.get(`${API}/sites/:siteId/metrics/timeseries`, ({ request, params }) => {
@@ -347,12 +368,20 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       const url = new URL(request.url);
       const metric = (url.searchParams.get('metric') ?? 'occupancy') as TimeseriesMetric;
       const bucket = (url.searchParams.get('bucket') ?? '15m') as Bucket;
-      if (!['occupancy', 'queue', 'walkaways', 'response_time'].includes(metric)) return detail(422, 'unknown metric');
+      if (!['occupancy', 'queue', 'walkaways', 'response_time'].includes(metric))
+        return detail(422, 'unknown metric');
       if (!['5m', '15m', '1h', '1d'].includes(bucket)) return detail(422, 'unknown bucket');
       const s = db.sites.get(siteId)!;
       const { from, to } = rangeOf(url, db.now());
       return HttpResponse.json(
-        metrics.timeseries({ settings: s.settings, tables: s.config.tables, installedAt: s.installedAt }, metric, bucket, from, to, db.now()),
+        metrics.timeseries(
+          { settings: s.settings, tables: s.config.tables, installedAt: s.installedAt },
+          metric,
+          bucket,
+          from,
+          to,
+          db.now(),
+        ),
       );
     }),
     http.get(`${API}/sites/:siteId/tables/stats`, ({ request, params }) => {
@@ -362,7 +391,12 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       const s = db.sites.get(siteId)!;
       const { from, to } = rangeOf(new URL(request.url), db.now());
       return HttpResponse.json(
-        metrics.tableStats({ settings: s.settings, tables: s.config.tables, installedAt: s.installedAt }, from, to, db.now()),
+        metrics.tableStats(
+          { settings: s.settings, tables: s.config.tables, installedAt: s.installedAt },
+          from,
+          to,
+          db.now(),
+        ),
       );
     }),
     http.get(`${API}/sites/:siteId/reports/shift`, ({ request, params }) => {
@@ -373,7 +407,11 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return detail(422, 'date must be YYYY-MM-DD');
       const s = db.sites.get(siteId)!;
       return HttpResponse.json(
-        metrics.shiftReport({ settings: s.settings, tables: s.config.tables, installedAt: s.installedAt }, date, db.now()),
+        metrics.shiftReport(
+          { settings: s.settings, tables: s.config.tables, installedAt: s.installedAt },
+          date,
+          db.now(),
+        ),
       );
     }),
     http.get(`${API}/orgs/:orgId/reports/compare`, ({ request, params }) => {
@@ -387,7 +425,12 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
         sites: db
           .sitesFor(user)
           .map((s) =>
-            metrics.summary({ settings: s.settings, tables: s.config.tables, installedAt: s.installedAt }, from, to, db.now()),
+            metrics.summary(
+              { settings: s.settings, tables: s.config.tables, installedAt: s.installedAt },
+              from,
+              to,
+              db.now(),
+            ),
           ),
       });
     }),
@@ -405,7 +448,11 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       if (!body.endpoint?.startsWith('https://') || !body.keys?.p256dh || !body.keys?.auth) {
         return detail(422, 'Invalid subscription');
       }
-      const sub = { subscription_id: shortId('sub'), site_id: body.site_id, endpoint: body.endpoint };
+      const sub = {
+        subscription_id: shortId('sub'),
+        site_id: body.site_id,
+        endpoint: body.endpoint,
+      };
       db.pushSubscriptions.set(sub.subscription_id, sub);
       return HttpResponse.json(sub, { status: 201 });
     }),

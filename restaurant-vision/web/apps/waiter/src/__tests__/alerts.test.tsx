@@ -30,14 +30,21 @@ beforeEach(async () => {
   vi.mocked(vibrate).mockClear();
 });
 
-function raiseAt(secondsAgo: number, tableId: string, kind: 'waiter_needed' | 'bussing_needed' = 'waiter_needed') {
+function raiseAt(
+  secondsAgo: number,
+  tableId: string,
+  kind: 'waiter_needed' | 'bussing_needed' = 'waiter_needed',
+) {
   clock = Date.now() / 1000 - secondsAgo;
   const a = db.raiseAlert('site-tlv', kind, tableId);
   clock = Date.now() / 1000;
   return a;
 }
 
-const cardTitles = (list: HTMLElement) => within(list).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+const cardTitles = (list: HTMLElement) =>
+  within(list)
+    .getAllByRole('heading', { level: 3 })
+    .map((h) => h.textContent);
 
 describe('waiter alerts', () => {
   it('lists open alerts oldest first with label, kind, timer and a big "On it" button', async () => {
@@ -77,7 +84,9 @@ describe('waiter alerts', () => {
     signInAs(db, 'waiter@zayit.demo');
     renderWaiter('/');
     await screen.findByRole('list', { name: 'Open alerts' });
-    await waitFor(() => expect(screen.getByRole('status', { name: /Live connection: Live/ })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: /Live connection: Live/ })).toBeInTheDocument(),
+    );
     expect(playAlertSound).not.toHaveBeenCalled();
     act(() => {
       db.raiseAlert('site-tlv', 'waiter_needed', 'tlv-t7', 'urgent');

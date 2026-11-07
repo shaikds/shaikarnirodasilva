@@ -24,4 +24,3 @@ export function byHourOfDay(series: Timeseries | undefined, timeZone: string): C
   }
   return out;
 }
-

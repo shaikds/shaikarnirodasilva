@@ -22,7 +22,11 @@ export function ConnectionBadge({ status, className }: { status: LiveStatus; cla
     >
       <span
         aria-hidden="true"
-        className={cn('h-2.5 w-2.5 rounded-full', DOT[status], status === 'open' && 'motion-safe:animate-pulse')}
+        className={cn(
+          'h-2.5 w-2.5 rounded-full',
+          DOT[status],
+          status === 'open' && 'motion-safe:animate-pulse',
+        )}
       />
       {text}
     </span>

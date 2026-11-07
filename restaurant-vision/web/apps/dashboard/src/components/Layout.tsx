@@ -74,7 +74,9 @@ export function Layout() {
   const nav = (
     <div className="flex flex-col gap-4">
       {access.role === 'owner' && (
-        <ul className="flex flex-col gap-1">{link('/', t('nav.overview'), LayoutDashboard, true)}</ul>
+        <ul className="flex flex-col gap-1">
+          {link('/', t('nav.overview'), LayoutDashboard, true)}
+        </ul>
       )}
       {siteId && (
         <div>
@@ -92,7 +94,9 @@ export function Layout() {
         </div>
       )}
       <div>
-        <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">{t('nav.orgSection')}</p>
+        <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">
+          {t('nav.orgSection')}
+        </p>
         <ul className="flex flex-col gap-1">
           {canOpen(access, 'users') && link('/users', t('nav.users'), Users)}
           {link('/compliance', t('nav.compliance'), ShieldCheck)}

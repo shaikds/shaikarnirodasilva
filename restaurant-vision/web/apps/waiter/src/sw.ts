@@ -2,7 +2,11 @@
 // Waiter PWA service worker: precaches the app shell, shows a notification for every Web Push
 // (table label + alert kind, in the user's language) and focuses the app on click.
 import { clientsClaim } from 'workbox-core';
-import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
+import {
+  cleanupOutdatedCaches,
+  createHandlerBoundToURL,
+  precacheAndRoute,
+} from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { buildNotification, normalizePayload } from './lib/notification';
 
@@ -12,7 +16,9 @@ declare const self: ServiceWorkerGlobalScope & {
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html'), { denylist: [/^\/api\//] }));
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('index.html'), { denylist: [/^\/api\//] }),
+);
 
 void self.skipWaiting();
 clientsClaim();
@@ -51,7 +57,11 @@ self.addEventListener('push', (event) => {
   }
   event.waitUntil(
     currentLang().then((l) => {
-      const { title, options } = buildNotification(normalizePayload(data), l, `${self.registration.scope}icon.svg`);
+      const { title, options } = buildNotification(
+        normalizePayload(data),
+        l,
+        `${self.registration.scope}icon.svg`,
+      );
       return self.registration.showNotification(title, options);
     }),
   );

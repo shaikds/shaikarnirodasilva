@@ -60,7 +60,12 @@ const report: ShiftReport = {
 describe('ROI estimates', () => {
   it('badges every ROI number as an estimate and explains the method', () => {
     render(<RoiSection report={report} />, { wrapper: TestProviders });
-    const names = ['Revenue lost to walk-aways', 'Faster first visit', 'Extra guests served', 'Extra revenue'];
+    const names = [
+      'Revenue lost to walk-aways',
+      'Faster first visit',
+      'Extra guests served',
+      'Extra revenue',
+    ];
     for (const name of names) {
       const tile = screen.getByRole('group', { name });
       expect(within(tile).getByText('Estimate')).toBeInTheDocument();
@@ -68,8 +73,12 @@ describe('ROI estimates', () => {
     }
     const lost = screen.getByRole('group', { name: 'Revenue lost to walk-aways' });
     expect(lost).toHaveTextContent('₪2,088');
-    expect(lost).toHaveTextContent('Walk-aways (6) × estimated party size × average check per guest (₪145).');
-    expect(screen.getByRole('group', { name: 'Faster first visit' })).toHaveTextContent('2 min faster');
+    expect(lost).toHaveTextContent(
+      'Walk-aways (6) × estimated party size × average check per guest (₪145).',
+    );
+    expect(screen.getByRole('group', { name: 'Faster first visit' })).toHaveTextContent(
+      '2 min faster',
+    );
   });
 
   it('uses the Hebrew badge text', async () => {
@@ -79,7 +88,10 @@ describe('ROI estimates', () => {
   });
 
   it('says "not enough data" instead of a number when an estimate is null', () => {
-    const empty = { ...report, roi: { ...report.roi, extra_covers: est(null), extra_revenue: est(null) } };
+    const empty = {
+      ...report,
+      roi: { ...report.roi, extra_covers: est(null), extra_revenue: est(null) },
+    };
     render(<RoiSection report={empty} />, { wrapper: TestProviders });
     const covers = screen.getByRole('group', { name: 'Extra guests served' });
     expect(covers).toHaveTextContent('Not enough data');

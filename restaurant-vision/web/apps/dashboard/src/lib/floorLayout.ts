@@ -23,10 +23,16 @@ export function layoutTables(tables: TableLive[], plan: FloorPlanItem[]) {
   let rows = Math.max(0, ...placed.map((p) => p.y + p.h));
   const startRow = rows > 0 ? rows + 1 : 0;
   unplaced.forEach((t, i) => {
-    placed.push({ table: t, x: i % cols, y: startRow + Math.floor(i / cols), w: 1, h: 1, placed: false });
+    placed.push({
+      table: t,
+      x: i % cols,
+      y: startRow + Math.floor(i / cols),
+      w: 1,
+      h: 1,
+      placed: false,
+    });
   });
   cols = Math.max(cols, ...placed.map((p) => p.x + p.w));
   rows = Math.max(rows, ...placed.map((p) => p.y + p.h));
   return { items: placed, cols, rows, unplacedCount: unplaced.length };
 }
-

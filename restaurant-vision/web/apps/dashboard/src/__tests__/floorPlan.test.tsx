@@ -22,17 +22,34 @@ describe('FloorPlan', () => {
   beforeEach(() => setupDashboardI18n('en'));
 
   it('renders every table state with an accessible label', () => {
-    render(<FloorPlan tables={tables} layout={layout} now={NOW} siteName="Tel Aviv" />, { wrapper: TestProviders });
-    expect(screen.getByRole('group', { name: 'Floor plan of Tel Aviv: 4 tables' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Table 1: Empty. 0 guests. for 4 min' })).toHaveAttribute('data-state', 'empty');
-    expect(screen.getByRole('img', { name: 'Table 2: Seated. 3 guests. for 4 min. 1 open alert' })).toHaveAttribute('data-state', 'seated');
-    expect(screen.getByRole('img', { name: 'Table 3: Attended. 3 guests. for 4 min' })).toHaveAttribute('data-state', 'attended');
-    expect(screen.getByRole('img', { name: 'Table 4: Needs bussing. 0 guests. for 4 min' })).toHaveAttribute('data-state', 'needs_bussing');
+    render(<FloorPlan tables={tables} layout={layout} now={NOW} siteName="Tel Aviv" />, {
+      wrapper: TestProviders,
+    });
+    expect(
+      screen.getByRole('group', { name: 'Floor plan of Tel Aviv: 4 tables' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: 'Table 1: Empty. 0 guests. for 4 min' }),
+    ).toHaveAttribute('data-state', 'empty');
+    expect(
+      screen.getByRole('img', { name: 'Table 2: Seated. 3 guests. for 4 min. 1 open alert' }),
+    ).toHaveAttribute('data-state', 'seated');
+    expect(
+      screen.getByRole('img', { name: 'Table 3: Attended. 3 guests. for 4 min' }),
+    ).toHaveAttribute('data-state', 'attended');
+    expect(
+      screen.getByRole('img', { name: 'Table 4: Needs bussing. 0 guests. for 4 min' }),
+    ).toHaveAttribute('data-state', 'needs_bussing');
   });
 
   it('colors each state with its own token and shows label, guests and timer', () => {
-    const { container } = render(<FloorPlan tables={tables} layout={layout} now={NOW} siteName="x" />, { wrapper: TestProviders });
-    const fills = TABLE_STATES.map((s) => container.querySelector(`[data-state="${s}"] rect`)!.getAttribute('style'));
+    const { container } = render(
+      <FloorPlan tables={tables} layout={layout} now={NOW} siteName="x" />,
+      { wrapper: TestProviders },
+    );
+    const fills = TABLE_STATES.map((s) =>
+      container.querySelector(`[data-state="${s}"] rect`)!.getAttribute('style'),
+    );
     expect(fills[0]).toContain('--rv-state-empty-bg');
     expect(fills[1]).toContain('--rv-state-seated-bg');
     expect(fills[2]).toContain('--rv-state-attended-bg');
@@ -46,9 +63,17 @@ describe('FloorPlan', () => {
 
   it('labels tables in Hebrew and mirrors the grid in RTL', async () => {
     await setupDashboardI18n('he');
-    const { container } = render(<FloorPlan tables={tables.slice(0, 1)} layout={[{ table_id: 't1', x: 0, y: 0, w: 1, h: 1 }]} now={NOW} siteName="תל אביב" />, {
-      wrapper: TestProviders,
-    });
+    const { container } = render(
+      <FloorPlan
+        tables={tables.slice(0, 1)}
+        layout={[{ table_id: 't1', x: 0, y: 0, w: 1, h: 1 }]}
+        now={NOW}
+        siteName="תל אביב"
+      />,
+      {
+        wrapper: TestProviders,
+      },
+    );
     expect(screen.getByRole('img', { name: /^שולחן 1: פנוי/ })).toBeInTheDocument();
     // x = 0 is the start edge, i.e. the right-most column (6 columns min, 100 units each).
     expect(container.querySelector('rect')!.getAttribute('x')).toBe('506');
@@ -63,6 +88,7 @@ describe('FloorPlan', () => {
 
   it('list view shows state chips with text', () => {
     render(<FloorList tables={tables} now={NOW} />, { wrapper: TestProviders });
-    for (const label of ['Empty', 'Seated', 'Attended', 'Needs bussing']) expect(screen.getByText(label)).toBeInTheDocument();
+    for (const label of ['Empty', 'Seated', 'Attended', 'Needs bussing'])
+      expect(screen.getByText(label)).toBeInTheDocument();
   });
 });

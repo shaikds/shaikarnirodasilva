@@ -125,7 +125,14 @@ export interface SwitchProps {
 }
 
 /** On/off switch (`role="switch"`), label clickable, keyboard: Space/Enter. */
-export function Switch({ checked, onChange, label, description, disabled, id: idProp }: SwitchProps) {
+export function Switch({
+  checked,
+  onChange,
+  label,
+  description,
+  disabled,
+  id: idProp,
+}: SwitchProps) {
   const autoId = useId();
   const id = idProp ?? autoId;
   return (

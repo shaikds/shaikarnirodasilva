@@ -56,8 +56,25 @@ export function LoginPage() {
           <p className="text-muted">{t('login.subtitle')}</p>
         </div>
         <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-          <TextField label={t('login.email')} type="email" inputMode="email" autoComplete="username" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} className="min-h-[52px] text-base" />
-          <TextField label={t('login.password')} type="password" autoComplete="current-password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} className="min-h-[52px] text-base" />
+          <TextField
+            label={t('login.email')}
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            dir="ltr"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="min-h-[52px] text-base"
+          />
+          <TextField
+            label={t('login.password')}
+            type="password"
+            autoComplete="current-password"
+            dir="ltr"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="min-h-[52px] text-base"
+          />
           {error && (
             <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
               {error}
@@ -70,7 +87,12 @@ export function LoginPage() {
         {rvEnv.mock && (
           <div className="mt-6 border-t border-border pt-4 text-center">
             <p className="mb-2 text-sm text-muted">{t('login.demoTitle')}</p>
-            <Button variant="secondary" size="lg" block onClick={() => submit({ email: demo.email, password: DEMO_PASSWORD })}>
+            <Button
+              variant="secondary"
+              size="lg"
+              block
+              onClick={() => submit({ email: demo.email, password: DEMO_PASSWORD })}
+            >
               {t('login.demoWaiter')}
             </Button>
           </div>

@@ -16,7 +16,9 @@ export interface OfflineInputs {
 
 /** True once any channel has been down for more than OFFLINE_AFTER_MS. */
 export function isOffline(i: OfflineInputs): boolean {
-  const since = [i.apiDownSince, i.wsDownSince, i.browserOfflineSince].filter((v): v is number => v !== null);
+  const since = [i.apiDownSince, i.wsDownSince, i.browserOfflineSince].filter(
+    (v): v is number => v !== null,
+  );
   if (since.length === 0) return false;
   return i.nowMs - Math.min(...since) > OFFLINE_AFTER_MS;
 }

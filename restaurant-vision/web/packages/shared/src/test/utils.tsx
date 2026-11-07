@@ -12,7 +12,10 @@ import type { MockDb } from '../mock/db';
 export const TEST_ORIGIN = 'http://localhost:3000';
 
 /** Initializes i18n synchronously in `lng` (default English for readable assertions). */
-export async function setupTestI18n(lng: Locale = 'en', options: Omit<InitI18nOptions, 'lng'> = {}) {
+export async function setupTestI18n(
+  lng: Locale = 'en',
+  options: Omit<InitI18nOptions, 'lng'> = {},
+) {
   initI18n({ ...options, lng });
   if (i18n.language !== lng) await i18n.changeLanguage(lng);
   return i18n;
@@ -27,9 +30,18 @@ export function createTestQueryClient(): QueryClient {
   return qc;
 }
 
-export function TestProviders({ children, queryClient }: { children: ReactNode; queryClient?: QueryClient }) {
+export function TestProviders({
+  children,
+  queryClient,
+}: {
+  children: ReactNode;
+  queryClient?: QueryClient;
+}) {
   return (
-    <RvProvider queryClient={queryClient ?? createTestQueryClient()} api={createDefaultApi(TEST_ORIGIN)}>
+    <RvProvider
+      queryClient={queryClient ?? createTestQueryClient()}
+      api={createDefaultApi(TEST_ORIGIN)}
+    >
       {children}
     </RvProvider>
   );
@@ -44,7 +56,9 @@ export function renderWithProviders(
     queryClient,
     ...render(ui, {
       ...options,
-      wrapper: ({ children }) => <TestProviders queryClient={queryClient}>{children}</TestProviders>,
+      wrapper: ({ children }) => (
+        <TestProviders queryClient={queryClient}>{children}</TestProviders>
+      ),
     }),
   };
 }

@@ -41,7 +41,17 @@ export const buttonClass = (
   );
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'primary', size = 'md', loading = false, block = false, className, children, disabled, type, ...rest },
+  {
+    variant = 'primary',
+    size = 'md',
+    loading = false,
+    block = false,
+    className,
+    children,
+    disabled,
+    type,
+    ...rest
+  },
   ref,
 ) {
   return (

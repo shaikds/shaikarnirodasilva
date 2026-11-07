@@ -73,7 +73,11 @@ export function formatElapsed(seconds: number): string {
 }
 
 /** "4 minutes ago" / "לפני 4 דקות" for an epoch-seconds timestamp. */
-export function formatRelativeTime(tsSeconds: number, lng: Locale, nowSeconds = Date.now() / 1000): string {
+export function formatRelativeTime(
+  tsSeconds: number,
+  lng: Locale,
+  nowSeconds = Date.now() / 1000,
+): string {
   const diff = tsSeconds - nowSeconds;
   const abs = Math.abs(diff);
   const rtf = new Intl.RelativeTimeFormat(intlLocale(lng), { numeric: 'auto' });

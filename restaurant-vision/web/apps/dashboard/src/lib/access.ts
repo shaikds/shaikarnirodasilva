@@ -3,17 +3,16 @@
 import { accessFromMe, canAccessSite, useAuthStore, useMe, type Access } from '@rv/shared';
 import { useParams } from 'react-router-dom';
 
-export type Landing =
-  | { kind: 'path'; path: string }
-  | { kind: 'waiter' }
-  | { kind: 'no-access' };
+export type Landing = { kind: 'path'; path: string } | { kind: 'waiter' } | { kind: 'no-access' };
 
 export function landingFor(access: Access): Landing {
   switch (access.role) {
     case 'owner':
       return { kind: 'path', path: '/' };
     case 'manager':
-      return access.siteId ? { kind: 'path', path: `/sites/${access.siteId}/live` } : { kind: 'no-access' };
+      return access.siteId
+        ? { kind: 'path', path: `/sites/${access.siteId}/live` }
+        : { kind: 'no-access' };
     case 'waiter':
       return { kind: 'waiter' };
     default:
@@ -22,7 +21,8 @@ export function landingFor(access: Access): Landing {
 }
 
 /** Pages and who may open them. Site pages additionally require access to that site. */
-export type PageId = 'overview' | 'live' | 'analytics' | 'report' | 'settings' | 'users' | 'compliance';
+export type PageId =
+  'overview' | 'live' | 'analytics' | 'report' | 'settings' | 'users' | 'compliance';
 
 const PAGE_ROLES: Record<PageId, Access['role'][]> = {
   overview: ['owner'],

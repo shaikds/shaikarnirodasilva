@@ -23,7 +23,8 @@ export function RequireAuth() {
     if (authFailed) logout();
   }, [authFailed, logout]);
 
-  if (!signedIn || authFailed) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!signedIn || authFailed)
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   if (me.isLoading || !me.data) {
     if (me.isError) return <ForbiddenPage />;
     return <LoadingBlock />;

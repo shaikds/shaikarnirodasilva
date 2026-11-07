@@ -1,6 +1,12 @@
 export { AppShell, PageHeader, navItemClass, type AppShellProps } from './AppShell';
 export { Badge, type BadgeProps, type BadgeTone } from './Badge';
-export { Button, buttonClass, type ButtonProps, type ButtonSize, type ButtonVariant } from './Button';
+export {
+  Button,
+  buttonClass,
+  type ButtonProps,
+  type ButtonSize,
+  type ButtonVariant,
+} from './Button';
 export { Card, type CardProps } from './Card';
 export { ConnectionBadge } from './ConnectionBadge';
 export { EmptyState, type EmptyStateProps } from './EmptyState';

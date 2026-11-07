@@ -69,7 +69,11 @@ export function AppShell({ brand, nav, headerEnd, banner, children, navKey }: Ap
               aria-controls="rv-mobile-nav"
               onClick={() => setOpen((v) => !v)}
             >
-              {open ? <X aria-hidden="true" className="h-5 w-5" /> : <Menu aria-hidden="true" className="h-5 w-5" />}
+              {open ? (
+                <X aria-hidden="true" className="h-5 w-5" />
+              ) : (
+                <Menu aria-hidden="true" className="h-5 w-5" />
+              )}
             </button>
           )}
           <div className="flex min-w-0 items-center gap-2">{brand}</div>
@@ -103,7 +107,11 @@ export function AppShell({ brand, nav, headerEnd, banner, children, navKey }: Ap
             </div>
           </div>
         )}
-        <main id="main" tabIndex={-1} className="min-w-0 flex-1 px-4 py-4 focus:outline-none sm:px-6 sm:py-6">
+        <main
+          id="main"
+          tabIndex={-1}
+          className="min-w-0 flex-1 px-4 py-4 focus:outline-none sm:px-6 sm:py-6"
+        >
           {children}
         </main>
       </div>

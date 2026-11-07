@@ -54,19 +54,30 @@ function SiteCard({ site }: { site: SiteSummary }) {
             <Users aria-hidden="true" className="h-3.5 w-3.5" />
             {t('overview.guestsNow')}
           </dt>
-          <dd className="text-2xl font-semibold">{site.guests === null ? t('overview.noData') : f.number(site.guests)}</dd>
+          <dd className="text-2xl font-semibold">
+            {site.guests === null ? t('overview.noData') : f.number(site.guests)}
+          </dd>
         </div>
         <div>
           <dt className="flex items-center gap-1 text-xs text-muted">
             <Bell aria-hidden="true" className="h-3.5 w-3.5" />
             {t('overview.openAlerts')}
           </dt>
-          <dd className={site.open_alerts > 0 ? 'text-2xl font-semibold text-warning' : 'text-2xl font-semibold'}>
+          <dd
+            className={
+              site.open_alerts > 0
+                ? 'text-2xl font-semibold text-warning'
+                : 'text-2xl font-semibold'
+            }
+          >
             {f.number(site.open_alerts)}
           </dd>
         </div>
       </dl>
-      <Link to={`/sites/${site.site_id}/live`} className={buttonClass('secondary', 'sm', 'mt-4 w-full')}>
+      <Link
+        to={`/sites/${site.site_id}/live`}
+        className={buttonClass('secondary', 'sm', 'mt-4 w-full')}
+      >
         {t('overview.openLive')}
       </Link>
     </Card>
@@ -84,14 +95,30 @@ function CompareTable({ rows, names }: { rows: MetricsSummary[]; names: Map<stri
         <caption className="sr-only">{t('overview.compareTitle')}</caption>
         <thead>
           <tr className="border-b border-border">
-            <th scope="col" className={th}>{t('overview.columns.site')}</th>
-            <th scope="col" className={th}>{t('overview.columns.guests')}</th>
-            <th scope="col" className={th}>{t('overview.columns.sessions')}</th>
-            <th scope="col" className={th}>{t('overview.columns.avgDwell')}</th>
-            <th scope="col" className={th}>{t('overview.columns.turnover')}</th>
-            <th scope="col" className={th}>{t('overview.columns.responseP50')}</th>
-            <th scope="col" className={th}>{t('overview.columns.queueWait')}</th>
-            <th scope="col" className={th}>{t('overview.columns.walkaways')}</th>
+            <th scope="col" className={th}>
+              {t('overview.columns.site')}
+            </th>
+            <th scope="col" className={th}>
+              {t('overview.columns.guests')}
+            </th>
+            <th scope="col" className={th}>
+              {t('overview.columns.sessions')}
+            </th>
+            <th scope="col" className={th}>
+              {t('overview.columns.avgDwell')}
+            </th>
+            <th scope="col" className={th}>
+              {t('overview.columns.turnover')}
+            </th>
+            <th scope="col" className={th}>
+              {t('overview.columns.responseP50')}
+            </th>
+            <th scope="col" className={th}>
+              {t('overview.columns.queueWait')}
+            </th>
+            <th scope="col" className={th}>
+              {t('overview.columns.walkaways')}
+            </th>
             <th scope="col" className={th}>
               <span className="inline-flex items-center gap-1">
                 {t('overview.columns.lostRevenue')} <EstimateBadge />
@@ -134,7 +161,10 @@ function NewSiteForm({ orgId, onDone }: { orgId: string; onDone: () => void }) {
   const [touched, setTouched] = useState(false);
   const nameError = touched && !name.trim() ? t('auth.errors.required') : undefined;
   const checkNum = Number(avgCheck);
-  const checkError = touched && (!Number.isFinite(checkNum) || checkNum < 0) ? t('settings.thresholds.errors.positive') : undefined;
+  const checkError =
+    touched && (!Number.isFinite(checkNum) || checkNum < 0)
+      ? t('settings.thresholds.errors.positive')
+      : undefined;
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -154,15 +184,31 @@ function NewSiteForm({ orgId, onDone }: { orgId: string; onDone: () => void }) {
   return (
     <Card title={t('overview.newSite.title')} className="mb-6">
       <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextField label={t('overview.newSite.name')} value={name} onChange={(e) => setName(e.target.value)} error={nameError} required maxLength={64} />
-        <SelectField label={t('overview.newSite.timezone')} value={timezone} onChange={(e) => setTimezone(e.target.value)} dir="ltr">
+        <TextField
+          label={t('overview.newSite.name')}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          error={nameError}
+          required
+          maxLength={64}
+        />
+        <SelectField
+          label={t('overview.newSite.timezone')}
+          value={timezone}
+          onChange={(e) => setTimezone(e.target.value)}
+          dir="ltr"
+        >
           {TIMEZONES.map((tz) => (
             <option key={tz} value={tz}>
               {tz}
             </option>
           ))}
         </SelectField>
-        <SelectField label={t('overview.newSite.currency')} value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
+        <SelectField
+          label={t('overview.newSite.currency')}
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value as Currency)}
+        >
           {CURRENCIES.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -213,7 +259,11 @@ export function OverviewPage() {
     <>
       <PageHeader
         title={t('overview.title')}
-        subtitle={me.data ? t('overview.subtitle', { org: me.data.org.name, count: sites.data?.length ?? 0 }) : undefined}
+        subtitle={
+          me.data
+            ? t('overview.subtitle', { org: me.data.org.name, count: sites.data?.length ?? 0 })
+            : undefined
+        }
         actions={
           !adding && (
             <Button onClick={() => setAdding(true)}>
@@ -246,7 +296,11 @@ export function OverviewPage() {
             description={t('overview.compareDesc')}
             actions={<RangePicker value={range} onChange={setRange} />}
           >
-            {compare.isLoading ? <LoadingBlock /> : <CompareTable rows={compare.data?.sites ?? []} names={names} />}
+            {compare.isLoading ? (
+              <LoadingBlock />
+            ) : (
+              <CompareTable rows={compare.data?.sites ?? []} names={names} />
+            )}
           </Card>
         </>
       )}

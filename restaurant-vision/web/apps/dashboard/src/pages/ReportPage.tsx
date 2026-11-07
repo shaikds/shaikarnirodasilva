@@ -58,7 +58,12 @@ export function RoiSection({ report }: { report: ShiftReport }) {
         <StatTile
           label={t('report.roi.lostRevenue')}
           value={f.money(roi.lost_revenue.value, roi.currency)}
-          estimate={{ method: t('report.roi.lostRevenueMethod', { walkaways: f.number(roi.walkaways), check }) }}
+          estimate={{
+            method: t('report.roi.lostRevenueMethod', {
+              walkaways: f.number(roi.walkaways),
+              check,
+            }),
+          }}
         />
         <StatTile
           label={t('report.roi.improvement')}
@@ -79,7 +84,11 @@ export function RoiSection({ report }: { report: ShiftReport }) {
         />
         <StatTile
           label={t('report.roi.extraCovers')}
-          value={roi.extra_covers.value === null ? t('common:status.notEnoughData') : f.number(roi.extra_covers.value)}
+          value={
+            roi.extra_covers.value === null
+              ? t('common:status.notEnoughData')
+              : f.number(roi.extra_covers.value)
+          }
           estimate={{ method: t('report.roi.extraCoversMethod') }}
         />
         <StatTile
@@ -103,7 +112,18 @@ function TablesTable({ report }: { report: ShiftReport }) {
         <caption className="sr-only">{t('report.tablesTitle')}</caption>
         <thead>
           <tr className="border-b border-border">
-            {(['table', 'seats', 'sessions', 'guests', 'avgDwell', 'party', 'firstVisit', 'bussing'] as const).map((c) => (
+            {(
+              [
+                'table',
+                'seats',
+                'sessions',
+                'guests',
+                'avgDwell',
+                'party',
+                'firstVisit',
+                'bussing',
+              ] as const
+            ).map((c) => (
               <th key={c} scope="col" className={th}>
                 {t(`report.columns.${c}`)}
               </th>
@@ -145,7 +165,14 @@ export function ReportPage() {
     <>
       <PageHeader
         title={t('report.title')}
-        subtitle={validDate ? t('report.subtitle', { site: meta.name, date: f.date(zonedDayStart(date, meta.timezone) + 12 * 3600, meta.timezone, 'long') }) : meta.name}
+        subtitle={
+          validDate
+            ? t('report.subtitle', {
+                site: meta.name,
+                date: f.date(zonedDayStart(date, meta.timezone) + 12 * 3600, meta.timezone, 'long'),
+              })
+            : meta.name
+        }
         actions={
           <>
             <TextField
@@ -157,7 +184,11 @@ export function ReportPage() {
               containerClassName="w-44"
               className="min-h-[40px]"
             />
-            <Button variant="secondary" className="self-end print:hidden" onClick={() => window.print()}>
+            <Button
+              variant="secondary"
+              className="self-end print:hidden"
+              onClick={() => window.print()}
+            >
               <Printer aria-hidden="true" className="h-4 w-4" />
               {t('report.print')}
             </Button>
@@ -173,7 +204,11 @@ export function ReportPage() {
           <LoadingBlock />
         )
       ) : (
-        <div className={report.isPlaceholderData ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+        <div
+          className={
+            report.isPlaceholderData ? 'opacity-60 transition-opacity' : 'transition-opacity'
+          }
+        >
           <Kpis report={report.data} />
           <RoiSection report={report.data} />
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

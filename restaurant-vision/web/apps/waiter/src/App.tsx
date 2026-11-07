@@ -36,7 +36,14 @@ function PublicOnly({ children }: { children: ReactNode }) {
 export function WaiterRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
+      <Route
+        path="/login"
+        element={
+          <PublicOnly>
+            <LoginPage />
+          </PublicOnly>
+        }
+      />
       <Route element={<RequireAuth />}>
         <Route index element={<AlertsPage />} />
         <Route path="/sites" element={<SitePickerPage />} />

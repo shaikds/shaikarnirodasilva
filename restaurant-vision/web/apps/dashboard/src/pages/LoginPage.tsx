@@ -78,7 +78,9 @@ export function LoginPage() {
       {rvEnv.mock && (
         <div className="mt-5 border-t border-border pt-4">
           <p className="text-sm font-medium">{t('auth.demoTitle')}</p>
-          <p className="mb-2 text-xs text-muted">{t('auth.demoHint', { password: DEMO_PASSWORD })}</p>
+          <p className="mb-2 text-xs text-muted">
+            {t('auth.demoHint', { password: DEMO_PASSWORD })}
+          </p>
           <div className="flex flex-wrap gap-2">
             {DEMO_ACCOUNTS.map((a) => (
               <Button

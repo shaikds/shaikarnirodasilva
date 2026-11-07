@@ -19,10 +19,17 @@ describe('TableStateChip', () => {
   });
 
   it('uses the agreed colors per state', () => {
-    const expected = { empty: 'state-empty', seated: 'state-seated', attended: 'state-attended', needs_bussing: 'state-bussing' };
+    const expected = {
+      empty: 'state-empty',
+      seated: 'state-seated',
+      attended: 'state-attended',
+      needs_bussing: 'state-bussing',
+    };
     for (const state of TABLE_STATES) {
       const { container } = render(<TableStateChip state={state} />);
-      expect(container.querySelector(`[data-state="${state}"]`)!.className).toContain(`bg-${expected[state]}-bg`);
+      expect(container.querySelector(`[data-state="${state}"]`)!.className).toContain(
+        `bg-${expected[state]}-bg`,
+      );
     }
   });
 
@@ -38,7 +45,13 @@ describe('TableStateChip', () => {
 
 describe('StatTile', () => {
   it('labels estimates with a badge and the method', () => {
-    render(<StatTile label="Lost revenue" value="₪1,200" estimate={{ method: 'walkaways × party × check' }} />);
+    render(
+      <StatTile
+        label="Lost revenue"
+        value="₪1,200"
+        estimate={{ method: 'walkaways × party × check' }}
+      />,
+    );
     const group = screen.getByRole('group', { name: 'Lost revenue' });
     expect(group).toHaveTextContent('Estimate');
     expect(group).toHaveTextContent('walkaways × party × check');

@@ -2,7 +2,13 @@ import { cn, useTranslation } from '@rv/shared';
 import { RANGE_KEYS, type RangeKey } from '../lib/range';
 
 /** Segmented control for the reporting period (radio semantics). */
-export function RangePicker({ value, onChange }: { value: RangeKey; onChange: (v: RangeKey) => void }) {
+export function RangePicker({
+  value,
+  onChange,
+}: {
+  value: RangeKey;
+  onChange: (v: RangeKey) => void;
+}) {
   const { t } = useTranslation();
   return (
     <fieldset className="inline-flex rounded-lg border border-border bg-surface p-0.5 shadow-sm">

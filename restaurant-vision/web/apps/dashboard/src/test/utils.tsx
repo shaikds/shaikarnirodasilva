@@ -20,7 +20,10 @@ export function renderApp(path: string) {
   const queryClient = createTestQueryClient();
   return render(
     <TestProviders queryClient={queryClient}>
-      <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter
+        initialEntries={[path]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <AppRoutes />
         <LocationProbe />
       </MemoryRouter>
@@ -32,7 +35,10 @@ export function renderApp(path: string) {
 export function renderRoute(ui: ReactElement, path: string, pattern = '*') {
   return render(
     <TestProviders>
-      <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter
+        initialEntries={[path]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <Routes>
           <Route path={pattern} element={ui} />
         </Routes>

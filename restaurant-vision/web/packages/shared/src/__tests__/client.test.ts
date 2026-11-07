@@ -39,7 +39,8 @@ function backend(opts: { validAccess: string; refreshResult: () => Response }) {
     const headers = new Headers(init?.headers);
     calls.push({ url, auth: headers.get('Authorization') });
     if (url.endsWith('/api/v1/auth/refresh')) return opts.refreshResult();
-    if (headers.get('Authorization') === `Bearer ${opts.validAccess}`) return json(200, { ok: true });
+    if (headers.get('Authorization') === `Bearer ${opts.validAccess}`)
+      return json(200, { ok: true });
     return json(401, { detail: 'expired' });
   });
   return { fetchImpl, calls };
@@ -50,16 +51,23 @@ describe('API client', () => {
     const { auth } = memoryAuth({ access: 'a', refresh: 'r' });
     const fetchImpl = vi.fn(async () => json(200, []));
     const client = createApiClient({ baseUrl: 'https://cloud.example/', auth, fetch: fetchImpl });
-    await client.request('/sites/s1/alerts', { query: { status: 'open', from: 10, to: undefined } });
+    await client.request('/sites/s1/alerts', {
+      query: { status: 'open', from: 10, to: undefined },
+    });
     expect(String((fetchImpl.mock.calls[0] as unknown[])[0])).toBe(
       'https://cloud.example/api/v1/sites/s1/alerts?status=open&from=10',
     );
-    expect(client.wsUrl({ token: 't', site_id: 's1' })).toBe('wss://cloud.example/api/v1/ws?token=t&site_id=s1');
+    expect(client.wsUrl({ token: 't', site_id: 's1' })).toBe(
+      'wss://cloud.example/api/v1/ws?token=t&site_id=s1',
+    );
   });
 
   it('sends the bearer token', async () => {
     const { auth } = memoryAuth({ access: 'access-1', refresh: 'refresh-1' });
-    const { fetchImpl, calls } = backend({ validAccess: 'access-1', refreshResult: () => json(200, pair(2)) });
+    const { fetchImpl, calls } = backend({
+      validAccess: 'access-1',
+      refreshResult: () => json(200, pair(2)),
+    });
     const client = createApiClient({ baseUrl: 'https://x', auth, fetch: fetchImpl });
     await expect(client.request('/me')).resolves.toEqual({ ok: true });
     expect(calls).toHaveLength(1);
@@ -68,10 +76,17 @@ describe('API client', () => {
 
   it('on 401 refreshes once and retries with the new token', async () => {
     const { auth, state } = memoryAuth({ access: 'access-1', refresh: 'refresh-1' });
-    const { fetchImpl, calls } = backend({ validAccess: 'access-2', refreshResult: () => json(200, pair(2)) });
+    const { fetchImpl, calls } = backend({
+      validAccess: 'access-2',
+      refreshResult: () => json(200, pair(2)),
+    });
     const client = createApiClient({ baseUrl: 'https://x', auth, fetch: fetchImpl });
     await expect(client.request('/me')).resolves.toEqual({ ok: true });
-    expect(calls.map((c) => c.url.replace('https://x/api/v1', ''))).toEqual(['/me', '/auth/refresh', '/me']);
+    expect(calls.map((c) => c.url.replace('https://x/api/v1', ''))).toEqual([
+      '/me',
+      '/auth/refresh',
+      '/me',
+    ]);
     expect(calls[2]!.auth).toBe('Bearer access-2');
     expect(state.access).toBe('access-2');
     expect(state.refresh).toBe('refresh-2');
@@ -79,7 +94,10 @@ describe('API client', () => {
 
   it('shares one refresh between concurrent 401s', async () => {
     const { auth } = memoryAuth({ access: 'access-1', refresh: 'refresh-1' });
-    const { fetchImpl, calls } = backend({ validAccess: 'access-2', refreshResult: () => json(200, pair(2)) });
+    const { fetchImpl, calls } = backend({
+      validAccess: 'access-2',
+      refreshResult: () => json(200, pair(2)),
+    });
     const client = createApiClient({ baseUrl: 'https://x', auth, fetch: fetchImpl });
     await Promise.all([client.request('/me'), client.request('/me'), client.request('/me')]);
     expect(calls.filter((c) => c.url.endsWith('/auth/refresh'))).toHaveLength(1);
@@ -88,7 +106,10 @@ describe('API client', () => {
   it('does not retry again when the retried request is still 401', async () => {
     const { auth, state } = memoryAuth({ access: 'access-1', refresh: 'refresh-1' });
     const onAuthLost = vi.fn();
-    const { fetchImpl, calls } = backend({ validAccess: 'never', refreshResult: () => json(200, pair(2)) });
+    const { fetchImpl, calls } = backend({
+      validAccess: 'never',
+      refreshResult: () => json(200, pair(2)),
+    });
     const client = createApiClient({ baseUrl: 'https://x', auth, fetch: fetchImpl, onAuthLost });
     await expect(client.request('/me')).rejects.toMatchObject({ status: 401, kind: 'auth' });
     expect(calls.filter((c) => c.url.endsWith('/auth/refresh'))).toHaveLength(1);
@@ -100,7 +121,10 @@ describe('API client', () => {
   it('signs out when the refresh is rejected', async () => {
     const { auth, state } = memoryAuth({ access: 'access-1', refresh: 'refresh-1' });
     const onAuthLost = vi.fn();
-    const { fetchImpl, calls } = backend({ validAccess: 'x', refreshResult: () => json(401, { detail: 'bad' }) });
+    const { fetchImpl, calls } = backend({
+      validAccess: 'x',
+      refreshResult: () => json(401, { detail: 'bad' }),
+    });
     const client = createApiClient({ baseUrl: 'https://x', auth, fetch: fetchImpl, onAuthLost });
     const err = await client.request('/me').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
@@ -117,7 +141,12 @@ describe('API client', () => {
       return json(401, { detail: 'expired' });
     });
     const reach = vi.fn();
-    const client = createApiClient({ baseUrl: 'https://x', auth, fetch: fetchImpl, onReachability: reach });
+    const client = createApiClient({
+      baseUrl: 'https://x',
+      auth,
+      fetch: fetchImpl,
+      onReachability: reach,
+    });
     await expect(client.request('/me')).rejects.toMatchObject({ kind: 'network', status: 0 });
     expect(state.cleared).toBe(false);
     expect(reach).toHaveBeenLastCalledWith(false);
@@ -127,17 +156,23 @@ describe('API client', () => {
     const { auth } = memoryAuth({ access: null, refresh: null });
     const fetchImpl = vi.fn(async () => json(401, { detail: 'Invalid email or password' }));
     const client = createApiClient({ baseUrl: 'https://x', auth, fetch: fetchImpl });
-    await expect(client.request('/auth/login', { method: 'POST', body: {}, auth: false })).rejects.toThrow(
-      'Invalid email or password',
-    );
+    await expect(
+      client.request('/auth/login', { method: 'POST', body: {}, auth: false }),
+    ).rejects.toThrow('Invalid email or password');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it('returns undefined for 204 and reports reachability', async () => {
     const reach = vi.fn();
     const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
-    const client = createApiClient({ baseUrl: 'https://x', fetch: fetchImpl, onReachability: reach });
-    await expect(client.request('/push/subscriptions/1', { method: 'DELETE' })).resolves.toBeUndefined();
+    const client = createApiClient({
+      baseUrl: 'https://x',
+      fetch: fetchImpl,
+      onReachability: reach,
+    });
+    await expect(
+      client.request('/push/subscriptions/1', { method: 'DELETE' }),
+    ).resolves.toBeUndefined();
     expect(reach).toHaveBeenCalledWith(true);
   });
 });

@@ -42,7 +42,10 @@ export function FloorPlanEditor({ site, tables }: { site: SiteSettings; tables: 
   const rtl = directionOf(i18n.language) === 'rtl';
   const update = useUpdateSite(site.site_id);
   const tableIds = useMemo(() => new Set(tables.map((x) => x.table_id)), [tables]);
-  const initial = useMemo(() => site.floor_plan.filter((p) => tableIds.has(p.table_id)), [site.floor_plan, tableIds]);
+  const initial = useMemo(
+    () => site.floor_plan.filter((p) => tableIds.has(p.table_id)),
+    [site.floor_plan, tableIds],
+  );
   const [items, setItems] = useState<FloorPlanItem[]>(initial);
   const [selected, setSelected] = useState<string | null>(null);
   const [announce, setAnnounce] = useState('');
@@ -71,7 +74,10 @@ export function FloorPlanEditor({ site, tables }: { site: SiteSettings; tables: 
           x: clamp(patch.x ?? i.x, 0, COLS - w),
           y: clamp(patch.y ?? i.y, 0, MAX_INDEX - h + 1),
         };
-        if (say) setAnnounce(t('settings.floorPlan.moved', { name: name(id), x: next.x + 1, y: next.y + 1 }));
+        if (say)
+          setAnnounce(
+            t('settings.floorPlan.moved', { name: name(id), x: next.x + 1, y: next.y + 1 }),
+          );
         return next;
       }),
     );
@@ -100,7 +106,10 @@ export function FloorPlanEditor({ site, tables }: { site: SiteSettings; tables: 
   const onPointerUp = () => {
     if (drag.current) {
       const it = items.find((i) => i.table_id === drag.current!.id);
-      if (it) setAnnounce(t('settings.floorPlan.moved', { name: name(it.table_id), x: it.x + 1, y: it.y + 1 }));
+      if (it)
+        setAnnounce(
+          t('settings.floorPlan.moved', { name: name(it.table_id), x: it.x + 1, y: it.y + 1 }),
+        );
     }
     drag.current = null;
   };
@@ -164,10 +173,26 @@ export function FloorPlanEditor({ site, tables }: { site: SiteSettings; tables: 
             onPointerCancel={onPointerUp}
           >
             {Array.from({ length: COLS + 1 }, (_, i) => (
-              <line key={`v${i}`} x1={i * CELL} y1={0} x2={i * CELL} y2={rows * CELL} style={{ stroke: 'rgb(var(--rv-border))' }} strokeWidth={1} />
+              <line
+                key={`v${i}`}
+                x1={i * CELL}
+                y1={0}
+                x2={i * CELL}
+                y2={rows * CELL}
+                style={{ stroke: 'rgb(var(--rv-border))' }}
+                strokeWidth={1}
+              />
             ))}
             {Array.from({ length: rows + 1 }, (_, i) => (
-              <line key={`h${i}`} x1={0} y1={i * CELL} x2={COLS * CELL} y2={i * CELL} style={{ stroke: 'rgb(var(--rv-border))' }} strokeWidth={1} />
+              <line
+                key={`h${i}`}
+                x1={0}
+                y1={i * CELL}
+                x2={COLS * CELL}
+                y2={i * CELL}
+                style={{ stroke: 'rgb(var(--rv-border))' }}
+                strokeWidth={1}
+              />
             ))}
             {items.map((item) => {
               const col = rtl ? COLS - item.x - item.w : item.x;
@@ -219,32 +244,46 @@ export function FloorPlanEditor({ site, tables }: { site: SiteSettings; tables: 
           <p aria-live="polite" className="sr-only">
             {announce}
           </p>
-          {hasOverlap && <p className="mt-2 text-sm text-warning">{t('settings.floorPlan.overlap')}</p>}
+          {hasOverlap && (
+            <p className="mt-2 text-sm text-warning">{t('settings.floorPlan.overlap')}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-4">
           <div className="rounded-lg border border-border p-3">
             {current ? (
               <>
-                <p className="mb-2 text-sm font-semibold">{t('settings.floorPlan.selected', { name: name(current.table_id) })}</p>
+                <p className="mb-2 text-sm font-semibold">
+                  {t('settings.floorPlan.selected', { name: name(current.table_id) })}
+                </p>
                 {(['w', 'h'] as const).map((dim) => (
                   <div key={dim} className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-sm">{t(dim === 'w' ? 'settings.floorPlan.width' : 'settings.floorPlan.height')}</span>
+                    <span className="text-sm">
+                      {t(dim === 'w' ? 'settings.floorPlan.width' : 'settings.floorPlan.height')}
+                    </span>
                     <div className="flex items-center gap-1">
                       <Button
                         size="sm"
                         variant="secondary"
-                        aria-label={t(dim === 'w' ? 'settings.floorPlan.narrower' : 'settings.floorPlan.shorter')}
+                        aria-label={t(
+                          dim === 'w'
+                            ? 'settings.floorPlan.narrower'
+                            : 'settings.floorPlan.shorter',
+                        )}
                         onClick={() => change(current.table_id, { [dim]: current[dim] - 1 }, true)}
                         disabled={current[dim] <= 1}
                       >
                         <Minus aria-hidden="true" className="h-4 w-4" />
                       </Button>
-                      <span className="rv-num w-6 text-center text-sm font-semibold">{current[dim]}</span>
+                      <span className="rv-num w-6 text-center text-sm font-semibold">
+                        {current[dim]}
+                      </span>
                       <Button
                         size="sm"
                         variant="secondary"
-                        aria-label={t(dim === 'w' ? 'settings.floorPlan.wider' : 'settings.floorPlan.taller')}
+                        aria-label={t(
+                          dim === 'w' ? 'settings.floorPlan.wider' : 'settings.floorPlan.taller',
+                        )}
                         onClick={() => change(current.table_id, { [dim]: current[dim] + 1 }, true)}
                         disabled={current[dim] >= 10}
                       >
@@ -268,7 +307,12 @@ export function FloorPlanEditor({ site, tables }: { site: SiteSettings; tables: 
               <ul className="flex flex-wrap gap-2">
                 {unplaced.map((tb) => (
                   <li key={tb.table_id}>
-                    <Button size="sm" variant="secondary" onClick={() => place(tb.table_id)} aria-label={t('settings.floorPlan.place', { name: name(tb.table_id) })}>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => place(tb.table_id)}
+                      aria-label={t('settings.floorPlan.place', { name: name(tb.table_id) })}
+                    >
                       <Plus aria-hidden="true" className="h-4 w-4" />
                       {tb.label}
                     </Button>

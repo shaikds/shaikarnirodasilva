@@ -32,8 +32,16 @@ export const ALERT_KINDS = [
   'long_queue',
 ] as const satisfies readonly AlertKind[];
 
-export const ALERT_SEVERITIES = ['info', 'warn', 'urgent'] as const satisfies readonly AlertSeverity[];
-export const CAMERA_STATUSES = ['ok', 'degraded', 'offline'] as const satisfies readonly CameraStatus[];
+export const ALERT_SEVERITIES = [
+  'info',
+  'warn',
+  'urgent',
+] as const satisfies readonly AlertSeverity[];
+export const CAMERA_STATUSES = [
+  'ok',
+  'degraded',
+  'offline',
+] as const satisfies readonly CameraStatus[];
 export const CURRENCIES = ['ILS', 'USD', 'AUD'] as const satisfies readonly Currency[];
 export const LOCALES = ['he', 'en'] as const satisfies readonly Locale[];
 export const ROLES = ['owner', 'manager', 'waiter'] as const satisfies readonly Role[];

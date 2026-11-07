@@ -3,25 +3,67 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { OFFLINE_AFTER_MS, isOffline } from '../lib/offline';
-import { DEFAULT_EDGE_URL, WAITER_SETTINGS_KEY, isValidEdgeUrl, useWaiterSettings } from '../lib/settings';
+import {
+  DEFAULT_EDGE_URL,
+  WAITER_SETTINGS_KEY,
+  isValidEdgeUrl,
+  useWaiterSettings,
+} from '../lib/settings';
 import { setupWaiterI18n } from '../test/utils';
 
 const now = 1_800_000_000_000;
 
 describe('isOffline', () => {
   it('stays online while everything answers', () => {
-    expect(isOffline({ apiDownSince: null, wsDownSince: null, browserOfflineSince: null, nowMs: now })).toBe(false);
+    expect(
+      isOffline({ apiDownSince: null, wsDownSince: null, browserOfflineSince: null, nowMs: now }),
+    ).toBe(false);
   });
 
   it('waits 10 s before declaring the cloud unreachable', () => {
-    expect(isOffline({ apiDownSince: now - OFFLINE_AFTER_MS, wsDownSince: null, browserOfflineSince: null, nowMs: now })).toBe(false);
-    expect(isOffline({ apiDownSince: now - OFFLINE_AFTER_MS - 1, wsDownSince: null, browserOfflineSince: null, nowMs: now })).toBe(true);
+    expect(
+      isOffline({
+        apiDownSince: now - OFFLINE_AFTER_MS,
+        wsDownSince: null,
+        browserOfflineSince: null,
+        nowMs: now,
+      }),
+    ).toBe(false);
+    expect(
+      isOffline({
+        apiDownSince: now - OFFLINE_AFTER_MS - 1,
+        wsDownSince: null,
+        browserOfflineSince: null,
+        nowMs: now,
+      }),
+    ).toBe(true);
   });
 
   it('counts the socket or the browser network being down', () => {
-    expect(isOffline({ apiDownSince: null, wsDownSince: now - 11_000, browserOfflineSince: null, nowMs: now })).toBe(true);
-    expect(isOffline({ apiDownSince: null, wsDownSince: null, browserOfflineSince: now - 12_000, nowMs: now })).toBe(true);
-    expect(isOffline({ apiDownSince: null, wsDownSince: now - 3_000, browserOfflineSince: null, nowMs: now })).toBe(false);
+    expect(
+      isOffline({
+        apiDownSince: null,
+        wsDownSince: now - 11_000,
+        browserOfflineSince: null,
+        nowMs: now,
+      }),
+    ).toBe(true);
+    expect(
+      isOffline({
+        apiDownSince: null,
+        wsDownSince: null,
+        browserOfflineSince: now - 12_000,
+        nowMs: now,
+      }),
+    ).toBe(true);
+    expect(
+      isOffline({
+        apiDownSince: null,
+        wsDownSince: now - 3_000,
+        browserOfflineSince: null,
+        nowMs: now,
+      }),
+    ).toBe(false);
   });
 });
 
@@ -34,7 +76,10 @@ describe('offline banner and edge URL setting', () => {
   it('links to the local edge alerts page', () => {
     render(<OfflineBanner edgeUrl={DEFAULT_EDGE_URL} />, { wrapper: TestProviders });
     expect(screen.getByRole('alert')).toHaveTextContent('No connection to the cloud');
-    expect(screen.getByRole('link', { name: 'Open local alerts' })).toHaveAttribute('href', 'http://rv-edge.local:8787/local-alerts');
+    expect(screen.getByRole('link', { name: 'Open local alerts' })).toHaveAttribute(
+      'href',
+      'http://rv-edge.local:8787/local-alerts',
+    );
   });
 
   it('defaults to rv-edge.local and validates addresses', () => {
@@ -60,7 +105,9 @@ describe('offline banner and edge URL setting', () => {
       },
     });
     try {
-      expect(() => useWaiterSettings.getState().setEdgeUrl('http://10.0.0.5:8787/local-alerts')).not.toThrow();
+      expect(() =>
+        useWaiterSettings.getState().setEdgeUrl('http://10.0.0.5:8787/local-alerts'),
+      ).not.toThrow();
       expect(useWaiterSettings.getState().edgeUrl).toBe('http://10.0.0.5:8787/local-alerts');
     } finally {
       Object.defineProperty(window, 'localStorage', original);

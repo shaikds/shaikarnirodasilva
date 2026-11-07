@@ -41,7 +41,11 @@ export function normalizePayload(data: unknown): AlertPushPayload {
   };
 }
 
-export function buildNotification(payload: AlertPushPayload, lang: 'he' | 'en', iconUrl = '/icon.svg'): BuiltNotification {
+export function buildNotification(
+  payload: AlertPushPayload,
+  lang: 'he' | 'en',
+  iconUrl = '/icon.svg',
+): BuiltNotification {
   const s = STRINGS[lang];
   const kinds = s.common.alertKind as Record<string, string>;
   const kind = payload.kind ? (kinds[payload.kind] ?? payload.kind) : null;
@@ -50,7 +54,10 @@ export function buildNotification(payload: AlertPushPayload, lang: 'he' | 'en', 
     : payload.kind === 'long_queue'
       ? s.waiter.alerts.entrance
       : null;
-  const title = kind && target ? fill(s.waiter.push.title, { target, kind }) : (kind ?? s.waiter.push.fallbackTitle);
+  const title =
+    kind && target
+      ? fill(s.waiter.push.title, { target, kind })
+      : (kind ?? s.waiter.push.fallbackTitle);
   const urgent = payload.severity === 'urgent';
   return {
     title,

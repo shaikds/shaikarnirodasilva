@@ -23,7 +23,10 @@ export function Tabs<T extends string>({
   const { i18n } = useTranslation();
   const rtl = directionOf(i18n.language) === 'rtl';
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const index = Math.max(0, tabs.findIndex((t) => t.id === value));
+  const index = Math.max(
+    0,
+    tabs.findIndex((t) => t.id === value),
+  );
 
   const onKeyDown = (e: KeyboardEvent) => {
     let next = -1;
@@ -41,7 +44,11 @@ export function Tabs<T extends string>({
 
   return (
     <div>
-      <div role="tablist" aria-label={label} className="mb-4 flex gap-1 overflow-x-auto border-b border-border">
+      <div
+        role="tablist"
+        aria-label={label}
+        className="mb-4 flex gap-1 overflow-x-auto border-b border-border"
+      >
         {tabs.map((tab, i) => (
           <button
             key={tab.id}
@@ -58,14 +65,22 @@ export function Tabs<T extends string>({
             onKeyDown={onKeyDown}
             className={cn(
               '-mb-px min-h-tap whitespace-nowrap border-b-2 px-3 text-sm font-medium',
-              tab.id === value ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-fg',
+              tab.id === value
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted hover:text-fg',
             )}
           >
             {tab.label}
           </button>
         ))}
       </div>
-      <div role="tabpanel" id={`panel-${value}`} aria-labelledby={`tab-${value}`} tabIndex={0} className="focus:outline-none">
+      <div
+        role="tabpanel"
+        id={`panel-${value}`}
+        aria-labelledby={`tab-${value}`}
+        tabIndex={0}
+        className="focus:outline-none"
+      >
         {children}
       </div>
     </div>

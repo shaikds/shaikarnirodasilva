@@ -19,7 +19,12 @@ export interface BackoffOptions {
   jitter: number;
 }
 
-export const DEFAULT_BACKOFF: BackoffOptions = { initialMs: 1000, maxMs: 30_000, factor: 2, jitter: 0.2 };
+export const DEFAULT_BACKOFF: BackoffOptions = {
+  initialMs: 1000,
+  maxMs: 30_000,
+  factor: 2,
+  jitter: 0.2,
+};
 
 /** Delay before reconnect attempt `attempt` (0-based). */
 export function computeBackoff(

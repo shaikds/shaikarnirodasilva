@@ -9,7 +9,8 @@ export function useFmt() {
     ...f,
     none,
     dur: (v: number | null | undefined) => (v === null || v === undefined ? none : f.duration(v)),
-    num: (v: number | null | undefined, digits = 0) => (v === null || v === undefined ? none : f.number(v, digits)),
+    num: (v: number | null | undefined, digits = 0) =>
+      v === null || v === undefined ? none : f.number(v, digits),
     money: (v: number | null | undefined, currency: Currency) =>
       v === null || v === undefined ? t('common:status.notEnoughData') : f.currency(v, currency),
   };

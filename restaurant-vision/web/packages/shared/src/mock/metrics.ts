@@ -106,7 +106,9 @@ export function summary(m: SiteModel, from: number, to: number, now: number): Me
     sessions,
     guests_served: guests,
     avg_dwell_s: has ? Math.round(3100 + n * 900) : null,
-    turnover_per_table: has ? Math.round((sessions / Math.max(1, m.tables.length)) * 10) / 10 : null,
+    turnover_per_table: has
+      ? Math.round((sessions / Math.max(1, m.tables.length)) * 10) / 10
+      : null,
     waiter_response_p50_s: percentile(responses, 0.5),
     waiter_response_p90_s: percentile(responses, 0.9),
     bussing_delay_p50_s: has ? Math.round(120 + n * 90) : null,
@@ -145,7 +147,9 @@ export function timeseries(
         if (value !== null) value = Math.round(value * (0.95 + noise(t, 'occ') * 0.1));
         break;
       case 'queue':
-        value = hours.length ? Math.round((hours.reduce((s, h) => s + h.queue, 0) / hours.length) * 10) / 10 : null;
+        value = hours.length
+          ? Math.round((hours.reduce((s, h) => s + h.queue, 0) / hours.length) * 10) / 10
+          : null;
         break;
       case 'walkaways':
         value = Math.round(hours.reduce((s, h) => s + h.walkaways, 0) * fraction);
@@ -167,8 +171,8 @@ export function tableStats(m: SiteModel, from: number, to: number, now: number):
   return m.tables.map((t) => {
     const n = noise(m.settings.site_id, t.table_id, from);
     const share = (t.seats / totalSeats) * (0.8 + n * 0.4);
-    const sessions = Math.round((s.sessions * share * t.seats) / Math.max(1, t.seats) );
-    const party = Math.min(t.seats, Math.max(1, Math.round((t.seats * (0.55 + n * 0.35)) * 10) / 10));
+    const sessions = Math.round((s.sessions * share * t.seats) / Math.max(1, t.seats));
+    const party = Math.min(t.seats, Math.max(1, Math.round(t.seats * (0.55 + n * 0.35) * 10) / 10));
     return {
       table_id: t.table_id,
       label: t.label,

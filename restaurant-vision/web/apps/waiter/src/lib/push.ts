@@ -4,7 +4,12 @@ import type { RvApi } from '@rv/shared';
 export type PushState = 'unsupported' | 'denied' | 'default' | 'granted';
 
 export function pushSupported(): boolean {
-  return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  return (
+    typeof window !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window &&
+    'Notification' in window
+  );
 }
 
 export function pushPermission(): PushState {
@@ -30,7 +35,9 @@ export class PushError extends Error {
 function serviceWorkerReady(timeoutMs = 8000): Promise<ServiceWorkerRegistration> {
   return Promise.race([
     navigator.serviceWorker.ready,
-    new Promise<never>((_, reject) => setTimeout(() => reject(new PushError('no-service-worker')), timeoutMs)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new PushError('no-service-worker')), timeoutMs),
+    ),
   ]);
 }
 
@@ -43,7 +50,10 @@ export async function enablePush(api: RvApi, siteId: string): Promise<string> {
   const { public_key } = await api.getVapidPublicKey();
   const sub =
     (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(public_key) }));
+    (await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(public_key),
+    }));
   const json = sub.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new PushError('failed');
   const out = await api.createPushSubscription({
@@ -63,7 +73,10 @@ export async function disablePush(api: RvApi, subscriptionId: string | null): Pr
 }
 
 /** Shows a notification from the page (app open but hidden); same tag as push, so no duplicates. */
-export async function showLocalNotification(title: string, options: NotificationOptions): Promise<void> {
+export async function showLocalNotification(
+  title: string,
+  options: NotificationOptions,
+): Promise<void> {
   if (!pushSupported() || Notification.permission !== 'granted') return;
   const reg = await navigator.serviceWorker.getRegistration();
   await reg?.showNotification(title, options);

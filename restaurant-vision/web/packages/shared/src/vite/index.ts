@@ -18,7 +18,10 @@ export function mswWorkerPlugin(): Plugin {
     name: 'rv-msw-worker',
     configResolved(config) {
       base = config.base;
-      const env = { ...loadEnv(config.mode, config.envDir || config.root, 'VITE_'), ...process.env };
+      const env = {
+        ...loadEnv(config.mode, config.envDir || config.root, 'VITE_'),
+        ...process.env,
+      };
       mock = env.VITE_MOCK === '1' || env.VITE_MOCK === 'true';
     },
     configureServer(server) {

@@ -48,7 +48,9 @@ export interface ApiClient {
 }
 
 function pageOrigin(): string {
-  return typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost';
+  return typeof window !== 'undefined' && window.location
+    ? window.location.origin
+    : 'http://localhost';
 }
 
 const UNREACHABLE_STATUSES = new Set([502, 503, 504]);
@@ -71,7 +73,11 @@ export function createApiClient(config: ApiClientConfig = {}): ApiClient {
     return u.toString();
   }
 
-  async function send(path: string, opts: RequestOptions, bearer: string | null): Promise<Response> {
+  async function send(
+    path: string,
+    opts: RequestOptions,
+    bearer: string | null,
+  ): Promise<Response> {
     const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers };
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
     if (bearer) headers.Authorization = `Bearer ${bearer}`;

@@ -59,7 +59,10 @@ export function initI18n(options: InitI18nOptions = {}): I18n {
   }
   const resources: Record<string, Record<string, object>> = {};
   for (const language of SUPPORTED_LANGUAGES) {
-    resources[language] = { ...sharedResources[language], ...(options.resources?.[language] ?? {}) };
+    resources[language] = {
+      ...sharedResources[language],
+      ...(options.resources?.[language] ?? {}),
+    };
   }
   i18n.on('languageChanged', applyDocumentLanguage);
   void i18n.use(initReactI18next).init({

@@ -14,7 +14,12 @@ export interface EmptyStateProps {
 export function EmptyState({ title, description, icon, action, className }: EmptyStateProps) {
   const { t } = useTranslation('common');
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-2 px-4 py-10 text-center', className)}>
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center gap-2 px-4 py-10 text-center',
+        className,
+      )}
+    >
       <span aria-hidden="true" className="text-muted">
         {icon ?? <Inbox className="h-10 w-10" />}
       </span>

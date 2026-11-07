@@ -28,19 +28,31 @@ export function AlertCard({
       data-alert-id={alert.alert_id}
       className={cn(
         'rounded-2xl border bg-surface p-4 shadow-card',
-        taken ? 'border-border opacity-80' : urgent ? 'border-s-8 border-danger border-s-danger' : 'border-s-8 border-warning/60 border-s-warning',
+        taken
+          ? 'border-border opacity-80'
+          : urgent
+            ? 'border-s-8 border-danger border-s-danger'
+            : 'border-s-8 border-warning/60 border-s-warning',
       )}
     >
       <div className="flex items-start gap-3">
-        <span aria-hidden="true" className={cn('mt-1', taken ? 'text-muted' : urgent ? 'text-danger' : 'text-warning')}>
-          {alert.kind === 'long_queue' ? <Users className="h-7 w-7" /> : <BellRing className="h-7 w-7" />}
+        <span
+          aria-hidden="true"
+          className={cn('mt-1', taken ? 'text-muted' : urgent ? 'text-danger' : 'text-warning')}
+        >
+          {alert.kind === 'long_queue' ? (
+            <Users className="h-7 w-7" />
+          ) : (
+            <BellRing className="h-7 w-7" />
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-2xl font-bold leading-tight">{title}</h3>
           <p className="text-base">{kind}</p>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
             <span>
-              {t('alerts.waiting')} <span className="rv-num font-semibold text-fg">{f.elapsed(age)}</span>
+              {t('alerts.waiting')}{' '}
+              <span className="rv-num font-semibold text-fg">{f.elapsed(age)}</span>
             </span>
             {urgent && !taken && <Badge tone="danger">{t('alerts.urgent')}</Badge>}
           </p>
@@ -50,7 +62,11 @@ export function AlertCard({
         <p className="mt-3 flex items-center gap-2 rounded-xl bg-info-soft px-3 py-3 text-base font-medium text-info">
           <Hand aria-hidden="true" className="h-5 w-5" />
           {t('alerts.taken')}
-          {alert.acked_at !== null && <span className="text-sm font-normal">· {t('alerts.takenAgo', { time: f.relative(alert.acked_at, now) })}</span>}
+          {alert.acked_at !== null && (
+            <span className="text-sm font-normal">
+              · {t('alerts.takenAgo', { time: f.relative(alert.acked_at, now) })}
+            </span>
+          )}
         </p>
       ) : (
         <Button

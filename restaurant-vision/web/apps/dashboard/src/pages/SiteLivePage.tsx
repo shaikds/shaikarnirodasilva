@@ -31,7 +31,11 @@ function ViewToggle({ value, onChange }: { value: View; onChange: (v: View) => v
     { v: 'list', label: t('live.listView'), Icon: List },
   ];
   return (
-    <div role="group" aria-label={t('live.viewLabel')} className="inline-flex rounded-lg border border-border bg-surface p-0.5">
+    <div
+      role="group"
+      aria-label={t('live.viewLabel')}
+      className="inline-flex rounded-lg border border-border bg-surface p-0.5"
+    >
       {options.map(({ v, label, Icon }) => (
         <button
           key={v}
@@ -95,7 +99,10 @@ export function SiteLivePage() {
         }
       />
       {!edgeOnline && (
-        <p role="status" className="mb-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning">
+        <p
+          role="status"
+          className="mb-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning"
+        >
           <TriangleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
           {t('live.stale')}
         </p>
@@ -108,7 +115,11 @@ export function SiteLivePage() {
             <>
               <FloorPlan tables={data.tables} layout={plan} now={now} siteName={meta.name} />
               <FloorLegend />
-              {unplacedCount > 0 && <p className="mt-2 text-xs text-muted">{t('live.unplaced', { count: unplacedCount })}</p>}
+              {unplacedCount > 0 && (
+                <p className="mt-2 text-xs text-muted">
+                  {t('live.unplaced', { count: unplacedCount })}
+                </p>
+              )}
             </>
           ) : (
             <FloorList tables={data.tables} now={now} />

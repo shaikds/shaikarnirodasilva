@@ -17,20 +17,76 @@ import { UsersPage } from './pages/UsersPage';
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
-      <Route path="/signup" element={<PublicOnly><SignupPage /></PublicOnly>} />
+      <Route
+        path="/login"
+        element={
+          <PublicOnly>
+            <LoginPage />
+          </PublicOnly>
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          <PublicOnly>
+            <SignupPage />
+          </PublicOnly>
+        }
+      />
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route index element={<HomeRoute overview={<OverviewPage />} />} />
           <Route path="sites/:siteId" element={<SiteScope />}>
             <Route index element={<Navigate to="live" replace />} />
-            <Route path="live" element={<RequirePage page="live"><SiteLivePage /></RequirePage>} />
-            <Route path="analytics" element={<RequirePage page="analytics"><AnalyticsPage /></RequirePage>} />
-            <Route path="report" element={<RequirePage page="report"><ReportPage /></RequirePage>} />
-            <Route path="settings" element={<RequirePage page="settings"><SettingsPage /></RequirePage>} />
+            <Route
+              path="live"
+              element={
+                <RequirePage page="live">
+                  <SiteLivePage />
+                </RequirePage>
+              }
+            />
+            <Route
+              path="analytics"
+              element={
+                <RequirePage page="analytics">
+                  <AnalyticsPage />
+                </RequirePage>
+              }
+            />
+            <Route
+              path="report"
+              element={
+                <RequirePage page="report">
+                  <ReportPage />
+                </RequirePage>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <RequirePage page="settings">
+                  <SettingsPage />
+                </RequirePage>
+              }
+            />
           </Route>
-          <Route path="users" element={<RequirePage page="users"><UsersPage /></RequirePage>} />
-          <Route path="compliance" element={<RequirePage page="compliance"><CompliancePage /></RequirePage>} />
+          <Route
+            path="users"
+            element={
+              <RequirePage page="users">
+                <UsersPage />
+              </RequirePage>
+            }
+          />
+          <Route
+            path="compliance"
+            element={
+              <RequirePage page="compliance">
+                <CompliancePage />
+              </RequirePage>
+            }
+          />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

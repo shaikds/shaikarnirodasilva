@@ -69,7 +69,9 @@ export const VIBRATION_PATTERN = [220, 120, 220];
 
 export function vibrate(urgent = false): boolean {
   try {
-    return navigator.vibrate?.(urgent ? [...VIBRATION_PATTERN, 120, 320] : VIBRATION_PATTERN) ?? false;
+    return (
+      navigator.vibrate?.(urgent ? [...VIBRATION_PATTERN, 120, 320] : VIBRATION_PATTERN) ?? false
+    );
   } catch {
     return false;
   }

@@ -22,13 +22,16 @@ describe('thresholds validation', () => {
     expect(errors.leave_confirm_s?.key).toBe('settings.thresholds.errors.positive');
     expect(errors.staff_visit_min_s?.key).toBe('settings.thresholds.errors.positive');
     expect(errors.long_queue_people?.key).toBe('settings.thresholds.errors.integer');
-    expect(errors.track_id_ttl_h).toEqual({ key: 'settings.thresholds.errors.max', values: { max: 24 } });
+    expect(errors.track_id_ttl_h).toEqual({
+      key: 'settings.thresholds.errors.max',
+      values: { max: 24 },
+    });
   });
 
   it('requires the first-visit alert to come after seat confirmation', () => {
     const v = toValues(DEFAULT_THRESHOLDS);
-    expect(validateThresholds({ ...v, first_visit_timeout_s: '15' }).first_visit_timeout_s?.key).toBe(
-      'settings.thresholds.errors.afterSeat',
-    );
+    expect(
+      validateThresholds({ ...v, first_visit_timeout_s: '15' }).first_visit_timeout_s?.key,
+    ).toBe('settings.thresholds.errors.afterSeat');
   });
 });

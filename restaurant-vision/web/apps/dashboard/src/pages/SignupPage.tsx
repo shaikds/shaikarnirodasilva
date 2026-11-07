@@ -56,9 +56,34 @@ export function SignupPage() {
   return (
     <AuthLayout title={t('auth.signupTitle')} subtitle={t('auth.signupSubtitle')}>
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-        <TextField label={t('auth.orgName')} value={form.org_name} onChange={set('org_name')} error={show('org_name')} required maxLength={64} autoComplete="organization" />
-        <TextField label={t('auth.name')} value={form.name} onChange={set('name')} error={show('name')} required maxLength={64} autoComplete="name" />
-        <TextField label={t('auth.email')} type="email" dir="ltr" value={form.email} onChange={set('email')} error={show('email')} required autoComplete="email" />
+        <TextField
+          label={t('auth.orgName')}
+          value={form.org_name}
+          onChange={set('org_name')}
+          error={show('org_name')}
+          required
+          maxLength={64}
+          autoComplete="organization"
+        />
+        <TextField
+          label={t('auth.name')}
+          value={form.name}
+          onChange={set('name')}
+          error={show('name')}
+          required
+          maxLength={64}
+          autoComplete="name"
+        />
+        <TextField
+          label={t('auth.email')}
+          type="email"
+          dir="ltr"
+          value={form.email}
+          onChange={set('email')}
+          error={show('email')}
+          required
+          autoComplete="email"
+        />
         <TextField
           label={t('auth.password')}
           type="password"

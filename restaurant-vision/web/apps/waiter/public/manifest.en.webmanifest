@@ -25,10 +25,7 @@
       "purpose": "maskable"
     }
   ],
-  "categories": [
-    "business",
-    "productivity"
-  ],
+  "categories": ["business", "productivity"],
   "translations": {
     "he": {
       "name": "Restaurant Vision – התראות למלצרים",

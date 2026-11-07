@@ -25,7 +25,12 @@ function useBucketLabel(bucket: Bucket, timeZone: string) {
   const fmt =
     bucket === '1d'
       ? new Intl.DateTimeFormat(intlLocale(lng), { day: 'numeric', month: 'numeric', timeZone })
-      : new Intl.DateTimeFormat(intlLocale(lng), { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone });
+      : new Intl.DateTimeFormat(intlLocale(lng), {
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+          timeZone,
+        });
   return (ts: number) => fmt.format(new Date(ts * 1000));
 }
 
@@ -51,8 +56,9 @@ export function AnalyticsPage() {
       label: label(p.ts),
       value: p.value === null ? null : Math.round((p.value / scale) * 10) / 10,
     }));
-  const tableData = (pick: (row: NonNullable<typeof tables.data>[number]) => number | null): ChartDatum[] =>
-    (tables.data ?? []).map((r) => ({ label: r.label, value: pick(r) }));
+  const tableData = (
+    pick: (row: NonNullable<typeof tables.data>[number]) => number | null,
+  ): ChartDatum[] => (tables.data ?? []).map((r) => ({ label: r.label, value: pick(r) }));
 
   const s = summary.data;
   const minutes = (v: number) => f.number(v, 1);
@@ -60,7 +66,11 @@ export function AnalyticsPage() {
 
   return (
     <>
-      <PageHeader title={t('analytics.title')} subtitle={meta.name} actions={<RangePicker value={rangeKey} onChange={setRangeKey} />} />
+      <PageHeader
+        title={t('analytics.title')}
+        subtitle={meta.name}
+        actions={<RangePicker value={rangeKey} onChange={setRangeKey} />}
+      />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card title={t('analytics.occupancyByHour')} description={t('analytics.occupancyDesc')}>
@@ -89,7 +99,11 @@ export function AnalyticsPage() {
           />
         </Card>
 
-        <Card title={t('analytics.queueTitle')} description={t('analytics.queueDesc')} className="xl:col-span-2">
+        <Card
+          title={t('analytics.queueTitle')}
+          description={t('analytics.queueDesc')}
+          className="xl:col-span-2"
+        >
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <StatTile label={t('analytics.avgWait')} value={f.dur(s?.queue_avg_wait_s)} />
             <StatTile label={t('analytics.maxWait')} value={f.dur(s?.queue_max_wait_s)} />
@@ -121,7 +135,11 @@ export function AnalyticsPage() {
           </div>
         </Card>
 
-        <Card title={t('analytics.tablesTitle')} description={t('analytics.tablesDesc')} className="xl:col-span-2">
+        <Card
+          title={t('analytics.tablesTitle')}
+          description={t('analytics.tablesDesc')}
+          className="xl:col-span-2"
+        >
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div>
               <h3 className="mb-1 text-sm font-medium text-muted">{t('analytics.sessions')}</h3>
@@ -137,7 +155,9 @@ export function AnalyticsPage() {
             <div>
               <h3 className="mb-1 text-sm font-medium text-muted">{t('analytics.avgDwellMin')}</h3>
               <ColumnChart
-                data={tableData((r) => (r.avg_dwell_s === null ? null : Math.round(r.avg_dwell_s / 60)))}
+                data={tableData((r) =>
+                  r.avg_dwell_s === null ? null : Math.round(r.avg_dwell_s / 60),
+                )}
                 seriesName={t('analytics.avgDwellMin')}
                 categoryName={t('report.columns.table')}
                 format={(v) => f.number(v)}
@@ -146,10 +166,14 @@ export function AnalyticsPage() {
               />
             </div>
             <div>
-              <h3 className="mb-1 text-sm font-medium text-muted">{t('analytics.firstVisitByTable')}</h3>
+              <h3 className="mb-1 text-sm font-medium text-muted">
+                {t('analytics.firstVisitByTable')}
+              </h3>
               <ColumnChart
                 data={tableData((r) =>
-                  r.first_visit_delay_p50_s === null ? null : Math.round((r.first_visit_delay_p50_s / 60) * 10) / 10,
+                  r.first_visit_delay_p50_s === null
+                    ? null
+                    : Math.round((r.first_visit_delay_p50_s / 60) * 10) / 10,
                 )}
                 seriesName={t('analytics.firstVisitByTable')}
                 categoryName={t('report.columns.table')}
