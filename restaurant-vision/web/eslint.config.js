@@ -23,7 +23,6 @@ export default tseslint.config(
       '**/dev-dist/**',
       '**/coverage/**',
       'packages/shared/src/contracts/types.ts',
-      'apps/edge-ui/**',
     ],
   },
   js.configs.recommended,

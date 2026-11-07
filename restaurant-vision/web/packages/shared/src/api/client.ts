@@ -28,6 +28,8 @@ export interface RequestOptions {
 export interface ApiClientConfig {
   /** Cloud origin; defaults to `VITE_API_URL`, then the page origin. */
   baseUrl?: string;
+  /** Path prefix of every endpoint (default `/api/v1`; the edge's LAN API uses `''`). */
+  prefix?: string;
   auth?: AuthAdapter;
   fetch?: typeof fetch;
   /** Called after every request: true if the cloud answered, false if it was unreachable. */
@@ -61,7 +63,8 @@ export function createApiClient(config: ApiClientConfig = {}): ApiClient {
   const doFetch: typeof fetch = (...args) => (config.fetch ?? globalThis.fetch)(...args);
   let refreshing: Promise<boolean> | null = null;
 
-  const url = (path: string): string => `${base || pageOrigin()}${API_PREFIX}${path}`;
+  const prefix = config.prefix ?? API_PREFIX;
+  const url = (path: string): string => `${base || pageOrigin()}${prefix}${path}`;
 
   function buildUrl(path: string, query?: Record<string, QueryValue>): string {
     const u = new URL(url(path));

@@ -62,6 +62,20 @@ describe('API client', () => {
     );
   });
 
+  it('supports another prefix, e.g. the edge LAN API', async () => {
+    const fetchImpl = vi.fn(async () => json(200, {}));
+    const client = createApiClient({
+      baseUrl: 'http://rv-edge.local:8787',
+      prefix: '',
+      fetch: fetchImpl,
+    });
+    await client.request('/local/state', { auth: false });
+    expect(String((fetchImpl.mock.calls[0] as unknown[])[0])).toBe(
+      'http://rv-edge.local:8787/local/state',
+    );
+    expect(client.wsUrl({})).toBe('ws://rv-edge.local:8787/ws');
+  });
+
   it('sends the bearer token', async () => {
     const { auth } = memoryAuth({ access: 'access-1', refresh: 'refresh-1' });
     const { fetchImpl, calls } = backend({
