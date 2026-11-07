@@ -16,6 +16,7 @@ Roles are conveyed the way the vision pipeline does it: by ``hints.uniform_score
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import math
 from collections.abc import Iterable, Sequence
@@ -205,6 +206,19 @@ def walker(
         uniform=_uniform(role, uniform),
         gaps=tuple(gaps),
     )
+
+
+def rotate(people: Iterable[Person], at: float) -> list[Person]:
+    """The tracker's daily id rotation: every person visible across ``at`` continues under a
+    new track id from ``at`` on (old id until just before, new id from that very frame)."""
+    out: list[Person] = []
+    for p in people:
+        if p.from_t < at < p.to_t:
+            out.append(dataclasses.replace(p, to_t=at))
+            out.append(dataclasses.replace(p, from_t=at, track_id=f"{p.track_id}-r"))
+        else:
+            out.append(p)
+    return out
 
 
 def box_for(anchor: Point2, mode: Anchor) -> tuple[float, float, float, float]:

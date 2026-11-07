@@ -390,6 +390,9 @@ def compile_layout(
         queue_poly, ent.queue_spacing, margin, body, Posture.STANDING, ent_anchor
     )
     queue_slots.sort(key=lambda p: (round(dist(p, ent.queue_exit[0]), 6), p))
+    if any(segment_side(line.a, line.b, v) == line.in_side for v in queue_poly):
+        # Moves between queue spots must never cross the line (the outer half-plane is convex).
+        errors.append("the queue zone must lie entirely on the outer side of the entrance line")
     if len(queue_slots) < max_party:
         errors.append(f"queue zone has room for {len(queue_slots)} people, need {max_party}")
     if errors:

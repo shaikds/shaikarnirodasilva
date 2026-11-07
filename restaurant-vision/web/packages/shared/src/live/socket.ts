@@ -1,8 +1,9 @@
-// Reconnecting WebSocket for `WS /api/v1/ws?token=&site_id=` (one EdgeEvent JSON per message).
+// Reconnecting WebSocket for `WS /api/v1/ws?token=&site_id=` (one EdgeEvent JSON per message)
+// and the edge's LAN socket `/local/ws` (EdgeEvents plus `{type:"live.snapshot", snapshot}`).
 // Exponential backoff with jitter; a fresh URL (token) on every attempt; auth close codes
 // trigger one token refresh; "forbidden" stops reconnecting.
-import type { EdgeEvent } from '../contracts';
-import { isEdgeEvent } from '../contracts';
+import type { EdgeEvent, LiveSnapshot } from '../contracts';
+import { isEdgeEvent, isLiveSnapshotMessage } from '../contracts';
 
 export type LiveStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -35,6 +36,8 @@ export interface LiveSocketOptions {
   /** Called before every connection attempt so a refreshed token is used. */
   getUrl: () => string;
   onEvent: (event: EdgeEvent) => void;
+  /** Full state (`live.snapshot` message), e.g. from the edge's local socket. */
+  onSnapshot?: (snapshot: LiveSnapshot) => void;
   onStatus?: (status: LiveStatus) => void;
   /** Fired on every successful open; `reconnected` is false the first time. */
   onOpen?: (reconnected: boolean) => void;
@@ -139,6 +142,7 @@ export class LiveSocket {
         return;
       }
       if (isEdgeEvent(parsed)) this.opts.onEvent(parsed);
+      else if (isLiveSnapshotMessage(parsed)) this.opts.onSnapshot?.(parsed.snapshot);
     };
     ws.onerror = () => {
       // `close` follows; reconnect is handled there.

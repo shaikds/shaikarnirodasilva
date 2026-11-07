@@ -4,7 +4,7 @@
 # two (bussing_needed) and a handful of walk-aways. Dwell is shortened so tables turn on screen.
 name: demo_dinner
 description: Two-hour moderately busy dinner with a few slow waiters and walk-aways.
-seed: 2026
+seed: 2032
 site: sample
 run:
   date: 2026-11-06

@@ -11,6 +11,7 @@
     "./mock": "./src/mock/index.ts",
     "./mock/browser": "./src/mock/browser.ts",
     "./mock/node": "./src/mock/node.ts",
+    "./mock/demo": "./src/mock/demo.ts",
     "./test-utils": "./src/test/utils.tsx",
     "./vite": "./src/vite/index.ts",
     "./i18n/resources": "./src/i18n/resources/index.ts",

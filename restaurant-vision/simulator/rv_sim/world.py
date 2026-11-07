@@ -791,13 +791,14 @@ class World:
 
     def _join_queue(self, party: Party, t: float) -> None:
         geo, motion = self.geometry, self.scenario.motion
-        free = [i for i, owner in enumerate(self._slot_owner) if owner is None][: party.size]
+        free = self._cluster_slots(party.size)
         party.slots = free
         for i in free:
             self._slot_owner[i] = party.party_id
         party.phase = PartyPhase.QUEUED
         self.queue.append(party)
         queue_zone = geo.queue_zone_id
+        # The party funnels in through the cluster's first slot, then spreads to its spots.
         for i, (m, slot_index) in enumerate(zip(party.members, free, strict=True)):
             slot = geo.queue_slots[slot_index]
             assert m.pos is not None
@@ -807,7 +808,7 @@ class World:
             legs.append(
                 self._walk(
                     geo.entrance_camera,
-                    [m.pos, slot],
+                    [m.pos, geo.queue_slots[free[0]], slot],
                     motion.guest_speed,
                     "to_queue",
                     frozenset({queue_zone}),
@@ -819,6 +820,13 @@ class World:
             party.party_id, "queued", self.start_ts + t, queued_at=self.start_ts + t
         )
         self._at(t + party.plan.patience_s, lambda now: self._patience_out(party, now))
+
+    def _cluster_slots(self, size: int) -> list[int]:
+        """A party stands together: the frontmost free slot plus the free slots nearest to it."""
+        slots = self.geometry.queue_slots
+        free = [i for i, owner in enumerate(self._slot_owner) if owner is None]
+        seed = slots[free[0]]
+        return sorted(free, key=lambda i: (math.dist(slots[i], seed), i))[:size]
 
     def _release_slots(self, party: Party) -> None:
         for i in party.slots:

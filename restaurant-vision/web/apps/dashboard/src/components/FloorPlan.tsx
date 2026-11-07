@@ -1,0 +1,219 @@
+// Schematic SVG floor plan from `SiteSettings.floor_plan` (grid cells, x from the start edge).
+// Tables are colored by state and always carry an icon, label, guest count and timer, plus an
+// accessible name. Camera imagery never appears here.
+import {
+  TABLE_STATE_STYLE,
+  TableStateChip,
+  TABLE_STATES,
+  directionOf,
+  formatElapsed,
+  useFormatters,
+  useTranslation,
+  type FloorPlanItem,
+  type TableLive,
+} from '@rv/shared';
+import { Users } from 'lucide-react';
+
+export const CELL = 100;
+const GAP = 12;
+
+export interface PlacedTable {
+  table: TableLive;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  placed: boolean;
+}
+
+/** Positions every table: floor-plan items first, then unplaced tables in rows below. */
+export function layoutTables(tables: TableLive[], plan: FloorPlanItem[]) {
+  const byId = new Map(plan.map((p) => [p.table_id, p]));
+  const placed: PlacedTable[] = [];
+  const unplaced: TableLive[] = [];
+  for (const t of tables) {
+    const p = byId.get(t.table_id);
+    if (p) placed.push({ table: t, x: p.x, y: p.y, w: p.w, h: p.h, placed: true });
+    else unplaced.push(t);
+  }
+  let cols = Math.max(6, ...placed.map((p) => p.x + p.w));
+  let rows = Math.max(0, ...placed.map((p) => p.y + p.h));
+  const startRow = rows > 0 ? rows + 1 : 0;
+  unplaced.forEach((t, i) => {
+    placed.push({ table: t, x: i % cols, y: startRow + Math.floor(i / cols), w: 1, h: 1, placed: false });
+  });
+  cols = Math.max(cols, ...placed.map((p) => p.x + p.w));
+  rows = Math.max(rows, ...placed.map((p) => p.y + p.h));
+  return { items: placed, cols, rows, unplacedCount: unplaced.length };
+}
+
+/** Elapsed display: a stopwatch where waiting matters, a compact duration otherwise. */
+function useTimerText() {
+  const f = useFormatters();
+  return (t: TableLive, now: number): string | null => {
+    if (t.since_ts === null) return null;
+    const s = Math.max(0, now - t.since_ts);
+    return t.state === 'seated' || t.state === 'needs_bussing' ? formatElapsed(s) : f.duration(s);
+  };
+}
+
+export function useTableAriaLabel() {
+  const { t } = useTranslation();
+  const f = useFormatters();
+  return (table: TableLive, now: number): string => {
+    const base = t('live.tableAria', {
+      name: t('common:table.name', { label: table.label }),
+      state: t(`common:tableState.${table.state}`),
+      guests: t('common:table.guests', { count: table.guest_count }),
+      since:
+        table.since_ts === null
+          ? t('live.unknownSince')
+          : t('common:table.since', { duration: f.duration(Math.max(0, now - table.since_ts)) }),
+    });
+    const alerts = table.open_alert_ids.length;
+    return alerts ? `${base}. ${t('live.tableAlerts', { count: alerts })}` : base;
+  };
+}
+
+export interface FloorPlanProps {
+  tables: TableLive[];
+  layout: FloorPlanItem[];
+  now: number;
+  siteName: string;
+}
+
+export function FloorPlan({ tables, layout, now, siteName }: FloorPlanProps) {
+  const { t, i18n } = useTranslation();
+  const rtl = directionOf(i18n.language) === 'rtl';
+  const timerText = useTimerText();
+  const ariaLabel = useTableAriaLabel();
+  const { items, cols, rows } = layoutTables(tables, layout);
+  const width = cols * CELL;
+  const height = Math.max(1, rows) * CELL;
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      role="group"
+      aria-label={t('live.floorPlanAria', { site: siteName, count: tables.length })}
+      className="h-auto w-full select-none"
+      style={{ maxHeight: '70vh' }}
+    >
+      {items.map(({ table, x, y, w, h, placed }) => {
+        const style = TABLE_STATE_STYLE[table.state];
+        const Icon = style.icon;
+        const col = rtl ? cols - x - w : x;
+        const rx = col * CELL + GAP / 2;
+        const ry = y * CELL + GAP / 2;
+        const rw = w * CELL - GAP;
+        const rh = h * CELL - GAP;
+        const cx = rx + rw / 2;
+        const cy = ry + rh / 2;
+        const timer = timerText(table, now);
+        const alerts = table.open_alert_ids.length;
+        const iconX = rtl ? rx + rw - 26 : rx + 8;
+        const badgeX = rtl ? rx + 14 : rx + rw - 14;
+        return (
+          <g
+            key={table.table_id}
+            role="img"
+            aria-label={ariaLabel(table, now)}
+            tabIndex={0}
+            data-state={table.state}
+            data-table-id={table.table_id}
+            className="cursor-default"
+          >
+            <rect
+              x={rx}
+              y={ry}
+              width={rw}
+              height={rh}
+              rx={14}
+              fill={style.fill}
+              stroke={style.stroke}
+              strokeWidth={table.state === 'empty' ? 2 : 3}
+              strokeDasharray={placed ? undefined : '6 4'}
+            />
+            <Icon x={iconX} y={ry + 8} width={18} height={18} color={style.text} aria-hidden="true" />
+            <text
+              x={cx}
+              y={cy - (h > 1 ? 14 : 8)}
+              textAnchor="middle"
+              fontSize={22}
+              fontWeight={700}
+              fill={style.text}
+            >
+              {table.label}
+            </text>
+            {table.state !== 'empty' && table.state !== 'needs_bussing' && (
+              <g aria-hidden="true">
+                <Users x={cx - 22} y={cy + 4} width={14} height={14} color={style.text} />
+                <text x={cx + 2} y={cy + 16} textAnchor="start" fontSize={15} fontWeight={600} fill={style.text} direction="ltr">
+                  {table.guest_count}
+                </text>
+              </g>
+            )}
+            {timer && (
+              <text
+                x={cx}
+                y={ry + rh - 10}
+                textAnchor="middle"
+                fontSize={13}
+                fill={style.text}
+                style={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                {timer}
+              </text>
+            )}
+            {alerts > 0 && (
+              <g aria-hidden="true">
+                <circle cx={badgeX} cy={ry + 14} r={11} fill="rgb(var(--rv-danger))" />
+                <text x={badgeX} y={ry + 19} textAnchor="middle" fontSize={13} fontWeight={700} fill="rgb(var(--rv-surface))">
+                  {alerts}
+                </text>
+              </g>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+export function FloorLegend() {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2" aria-label={t('live.legend')} role="group">
+      {TABLE_STATES.map((s) => (
+        <TableStateChip key={s} state={s} size="sm" />
+      ))}
+    </div>
+  );
+}
+
+/** Same data as the plan, as a list (small screens, screen readers, preference). */
+export function FloorList({ tables, now }: { tables: TableLive[]; now: number }) {
+  const { t } = useTranslation();
+  const timerText = useTimerText();
+  return (
+    <ul className="divide-y divide-border">
+      {tables.map((table) => (
+        <li key={table.table_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+          <span className="min-w-[4.5rem] font-semibold">{t('common:table.name', { label: table.label })}</span>
+          <TableStateChip state={table.state} size="sm" />
+          {table.state !== 'empty' && table.state !== 'needs_bussing' && (
+            <span className="text-sm text-muted">{t('common:table.guests', { count: table.guest_count })}</span>
+          )}
+          <span className="ms-auto flex items-center gap-2 text-sm">
+            {table.open_alert_ids.length > 0 && (
+              <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-semibold text-danger">
+                {t('live.tableAlerts', { count: table.open_alert_ids.length })}
+              </span>
+            )}
+            <span className="rv-num text-muted">{timerText(table, now) ?? ''}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}

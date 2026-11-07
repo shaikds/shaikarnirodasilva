@@ -71,6 +71,20 @@ describe('LiveSocket', () => {
     socket.stop();
   });
 
+  it('passes edge live.snapshot messages to onSnapshot', () => {
+    const onSnapshot = vi.fn();
+    const { socket, events } = make({ onSnapshot });
+    socket.start();
+    FakeSocket.instances[0]!.open();
+    const snapshot = { site_id: 's', ts: 1, tables: [], occupancy: null, queues: [], open_alerts: [], devices: [] };
+    FakeSocket.instances[0]!.message({ type: 'live.snapshot', snapshot });
+    FakeSocket.instances[0]!.message({ type: 'live.snapshot', snapshot: { nope: true } });
+    expect(onSnapshot).toHaveBeenCalledTimes(1);
+    expect(onSnapshot).toHaveBeenCalledWith(snapshot);
+    expect(events).toHaveLength(0);
+    socket.stop();
+  });
+
   it('reconnects with backoff and a fresh URL', () => {
     const onOpen = vi.fn();
     const { socket, statuses } = make({ onOpen });

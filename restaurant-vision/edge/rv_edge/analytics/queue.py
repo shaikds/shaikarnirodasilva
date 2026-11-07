@@ -14,10 +14,15 @@ Per track (staff tracks are ignored, e.g. a host standing at the host stand):
   or the image border, but not within ``line_near`` of the entrance line. Its wait is
   ``last time inside the zone - entered_at``.
 * **Lost**: a member that vanished elsewhere (deep inside the queue, or near the line) is
-  probably occluded. It stops counting, but for ``lost_keep_s`` it can resume (same track id
-  reappears) or be handed off to a new track id that joins within ``handoff_distance`` of
-  where it was lost (geometry and timing only, never appearance). After that it is dropped
-  silently: the outcome is unknown, so no event.
+  probably occluded (the tracker keeps an id through about 3 s of occlusion, then issues a new
+  one). It stops counting, but for ``lost_keep_s`` it can resume (same track id reappears) or
+  be taken over by a new track id that appears inside the zone within ``handoff_distance`` of
+  where it was lost. After that it is dropped silently: the outcome is unknown, so no event.
+* **Id switch / rotation**: a new track id appearing within ``handoff_distance`` of a member
+  whose id was in the previous frame but not in this one takes the member over at once (wait
+  and party kept). This covers the daily ``track_id_ttl_h`` rotation, when every visible
+  person gets a new id in the same frame. Matching uses geometry and timing only, never
+  appearance, and the state lives only in RAM.
 
 Parties: a joining track belongs to the party of a waiting member that joined within
 ``party_window_s`` (5 s) and stands within ``party_distance``. A party's walk-away is one
@@ -128,6 +133,7 @@ class _QueueZone:
         self.done: dict[TrackKey, float] = {}
         self.alert_id: str | None = None
         self.latest: QueueLive | None = None
+        self.last_frame_ts: float | None = None
 
     def line_distance(self, p: Point2) -> float:
         return min((line.distance(p) for line in self.lines), default=math.inf)
@@ -235,10 +241,10 @@ class QueueModule:
         zone_id = qz.zone.zone_id
         line_ids = {line.zone_id for line in qz.lines}
         events: list[EdgeEvent] = []
-        seen: set[TrackKey] = set()
+        prev_t, qz.last_frame_ts = qz.last_frame_ts, t
+        frame_keys = {obs.key for obs in fo.tracks}
         for obs in fo.tracks:
             key = obs.key
-            seen.add(key)
             if key in qz.done:
                 qz.done[key] = t
                 continue
@@ -247,10 +253,13 @@ class QueueModule:
                 if member is not None:  # mistaken for a guest at first: no queue outcome
                     events += self._finish(qz, member, t)
                 continue
+            in_zone = zone_id in obs.hits.queues
             if member is None:
-                if zone_id in obs.hits.queues:
-                    self._join(qz, key, t, obs.anchor)
-                continue
+                member = self._take_over(qz, key, obs.anchor, t, in_zone, prev_t, frame_keys)
+                if member is None:
+                    if in_zone:
+                        self._join(qz, key, t, obs.anchor)
+                    continue
             member.lost_at = None
             if any(c is Crossing.IN and lid in line_ids for lid, c in obs.crossings):
                 events.append(
@@ -266,7 +275,7 @@ class QueueModule:
                 events += self._finish(qz, member, t)
                 continue
             member.last_seen_ts, member.last_anchor = t, obs.anchor
-            if zone_id in obs.hits.queues:
+            if in_zone:
                 member.last_in_zone_ts, member.last_in_zone_anchor = t, obs.anchor
         p = self.params
         for member in list(qz.members.values()):
@@ -274,7 +283,7 @@ class QueueModule:
                 if t - member.lost_at >= p.lost_keep_s:
                     member.party.dropped += 1
                     events += self._finish(qz, member, t)
-            elif member.key in seen:
+            elif member.key in frame_keys:
                 if t - member.last_in_zone_ts >= p.exit_grace_s and not self._heading_in(
                     qz, member
                 ):
@@ -286,15 +295,43 @@ class QueueModule:
                     member.lost_at = t
         return events
 
+    def _take_over(
+        self,
+        qz: _QueueZone,
+        key: TrackKey,
+        anchor: Point2,
+        t: float,
+        in_zone: bool,
+        prev_t: float | None,
+        frame_keys: set[TrackKey],
+    ) -> _Member | None:
+        """Let a new track id continue an existing member (keeping its wait and party).
+
+        Candidates within ``handoff_distance``: a member whose id was in the previous frame
+        but not in this one (an id switch or the daily id rotation: same spot, same instant),
+        anywhere; and, for a new id inside the zone, a member lost earlier. The nearest wins;
+        the old id is retired (ignored if it ever comes back)."""
+        best: _Member | None = None
+        best_d = math.inf
+        for m in qz.members.values():
+            if m.key in frame_keys:
+                continue
+            switched = m.lost_at is None and prev_t is not None and m.last_seen_ts == prev_t
+            if not (switched or (in_zone and m.lost_at is not None)):
+                continue
+            d = _dist(m.last_anchor, anchor)
+            if d <= self.params.handoff_distance and d < best_d:
+                best, best_d = m, d
+        if best is None:
+            return None
+        del qz.members[best.key]
+        qz.done[best.key] = t
+        best.key = key
+        qz.members[key] = best
+        return best
+
     def _join(self, qz: _QueueZone, key: TrackKey, t: float, anchor: Point2) -> None:
         p = self.params
-        lost = [m for m in qz.members.values() if m.lost_at is not None]
-        heir = min(lost, key=lambda m: _dist(m.last_anchor, anchor), default=None)
-        if heir is not None and _dist(heir.last_anchor, anchor) <= p.handoff_distance:
-            del qz.members[heir.key]
-            qz.done[heir.key] = t
-            qz.members[key] = _Member(key, heir.party, heir.entered_at, t, anchor, t, anchor)
-            return
         mates = [
             m
             for m in qz.members.values()

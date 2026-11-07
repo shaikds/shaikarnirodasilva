@@ -11,6 +11,7 @@ import type {
   Currency,
   EdgeEvent,
   EventType,
+  LiveSnapshot,
   Locale,
   Role,
   TableState,
@@ -74,6 +75,29 @@ export const DEVICE_OFFLINE_AFTER_S = 90;
 export type EdgeEventOf<T extends EventType> = Extract<EdgeEvent, { type: T }>;
 
 const EVENT_TYPE_SET: ReadonlySet<string> = new Set(EVENT_TYPES);
+
+/**
+ * Full-state message the edge's local WebSocket (`/local/ws`) sends alongside EdgeEvents
+ * (and that a cloud socket may send too): replaces the cached LiveSnapshot.
+ */
+export interface LiveSnapshotMessage {
+  type: 'live.snapshot';
+  snapshot: LiveSnapshot;
+}
+
+export function isLiveSnapshotMessage(value: unknown): value is LiveSnapshotMessage {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  const snap = v.snapshot as Record<string, unknown> | undefined;
+  return (
+    v.type === 'live.snapshot' &&
+    typeof snap === 'object' &&
+    snap !== null &&
+    typeof snap.site_id === 'string' &&
+    Array.isArray(snap.tables) &&
+    Array.isArray(snap.open_alerts)
+  );
+}
 
 /**
  * Cheap structural check for messages arriving over a WebSocket. Full validation happens on

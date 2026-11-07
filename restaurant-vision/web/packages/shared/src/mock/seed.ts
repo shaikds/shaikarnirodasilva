@@ -11,6 +11,7 @@ import type {
   Zone,
 } from '../contracts';
 import { DEFAULT_THRESHOLDS } from '../contracts';
+import { DEMO_PASSWORD } from './demo';
 
 export interface MockUser {
   user_id: string;
@@ -31,13 +32,7 @@ export interface MockDevice {
   cameras: { camera_id: string; status: 'ok' | 'degraded' | 'offline'; fps: number }[];
 }
 
-export const DEMO_PASSWORD = 'demo1234';
-
-export const DEMO_ACCOUNTS = [
-  { role: 'owner', email: 'owner@zayit.demo' },
-  { role: 'manager', email: 'manager@zayit.demo' },
-  { role: 'waiter', email: 'waiter@zayit.demo' },
-] as const;
+export { DEMO_ACCOUNTS, DEMO_PASSWORD } from './demo';
 
 /** Mock VAPID application server key (a real P-256 point so browsers accept it). */
 export const MOCK_VAPID_PUBLIC_KEY =

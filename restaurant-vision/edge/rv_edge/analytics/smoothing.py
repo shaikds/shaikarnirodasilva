@@ -3,7 +3,9 @@
 Two stages, used for table guests, ``area`` guests and staff on the floor:
 
 1. :class:`HeldSet` tolerates short detection dropouts (occlusion): a track still counts if it
-   was seen within the last ``hold_s`` seconds (about 3 s).
+   was seen within the last ``hold_s`` seconds (3 s, matching the tracker, which keeps a
+   person's id through about 3 s of occlusion). A track id that appears while a held id is
+   missing replaces it, so id switches and the daily id rotation do not double count.
 2. :class:`RollingMedian` smooths the held count with the lower median over the trailing window
    ``(t - window_s, t]`` (``Thresholds.count_window_s``). Every frame is one sample, so at a
    steady frame rate the median moves from ``a`` to ``b`` once more than half of the window
@@ -100,6 +102,31 @@ class HeldSet:
         """Record a sighting of ``key`` at ``ts``."""
         self._last[key] = ts
 
+    def see_frame(self, ts: float, keys: Iterable[TrackKey]) -> None:
+        """Record every key seen in one frame.
+
+        Keys seen for the first time *replace* held keys missing from this frame (most
+        recently seen first) instead of adding to them: when a tracker gives a person a new
+        id (id switch after occlusion, or every visible track at once at the daily
+        ``track_id_ttl_h`` rotation), the old id must not keep counting for ``hold_s`` next
+        to the new one. Nothing is carried from the old key to the new one; this only avoids
+        a double count. A genuinely new person arriving while someone is occluded can make
+        the count dip for at most ``hold_s``, which the rolling median absorbs.
+        """
+        frame = list(keys)
+        last = self._last
+        fresh = sum(1 for key in frame if key not in last)
+        if fresh:
+            present = set(frame)
+            missing = sorted(
+                (k for k, seen in last.items() if k not in present and ts - seen <= self.hold_s),
+                key=lambda k: (-last[k], k),
+            )
+            for key in missing[:fresh]:
+                del last[key]
+        for key in frame:
+            last[key] = ts
+
     def discard(self, key: TrackKey) -> None:
         """Stop counting ``key`` immediately (e.g. it turned out to be staff)."""
         self._last.pop(key, None)
@@ -147,8 +174,7 @@ class SmoothedCount:
         held = self._held
         for key in drop:
             held.discard(key)
-        for key in keys:
-            held.see(key, ts)
+        held.see_frame(ts, keys)
         self.raw = held.count(ts)
         self.value = self._median.add(ts, self.raw)
         return self.value

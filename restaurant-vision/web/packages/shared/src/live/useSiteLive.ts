@@ -39,7 +39,9 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
   onEventRef.current = options.onEvent;
   const pending = useRef<EdgeEvent[]>([]);
   const socketEnabled = options.socket !== false && !!siteId;
-  const { backoff, WebSocketImpl } = options;
+  const { WebSocketImpl } = options;
+  // Callers often pass an inline object; key the effect on its content.
+  const backoffKey = JSON.stringify(options.backoff ?? {});
 
   const query = useQuery({
     queryKey: queryKeys.live(siteId ?? ''),
@@ -67,7 +69,7 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
     const socket = new LiveSocket({
       getUrl: () => api.liveSocketUrl(siteId),
       refreshAuth: () => client.refresh(),
-      backoff,
+      backoff: JSON.parse(backoffKey) as Partial<BackoffOptions>,
       WebSocketImpl,
       onStatus: (status) =>
         setConnection((c) => ({
@@ -77,6 +79,11 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
         })),
       onOpen: (reconnected) => {
         if (reconnected) void qc.invalidateQueries({ queryKey: key });
+      },
+      onSnapshot: (snapshot) => {
+        if (snapshot.site_id !== siteId) return;
+        qc.setQueryData<LiveSnapshot>(key, snapshot);
+        setConnection((c) => ({ ...c, lastEventAt: Date.now() }));
       },
       onEvent: (event) => {
         if (event.site_id !== siteId) return;
@@ -89,7 +96,7 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
     });
     socket.start();
     return () => socket.stop();
-  }, [api, client, qc, siteId, socketEnabled, backoff, WebSocketImpl]);
+  }, [api, client, qc, siteId, socketEnabled, backoffKey, WebSocketImpl]);
 
   return { ...query, connection };
 }
