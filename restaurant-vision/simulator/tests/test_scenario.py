@@ -83,9 +83,14 @@ def test_layout_errors() -> None:
         scenario(layout={"entrance": {"door": inside_queue}})
     with pytest.raises(ValidationError, match="lane_in .* crosses the entrance line none"):
         scenario(layout={"entrance": {"lane_in": [[0.36, 0.33], [0.6, 0.33]]}})
-    with pytest.raises(ValidationError, match="aisle passes through zone 'z-t6'"):
-        scenario(layout={"cameras": {"cam-dining": {"entry": [0.08, 0.47],
-                                                    "aisle": [[0.08, 0.47], [0.4, 0.7]]}}})
+    with pytest.raises(ValidationError, match="aisle passes through zone 'z-t5'"):
+        scenario(
+            layout={
+                "cameras": {
+                    "cam-dining": {"entry": [0.08, 0.47], "aisle": [[0.08, 0.47], [0.4, 0.7]]}
+                }
+            }
+        )
     site = sample_site_config().model_dump(mode="json")
     site["zones"] = [z for z in site["zones"] if z["zone_id"] != "z-staff-kitchen"]
     with pytest.raises(ValidationError, match="'z-staff-kitchen' not found"):

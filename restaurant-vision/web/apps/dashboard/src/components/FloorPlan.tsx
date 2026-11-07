@@ -129,26 +129,25 @@ export function FloorPlan({ tables, layout, now, siteName }: FloorPlanProps) {
               width={rw}
               height={rh}
               rx={14}
-              fill={style.fill}
-              stroke={style.stroke}
+              style={{ fill: style.fill, stroke: style.stroke }}
               strokeWidth={table.state === 'empty' ? 2 : 3}
               strokeDasharray={placed ? undefined : '6 4'}
             />
-            <Icon x={iconX} y={ry + 8} width={18} height={18} color={style.text} aria-hidden="true" />
+            <Icon x={iconX} y={ry + 8} width={18} height={18} style={{ color: style.text }} aria-hidden="true" />
             <text
               x={cx}
               y={cy - (h > 1 ? 14 : 8)}
               textAnchor="middle"
               fontSize={22}
               fontWeight={700}
-              fill={style.text}
+              style={{ fill: style.text }}
             >
               {table.label}
             </text>
             {table.state !== 'empty' && table.state !== 'needs_bussing' && (
               <g aria-hidden="true">
-                <Users x={cx - 22} y={cy + 4} width={14} height={14} color={style.text} />
-                <text x={cx + 2} y={cy + 16} textAnchor="start" fontSize={15} fontWeight={600} fill={style.text} direction="ltr">
+                <Users x={cx - 22} y={cy + 4} width={14} height={14} style={{ color: style.text }} />
+                <text x={cx + 2} y={cy + 16} textAnchor="start" fontSize={15} fontWeight={600} style={{ fill: style.text }} direction="ltr">
                   {table.guest_count}
                 </text>
               </g>
@@ -159,16 +158,15 @@ export function FloorPlan({ tables, layout, now, siteName }: FloorPlanProps) {
                 y={ry + rh - 10}
                 textAnchor="middle"
                 fontSize={13}
-                fill={style.text}
-                style={{ fontVariantNumeric: 'tabular-nums' }}
+                style={{ fill: style.text, fontVariantNumeric: 'tabular-nums' }}
               >
                 {timer}
               </text>
             )}
             {alerts > 0 && (
               <g aria-hidden="true">
-                <circle cx={badgeX} cy={ry + 14} r={11} fill="rgb(var(--rv-danger))" />
-                <text x={badgeX} y={ry + 19} textAnchor="middle" fontSize={13} fontWeight={700} fill="rgb(var(--rv-surface))">
+                <circle cx={badgeX} cy={ry + 14} r={11} style={{ fill: 'rgb(var(--rv-danger))' }} />
+                <text x={badgeX} y={ry + 19} textAnchor="middle" fontSize={13} fontWeight={700} style={{ fill: 'rgb(var(--rv-surface))' }}>
                   {alerts}
                 </text>
               </g>

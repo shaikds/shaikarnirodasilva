@@ -1,5 +1,6 @@
 // React Query hooks over the typed endpoints.
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -255,6 +256,7 @@ export function useMetricsSummary(siteId: string | undefined, range: TimeRange) 
     queryKey: queryKeys.summary(siteId ?? '', range),
     queryFn: ({ signal }) => api.getMetricsSummary(siteId!, range, signal),
     enabled: !!siteId,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -264,6 +266,7 @@ export function useTimeseries(siteId: string | undefined, q: TimeseriesQuery) {
     queryKey: queryKeys.timeseries(siteId ?? '', q),
     queryFn: ({ signal }) => api.getTimeseries(siteId!, q, signal),
     enabled: !!siteId,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -273,6 +276,7 @@ export function useTableStats(siteId: string | undefined, range: TimeRange) {
     queryKey: queryKeys.tableStats(siteId ?? '', range),
     queryFn: ({ signal }) => api.getTableStats(siteId!, range, signal),
     enabled: !!siteId,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -282,6 +286,7 @@ export function useShiftReport(siteId: string | undefined, date: string) {
     queryKey: queryKeys.shiftReport(siteId ?? '', date),
     queryFn: ({ signal }) => api.getShiftReport(siteId!, date, signal),
     enabled: !!siteId && /^\d{4}-\d{2}-\d{2}$/.test(date),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -291,6 +296,7 @@ export function useBranchComparison(orgId: string | undefined, range: TimeRange,
     queryKey: queryKeys.compare(orgId ?? '', range),
     queryFn: ({ signal }) => api.compareBranches(orgId!, range, signal),
     enabled: !!orgId && enabled,
+    placeholderData: keepPreviousData,
   });
 }
 

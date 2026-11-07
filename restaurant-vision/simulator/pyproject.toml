@@ -20,6 +20,7 @@ packages = ["rv_sim"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 100
@@ -39,3 +40,6 @@ follow_untyped_imports = true
 
 [project.scripts]
 rv-sim = "rv_sim.cli:main"
+
+[tool.ruff.lint.isort]
+known-first-party = ["rv_sim", "conftest"]

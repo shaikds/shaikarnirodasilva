@@ -29,6 +29,11 @@
     --rv-info-soft: 225 237 255;
     --rv-focus: 23 92 211;
 
+    /* Charts (validated with the dataviz palette checks against these surfaces). */
+    --rv-chart-1: 42 120 214; /* #2a78d6 */
+    --rv-chart-grid: 229 231 235;
+    --rv-chart-axis: 107 114 128;
+
     /* Table states: text on background >= 7:1, stroke distinguishes on the floor plan. */
     --rv-state-empty-bg: 236 239 243; /* neutral gray */
     --rv-state-empty-fg: 52 64 84;
@@ -64,6 +69,10 @@
     --rv-info: 132 187 255;
     --rv-info-soft: 20 44 84;
     --rv-focus: 132 187 255;
+
+    --rv-chart-1: 57 135 229; /* #3987e5 */
+    --rv-chart-grid: 44 51 62;
+    --rv-chart-axis: 160 171 186;
 
     --rv-state-empty-bg: 44 51 62;
     --rv-state-empty-fg: 220 226 234;

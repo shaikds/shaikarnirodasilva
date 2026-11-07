@@ -174,6 +174,8 @@ export const dashboardEn = {
     p90: '90th percentile (p90)',
     medianOverTime: 'Median response over time (min)',
     firstVisitByTable: 'First visit delay by table, median (min)',
+    hour: 'Hour',
+    when: 'Time',
     minutes: 'Minutes',
     noData: 'Not enough data for this period yet.',
     chartSummary: '{{title}}: {{count}} data points.',

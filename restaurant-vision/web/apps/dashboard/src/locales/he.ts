@@ -175,6 +175,8 @@ export const dashboardHe = {
     p90: 'אחוזון 90 (p90)',
     medianOverTime: 'חציון זמן התגובה לאורך זמן (דק׳)',
     firstVisitByTable: 'זמן עד ביקור ראשון לפי שולחן, חציון (דק׳)',
+    hour: 'שעה',
+    when: 'זמן',
     minutes: 'דקות',
     noData: 'אין עדיין מספיק נתונים לתקופה הזו.',
     chartSummary: '{{title}}: {{count}} נקודות נתונים.',

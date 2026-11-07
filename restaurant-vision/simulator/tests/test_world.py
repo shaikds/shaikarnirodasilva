@@ -175,7 +175,8 @@ def test_ground_truth_is_consistent_with_the_world(smoke_world: World) -> None:
     assert len(truth.occupancy) == 601
     for point in truth.occupancy:
         open_sessions = [
-            s for s in truth.sessions
+            s
+            for s in truth.sessions
             if s.seated_at <= point.ts and (s.left_at is None or s.left_at > point.ts)
         ]
         assert point.tables_occupied == len(open_sessions)
@@ -185,7 +186,6 @@ def test_ground_truth_is_consistent_with_the_world(smoke_world: World) -> None:
 
 def test_hourly_arrivals_follow_the_rate_profile() -> None:
     from conftest import SCENARIOS
-
     from rv_sim import load_scenario
 
     world = World(load_scenario(SCENARIOS / "peak_friday.yaml"))
