@@ -1,0 +1,254 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import threading
+from collections.abc import Callable
+from typing import Any
+
+import httpx
+from rv_contracts import (
+    AckVia,
+    AlertStatus,
+    CameraStatus,
+    EdgeHeartbeat,
+    EventType,
+    LiveSnapshot,
+    SiteConfig,
+)
+from rv_contracts.fixtures import CAM_DINING, CAM_ENTRANCE
+
+from rv_edge.runtime.runtime import (
+    LOCAL_DEVICE_ID,
+    DropOldestQueue,
+    EdgeRuntime,
+)
+
+from .conftest import DEVICE_ID, SITE_ID
+from .fakes import ALERT_ID, EngineHolder, FakeCloud, FakeFactory, ManualClock, RecordingSink
+from .fakes import wait_until as _wait_until
+
+Build = Callable[..., tuple[EdgeRuntime, FakeFactory, EngineHolder]]
+
+
+def wait_until(cond: Callable[[], bool], timeout: float = 3.0) -> None:
+    assert _wait_until(cond, timeout), "condition not met in time"
+
+
+def _down(request: httpx.Request) -> httpx.Response:
+    raise httpx.ConnectError("cloud unreachable", request=request)
+
+
+OFFLINE_CLOUD: dict[str, Any] = {
+    "enable_sync": True,
+    "cloud_transport": httpx.MockTransport(_down),
+}
+"""Paired, with a cloud that is down: events stay in the outbox."""
+
+
+def started(make_runtime: Build, **kwargs: Any) -> tuple[EdgeRuntime, FakeFactory, EngineHolder]:
+    runtime, factory, holder = make_runtime(**kwargs)
+    runtime.start()
+    wait_until(lambda: bool(holder.engines))
+    return runtime, factory, holder
+
+
+def test_frames_flow_from_cameras_to_the_analytics_thread(make_runtime: Build) -> None:
+    runtime, factory, holder = started(make_runtime)
+    engine = holder.engine
+    wait_until(lambda: {tf.camera_id for tf in list(engine.frames)} == {CAM_DINING, CAM_ENTRANCE})
+    assert engine.threads == {"rv-analytics"}
+    by_camera = {p.camera_id: p for p in factory.built}
+    assert by_camera[CAM_DINING].privacy_masks  # restroom privacy zone passed to the pipeline
+    assert by_camera[CAM_DINING].started
+    assert factory.kwargs[0]["detector_backend"] == "auto"
+
+
+def test_events_reach_outbox_bus_and_local_broadcast(make_runtime: Build) -> None:
+    runtime, _, _ = make_runtime(**OFFLINE_CLOUD)
+    sink = RecordingSink()
+    runtime.bus.subscribe(sink)
+
+    async def first_alert() -> dict[str, Any]:
+        sub = runtime.broadcaster.subscribe()
+        runtime.start()
+        while True:
+            message: dict[str, Any] = json.loads(await asyncio.wait_for(sub.queue.get(), 3))
+            if message["type"] == "alert.raised":
+                return message
+
+    message = asyncio.run(first_alert())
+    assert message["alert_id"] == ALERT_ID
+    wait_until(lambda: bool(sink.of_type("alert.raised")))
+    rows = [item.event for item in runtime.outbox.fetch_batch()]
+    assert any(e.type is EventType.ALERT_RAISED for e in rows)
+
+
+def test_unpaired_edge_does_not_persist_events(make_runtime: Build) -> None:
+    runtime, _, _ = make_runtime(paired=False, heartbeat_interval_s=0.05)
+    sink = RecordingSink()
+    runtime.bus.subscribe(sink)
+    runtime.start()
+    wait_until(lambda: bool(sink.of_type("alert.raised")) and bool(sink.of_type("edge.heartbeat")))
+    assert runtime.outbox.depth() == 0
+    heartbeat = sink.of_type("edge.heartbeat")[0]
+    assert isinstance(heartbeat, EdgeHeartbeat)
+    assert heartbeat.device_id == LOCAL_DEVICE_ID
+
+
+def test_local_ack_is_applied_on_the_analytics_thread(make_runtime: Build) -> None:
+    runtime, _, holder = started(make_runtime, **OFFLINE_CLOUD)
+    engine = holder.engine
+    wait_until(lambda: runtime.find_alert(ALERT_ID) is not None)
+    view = runtime.ack_alert(ALERT_ID, via=AckVia.LOCAL)
+    assert view is not None
+    assert view.status is AlertStatus.ACKNOWLEDGED and view.ack_via is AckVia.LOCAL
+    assert engine.acks[0][0] == ALERT_ID and engine.acks[0][2] is AckVia.LOCAL
+    assert engine.threads == {"rv-analytics"}
+    assert runtime.ack_alert("no-such-alert", via=AckVia.LOCAL) is None
+    acked = [i.event for i in runtime.outbox.fetch_batch() if i.event.type.value.endswith("ged")]
+    assert acked and acked[0].via is AckVia.LOCAL  # type: ignore[union-attr]
+
+
+def test_cloud_ack_command_reaches_the_analytics_thread(make_runtime: Build) -> None:
+    cloud = FakeCloud()
+    cloud.pages = [{"cursor": "c0", "commands": []}]
+    runtime, _, holder = make_runtime(
+        enable_sync=True,
+        cloud_transport=httpx.MockTransport(cloud.handler),
+        sync_options={"poll_interval_s": 0.02},
+    )
+    runtime.start()
+    wait_until(lambda: bool(holder.engines) and runtime.find_alert(ALERT_ID) is not None)
+    cloud.pages.append(
+        {
+            "cursor": "c1",
+            "commands": [
+                {
+                    "kind": "alert_ack",
+                    "command_id": "cmd-1",
+                    "site_id": SITE_ID,
+                    "created_at": 1_793_988_100.0,
+                    "alert_id": ALERT_ID,
+                    "ack_at": 1_793_988_100.5,
+                }
+            ],
+        }
+    )
+    engine = holder.engine
+    wait_until(lambda: any(via is AckVia.CLOUD for _, _, via in list(engine.acks)))
+    assert engine.acks[0] == (ALERT_ID, 1_793_988_100.5, AckVia.CLOUD)
+    assert engine.threads == {"rv-analytics"}
+    # The resulting alert.acknowledged (via=cloud) is delivered back to the cloud.
+    wait_until(
+        lambda: any(
+            e.get("type") == "alert.acknowledged" and e.get("via") == "cloud"
+            for e in list(cloud.stored.values())
+        )
+    )
+    assert runtime.sync is not None and runtime.sync.online
+
+
+def test_heartbeat_contents(make_runtime: Build) -> None:
+    runtime, _, _ = make_runtime(heartbeat_interval_s=0.05, **OFFLINE_CLOUD)
+    sink = RecordingSink()
+    runtime.bus.subscribe(sink)
+    runtime.start()
+    wait_until(lambda: len(sink.of_type("edge.heartbeat")) >= 2)
+    wait_until(
+        lambda: any(
+            isinstance(h, EdgeHeartbeat) and all(c.status is CameraStatus.OK for c in h.cameras)
+            for h in sink.of_type("edge.heartbeat")
+        )
+    )
+    hb = sink.of_type("edge.heartbeat")[-1]
+    assert isinstance(hb, EdgeHeartbeat)
+    assert hb.site_id == SITE_ID and hb.device_id == DEVICE_ID
+    assert hb.version == runtime.version
+    assert {c.camera_id for c in hb.cameras} == {CAM_DINING, CAM_ENTRANCE}
+    assert hb.mem_mb > 0 and hb.cpu_pct >= 0
+    assert hb.outbox_depth >= 1  # earlier events wait for the (down) cloud
+
+
+def test_ticks_follow_the_clock(make_runtime: Build) -> None:
+    clock = ManualClock()
+    runtime, _, holder = started(make_runtime, clock=clock)
+    engine = holder.engine
+    assert engine.ticks == []
+    clock.advance(1.5)
+    wait_until(lambda: len(engine.ticks) == 1)
+    assert engine.ticks[0] == clock.now()
+
+
+def test_live_snapshot_shape(make_runtime: Build) -> None:
+    runtime, _, _ = started(make_runtime)
+    wait_until(lambda: runtime.find_alert(ALERT_ID) is not None)
+    snapshot = runtime.live_snapshot()
+    again = LiveSnapshot.model_validate_json(snapshot.model_dump_json())
+    assert again.site_id == SITE_ID
+    assert len(again.tables) == 8
+    assert again.devices[0].device_id == DEVICE_ID and again.devices[0].online
+    assert [a.alert_id for a in again.open_alerts] == [ALERT_ID]
+
+
+def test_runtime_without_config_still_serves_state(make_runtime: Build) -> None:
+    runtime, factory, holder = make_runtime(with_config=False, paired=False)
+    runtime.start()
+    snapshot = runtime.live_snapshot()
+    assert snapshot.site_id == "unconfigured"
+    assert snapshot.tables == [] and factory.built == [] and holder.engines == []
+
+
+def test_local_config_change_reconfigures_engine_and_cameras(
+    make_runtime: Build, config: SiteConfig
+) -> None:
+    runtime, factory, holder = started(make_runtime)
+    wait_until(lambda: len(factory.built) == 2)
+    data = config.model_dump()
+    for camera in data["cameras"]:
+        if camera["camera_id"] == CAM_ENTRANCE:
+            camera["enabled"] = False
+    edited = SiteConfig.model_validate(data)
+    runtime.apply_local_config(edited)
+    engine = holder.engine
+    wait_until(lambda: engine.configs[-1] == edited)
+    entrance = next(p for p in factory.built if p.camera_id == CAM_ENTRANCE)
+    wait_until(lambda: entrance.stopped)
+    assert runtime.config_store.has_pending_push
+    assert [h.camera_id for h in runtime.camera_health()] == [CAM_DINING]
+
+
+def test_config_for_another_site_is_rejected(make_runtime: Build, config: SiteConfig) -> None:
+    runtime, _, _ = started(make_runtime)
+    other = SiteConfig.model_validate({**config.model_dump(), "site_id": "other-site"})
+    try:
+        runtime.apply_local_config(other)
+    except ValueError as exc:
+        assert "paired" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected ConfigRejected")
+
+
+def test_clean_stop(make_runtime: Build) -> None:
+    runtime, factory, holder = started(make_runtime)
+    wait_until(lambda: len(factory.built) == 2 and bool(holder.engine.frames))
+    runtime.stop()
+    assert not runtime.running
+    assert all(p.stopped for p in factory.built)
+    alive = [t.name for t in threading.enumerate() if t.name.startswith("rv-") and t.is_alive()]
+    assert alive == []
+    runtime.stop()  # idempotent
+    try:
+        runtime.ack_alert(ALERT_ID, via=AckVia.LOCAL)
+    except RuntimeError:
+        pass
+    else:  # pragma: no cover
+        raise AssertionError("ack after stop must fail")
+
+
+def test_drop_oldest_queue() -> None:
+    q: DropOldestQueue[int] = DropOldestQueue(3)
+    for i in range(5):
+        q.put(i)
+    assert q.dropped == 2
+    assert [q.get(0), q.get(0), q.get(0), q.get(0)] == [2, 3, 4, None]

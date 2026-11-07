@@ -620,15 +620,18 @@ class EdgeRuntime:
         """Measure the staff-uniform colour inside ``box`` of the current frame, store it and
         restart the camera pipelines with it."""
         cap = self.capture(camera_id)
-        image = cap.frame.image if cap.frame is not None else None
-        if image is None or not hasattr(image, "shape"):
+        frame = cap.frame
+        if frame is None or not hasattr(frame.image, "shape"):
             raise CalibrationError("uniform calibration needs a real camera image")
         try:
             hints = importlib.import_module("rv_edge.vision.hints")
             measure = hints.measure_uniform_hsv
         except (ImportError, AttributeError) as exc:
             raise CalibrationError("uniform calibration is not available in this build") from exc
-        h, s, v = (float(x) for x in measure(image, box))
+        try:
+            h, s, v = (float(x) for x in measure(frame, box))
+        except ValueError as exc:  # no pixels / box too small
+            raise CalibrationError(str(exc)) from exc
         hsv = (h, s, v)
         self.secrets.set_uniform_hsv(hsv)
         self.reconcile_cameras()

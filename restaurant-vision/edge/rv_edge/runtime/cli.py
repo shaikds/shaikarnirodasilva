@@ -108,8 +108,8 @@ def serve(
     server = uvicorn.Server(
         uvicorn.Config(
             app,
-            host=host or settings.local_host,
-            port=port or settings.local_port,
+            host=host if host is not None else settings.local_host,
+            port=port if port is not None else settings.local_port,
             log_level=level.lower(),
             access_log=False,
         )

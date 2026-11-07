@@ -220,6 +220,16 @@ class CloudSync:
         items = self._outbox.fetch_batch(limit)
         if not items:
             return False
+        # The cloud answers 403 to events of another site (e.g. queued before a re-pair to a
+        # different site); dead-letter them so they cannot block the outbox.
+        site_id = self._secrets.site_id
+        foreign = [item.id for item in items if item.event.site_id != site_id]
+        if foreign:
+            self._outbox.mark_failed(foreign)
+            log.warning("dead-lettered %d queued events of another site", len(foreign))
+            items = [item for item in items if item.event.site_id == site_id]
+            if not items:
+                return True
         batch = EventBatch(events=[item.event for item in items])
         resp = client.post(EVENTS_PATH, content=batch.model_dump_json(), headers={**auth, **_JSON})
         self._raise_for_transient(resp)
