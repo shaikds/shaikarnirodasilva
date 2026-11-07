@@ -1,0 +1,435 @@
+"""Entrance queue: waits, seatings, walk-aways and the long-queue alert (architecture 6.2).
+
+One state per ``queue`` zone, using the ``entrance_line`` zones drawn on the same camera
+(the line between the queue and the dining room; crossing it inward means "seated").
+
+Per track (staff tracks are ignored, e.g. a host standing at the host stand):
+
+* **Join**: the first frame its anchor is inside the queue zone records ``entered_at``.
+* **Seated**: a member crossing an entrance line *inward* emits ``queue.seated`` with
+  ``waited_s = crossing ts - entered_at``.
+* **Left** (walked away outward): a member that is visible but has been outside the zone for
+  ``exit_grace_s`` without heading towards the line, or that vanished (not seen for
+  ``vanish_s``) *near the door*: outside the zone, or within ``door_margin`` of the zone edge
+  or the image border, but not within ``line_near`` of the entrance line. Its wait is
+  ``last time inside the zone - entered_at``.
+* **Lost**: a member that vanished elsewhere (deep inside the queue, or near the line) is
+  probably occluded. It stops counting, but for ``lost_keep_s`` it can resume (same track id
+  reappears) or be handed off to a new track id that joins within ``handoff_distance`` of
+  where it was lost (geometry and timing only, never appearance). After that it is dropped
+  silently: the outcome is unknown, so no event.
+
+Parties: a joining track belongs to the party of a waiting member that joined within
+``party_window_s`` (5 s) and stands within ``party_distance``. A party's walk-away is one
+``queue.walkaway`` event, emitted when its last member is resolved, if the longest wait of the
+members who left is >= ``walkaway_min_wait_s``: ``party_size_est`` = members who left (plus
+members dropped as lost, unless someone of the party was seated).
+
+``long_queue`` (warn) is raised when people >= ``long_queue_people`` or the longest current
+wait >= ``long_queue_wait_s``, and resolved (``state_change``) only once *both* fall back
+below the hysteresis levels: people <= ``long_queue_people - 1 - h`` (h defaults to a quarter
+of the threshold, at least 1) and longest wait < ``wait_clear_ratio * long_queue_wait_s``.
+
+``queue.snapshot`` (people waiting, parties, longest and mean current wait) is emitted for
+every queue zone every ``snapshot_interval_s``. Waits are measured to the tick time.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+from typing import Any
+
+from rv_contracts import (
+    AlertKind,
+    Crossing,
+    EdgeEvent,
+    QueueLive,
+    QueueSeated,
+    QueueSnapshot,
+    QueueWalkaway,
+    ResolveReason,
+    SiteConfig,
+    TrackFrame,
+    ZoneKind,
+    make_event,
+)
+
+from .alerts import AlertManager
+from .roles import Role
+from .scene import FrameObservation, SceneModule
+from .timers import IntervalTimer
+from .zones import LineZone, Point2, PolygonZone, TrackKey, border_distance
+
+
+@dataclass(frozen=True, slots=True)
+class QueueParams:
+    """Queue heuristics. Distances are normalized image units, times seconds."""
+
+    party_window_s: float = 5.0
+    party_distance: float = 0.15
+    exit_grace_s: float = 10.0
+    vanish_s: float = 3.0
+    door_margin: float = 0.05
+    line_near: float = 0.1
+    heading_eps: float = 0.02
+    """A member outside the zone is heading in if it is this much closer to the line than
+    where it last was inside the zone."""
+    lost_keep_s: float = 30.0
+    handoff_distance: float = 0.1
+    people_hysteresis: int | None = None
+    """People below ``long_queue_people - 1`` needed to clear ``long_queue``; None: a quarter
+    of the threshold, at least 1."""
+    wait_clear_ratio: float = 0.75
+    done_forget_s: float = 60.0
+    """Finished track ids are ignored (not re-queued) until unseen this long."""
+
+    def people_clear_at(self, long_queue_people: int) -> int:
+        """Highest people count at which an open ``long_queue`` may clear."""
+        hyst = self.people_hysteresis
+        if hyst is None:
+            hyst = max(1, round(long_queue_people * 0.25))
+        return max(0, long_queue_people - 1 - hyst)
+
+
+@dataclass(slots=True, eq=False)
+class _Party:
+    waiting: int = 0
+    """Members not yet resolved (waiting or lost)."""
+    left_waits: list[float] = field(default_factory=list)
+    dropped: int = 0
+    seated: int = 0
+
+
+@dataclass(slots=True, eq=False)
+class _Member:
+    key: TrackKey
+    party: _Party
+    entered_at: float
+    last_in_zone_ts: float
+    last_in_zone_anchor: Point2
+    last_seen_ts: float
+    last_anchor: Point2
+    lost_at: float | None = None
+
+
+def _dist(a: Point2, b: Point2) -> float:
+    return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
+class _QueueZone:
+    """Live state of one queue zone."""
+
+    def __init__(self, zone: PolygonZone, camera_id: str, lines: tuple[LineZone, ...]) -> None:
+        self.zone = zone
+        self.camera_id = camera_id
+        self.lines = lines
+        self.members: dict[TrackKey, _Member] = {}
+        self.done: dict[TrackKey, float] = {}
+        self.alert_id: str | None = None
+        self.latest: QueueLive | None = None
+
+    def line_distance(self, p: Point2) -> float:
+        return min((line.distance(p) for line in self.lines), default=math.inf)
+
+    def waiting(self) -> list[_Member]:
+        return [m for m in self.members.values() if m.lost_at is None]
+
+    def stats(self, now: float) -> tuple[int, int, float, float]:
+        """``(people, parties, longest_wait_s, avg_wait_s)`` at ``now``."""
+        waiting = self.waiting()
+        if not waiting:
+            return 0, 0, 0.0, 0.0
+        waits = [max(0.0, now - m.entered_at) for m in waiting]
+        parties = len({id(m.party) for m in waiting})
+        return len(waiting), parties, max(waits), sum(waits) / len(waits)
+
+
+class QueueModule:
+    """``AnalyticsModule`` for entrance queues (name ``queue``); see module docstring."""
+
+    def __init__(
+        self,
+        scene: SceneModule,
+        alerts: AlertManager,
+        config: SiteConfig,
+        *,
+        params: QueueParams | None = None,
+    ) -> None:
+        self._scene = scene
+        self._alerts = alerts
+        self.params = params if params is not None else QueueParams()
+        self._config = config
+        self._zones: dict[str, _QueueZone] = {}
+        self._enabled = False
+        self._timer = IntervalTimer(config.thresholds.snapshot_interval_s)
+        self._pending: list[EdgeEvent] = []
+        self._last_t: float | None = None
+        self.configure(config)
+
+    @property
+    def name(self) -> str:
+        return "queue"
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    def configure(self, config: SiteConfig) -> None:
+        """Keep the state of queue zones that still exist on the same camera; drop the others
+        and resolve their ``long_queue`` alerts (``state_change``, emitted on the next call)."""
+        self._config = config
+        self._timer.interval_s = config.thresholds.snapshot_interval_s
+        enabled = config.modules.queue
+        enabled_cams = {c.camera_id for c in config.cameras if c.enabled}
+        zones: dict[str, _QueueZone] = {}
+        if enabled:
+            for zone in config.zones:
+                if zone.kind is not ZoneKind.QUEUE or zone.camera_id not in enabled_cams:
+                    continue
+                poly = PolygonZone.from_zone(zone)
+                lines = tuple(
+                    LineZone(z.zone_id, z.line)
+                    for z in config.zones_for(zone.camera_id, ZoneKind.ENTRANCE_LINE)
+                    if z.line is not None
+                )
+                state = self._zones.get(zone.zone_id)
+                if state is None or state.camera_id != zone.camera_id:
+                    state = _QueueZone(poly, zone.camera_id, lines)
+                else:
+                    state.zone, state.lines = poly, lines
+                zones[zone.zone_id] = state
+        ts = self._last_t if self._last_t is not None else 0.0
+        for zone_id, state in self._zones.items():
+            if zones.get(zone_id) is not state and state.alert_id is not None:
+                self._pending += self._alerts.resolve(
+                    state.alert_id, ts, ResolveReason.STATE_CHANGE
+                )
+        self._zones = zones
+        self._enabled = enabled
+
+    def _take_pending(self) -> list[EdgeEvent]:
+        out, self._pending = self._pending, []
+        return out
+
+    def _advance(self, t: float) -> None:
+        self._last_t = t if self._last_t is None else max(self._last_t, t)
+
+    # --- frames -----------------------------------------------------------------------
+
+    def on_track_frame(self, tf: TrackFrame) -> list[EdgeEvent]:
+        out = self._take_pending()
+        states = [q for q in self._zones.values() if q.camera_id == tf.camera_id]
+        if not states:
+            return out
+        fo = self._scene.observe(tf)
+        if fo is None:
+            return out
+        self._advance(fo.ts)
+        for state in states:
+            out += self._process(state, fo)
+        return out
+
+    def _process(self, qz: _QueueZone, fo: FrameObservation) -> list[EdgeEvent]:
+        t = fo.ts
+        zone_id = qz.zone.zone_id
+        line_ids = {line.zone_id for line in qz.lines}
+        events: list[EdgeEvent] = []
+        seen: set[TrackKey] = set()
+        for obs in fo.tracks:
+            key = obs.key
+            seen.add(key)
+            if key in qz.done:
+                qz.done[key] = t
+                continue
+            member = qz.members.get(key)
+            if obs.role is Role.STAFF:
+                if member is not None:  # mistaken for a guest at first: no queue outcome
+                    events += self._finish(qz, member, t)
+                continue
+            if member is None:
+                if zone_id in obs.hits.queues:
+                    self._join(qz, key, t, obs.anchor)
+                continue
+            member.lost_at = None
+            if any(c is Crossing.IN and lid in line_ids for lid, c in obs.crossings):
+                events.append(
+                    make_event(
+                        QueueSeated,
+                        self._config.site_id,
+                        t,
+                        zone_id=zone_id,
+                        waited_s=max(0.0, t - member.entered_at),
+                    )
+                )
+                member.party.seated += 1
+                events += self._finish(qz, member, t)
+                continue
+            member.last_seen_ts, member.last_anchor = t, obs.anchor
+            if zone_id in obs.hits.queues:
+                member.last_in_zone_ts, member.last_in_zone_anchor = t, obs.anchor
+        p = self.params
+        for member in list(qz.members.values()):
+            if member.lost_at is not None:
+                if t - member.lost_at >= p.lost_keep_s:
+                    member.party.dropped += 1
+                    events += self._finish(qz, member, t)
+            elif member.key in seen:
+                if t - member.last_in_zone_ts >= p.exit_grace_s and not self._heading_in(
+                    qz, member
+                ):
+                    events += self._left(qz, member, t)
+            elif t - member.last_seen_ts >= p.vanish_s:
+                if self._near_door(qz, member):
+                    events += self._left(qz, member, t)
+                else:
+                    member.lost_at = t
+        return events
+
+    def _join(self, qz: _QueueZone, key: TrackKey, t: float, anchor: Point2) -> None:
+        p = self.params
+        lost = [m for m in qz.members.values() if m.lost_at is not None]
+        heir = min(lost, key=lambda m: _dist(m.last_anchor, anchor), default=None)
+        if heir is not None and _dist(heir.last_anchor, anchor) <= p.handoff_distance:
+            del qz.members[heir.key]
+            qz.done[heir.key] = t
+            qz.members[key] = _Member(key, heir.party, heir.entered_at, t, anchor, t, anchor)
+            return
+        mates = [
+            m
+            for m in qz.members.values()
+            if m.lost_at is None
+            and abs(t - m.entered_at) <= p.party_window_s
+            and _dist(m.last_anchor, anchor) <= p.party_distance
+        ]
+        mate = min(mates, key=lambda m: _dist(m.last_anchor, anchor), default=None)
+        party = _Party() if mate is None else mate.party
+        party.waiting += 1
+        qz.members[key] = _Member(key, party, t, t, anchor, t, anchor)
+
+    def _heading_in(self, qz: _QueueZone, m: _Member) -> bool:
+        if not qz.lines or m.last_seen_ts == m.last_in_zone_ts:
+            return False
+        return (
+            qz.line_distance(m.last_anchor)
+            < qz.line_distance(m.last_in_zone_anchor) - self.params.heading_eps
+        )
+
+    def _near_door(self, qz: _QueueZone, m: _Member) -> bool:
+        p = self.params
+        anchor = m.last_anchor
+        if qz.lines and qz.line_distance(anchor) <= p.line_near:
+            return False
+        if m.last_seen_ts != m.last_in_zone_ts:  # last seen outside the zone
+            return not self._heading_in(qz, m)
+        return (
+            qz.zone.boundary_distance(anchor) <= p.door_margin
+            or border_distance(anchor) <= p.door_margin
+        )
+
+    def _left(self, qz: _QueueZone, m: _Member, t: float) -> list[EdgeEvent]:
+        m.party.left_waits.append(max(0.0, m.last_in_zone_ts - m.entered_at))
+        return self._finish(qz, m, t)
+
+    def _finish(self, qz: _QueueZone, m: _Member, t: float) -> list[EdgeEvent]:
+        del qz.members[m.key]
+        qz.done[m.key] = t
+        party = m.party
+        party.waiting -= 1
+        if party.waiting > 0 or not party.left_waits:
+            return []
+        longest = max(party.left_waits)
+        if longest < self._config.thresholds.walkaway_min_wait_s:
+            return []
+        size = len(party.left_waits) + (party.dropped if party.seated == 0 else 0)
+        return [
+            make_event(
+                QueueWalkaway,
+                self._config.site_id,
+                t,
+                zone_id=qz.zone.zone_id,
+                waited_s=longest,
+                party_size_est=size,
+            )
+        ]
+
+    # --- ticks ------------------------------------------------------------------------
+
+    def on_tick(self, now: float) -> list[EdgeEvent]:
+        out = self._take_pending()
+        if not self._enabled:
+            return out
+        self._advance(now)
+        forget = self.params.done_forget_s
+        for qz in self._zones.values():
+            for key in [k for k, ts in qz.done.items() if now - ts > forget]:
+                del qz.done[key]
+            out += self._long_queue(qz, now)
+        if self._zones and self._timer.due(now):
+            for qz in self._zones.values():
+                people, parties, longest, avg = qz.stats(now)
+                out.append(
+                    make_event(
+                        QueueSnapshot,
+                        self._config.site_id,
+                        now,
+                        zone_id=qz.zone.zone_id,
+                        people=people,
+                        parties_est=parties,
+                        longest_wait_s=longest,
+                        avg_wait_s=avg,
+                    )
+                )
+                qz.latest = QueueLive(
+                    zone_id=qz.zone.zone_id,
+                    ts=now,
+                    people=people,
+                    parties_est=parties,
+                    longest_wait_s=longest,
+                    avg_wait_s=avg,
+                )
+        return out
+
+    def _long_queue(self, qz: _QueueZone, now: float) -> list[EdgeEvent]:
+        th = self._config.thresholds
+        people, _, longest, _ = qz.stats(now)
+        if qz.alert_id is not None and not self._alerts.is_open(qz.alert_id):
+            qz.alert_id = None  # resolved elsewhere (alerts switched off)
+        if qz.alert_id is None:
+            if people >= th.long_queue_people or longest >= th.long_queue_wait_s:
+                record, events = self._alerts.raise_alert(
+                    AlertKind.LONG_QUEUE, now, zone_id=qz.zone.zone_id
+                )
+                if record is not None:
+                    qz.alert_id = record.alert_id
+                return events
+            return []
+        if (
+            people <= self.params.people_clear_at(th.long_queue_people)
+            and longest < self.params.wait_clear_ratio * th.long_queue_wait_s
+        ):
+            events = self._alerts.resolve(qz.alert_id, now, ResolveReason.STATE_CHANGE)
+            qz.alert_id = None
+            return events
+        return []
+
+    # --- read side --------------------------------------------------------------------
+
+    def live(self) -> list[QueueLive]:
+        """Latest ``queue.snapshot`` of every queue zone that has one."""
+        return [qz.latest for qz in self._zones.values() if qz.latest is not None]
+
+    def snapshot(self) -> dict[str, Any]:
+        now = self._last_t if self._last_t is not None else 0.0
+        zones: dict[str, Any] = {}
+        for zone_id, qz in self._zones.items():
+            people, parties, longest, avg = qz.stats(now)
+            zones[zone_id] = {
+                "people": people,
+                "parties_est": parties,
+                "longest_wait_s": longest,
+                "avg_wait_s": avg,
+                "lost": len(qz.members) - people,
+                "alert_id": qz.alert_id,
+            }
+        return {"enabled": self._enabled, "zones": zones}

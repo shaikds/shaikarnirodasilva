@@ -14,7 +14,6 @@ import math
 import cv2
 import numpy as np
 import numpy.typing as npt
-
 from rv_contracts import AppearanceHints, Frame
 
 from ..interfaces import Box, SyntheticImage
@@ -126,15 +125,15 @@ class UniformColorHints:
         return AppearanceHints(uniform_score=self.score(image, box))
 
 
-def measure_uniform_hsv(frame: Frame, box: Box) -> HSV:
+def measure_uniform_hsv(frame: Frame | npt.NDArray[np.uint8], box: Box) -> HSV:
     """Calibration: the dominant torso colour of the staff member in ``box``.
 
-    Returns ``(hue_deg, saturation, value)``: circular mean hue and median saturation/value of
-    the coloured pixels when most of the torso is coloured, else of all pixels (black, grey
-    or white uniforms). Raises ``ValueError`` if the frame has no pixels or the box is too
-    small.
+    ``frame`` is a ``Frame`` or its BGR image. Returns ``(hue_deg, saturation, value)``:
+    circular mean hue and median saturation/value of the coloured pixels when most of the
+    torso is coloured, else of all pixels (black, grey or white uniforms). Raises
+    ``ValueError`` if there are no pixels or the box is too small.
     """
-    image = frame.image
+    image = frame.image if isinstance(frame, Frame) else frame
     if not isinstance(image, np.ndarray) or image.ndim != 3 or image.shape[2] != 3:
         raise ValueError("uniform calibration needs a BGR camera frame")
     crop = torso_crop(image, box)

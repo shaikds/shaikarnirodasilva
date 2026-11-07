@@ -19,7 +19,7 @@ from enum import Enum
 
 import numpy as np
 import numpy.typing as npt
-from scipy.optimize import linear_sum_assignment
+from scipy.optimize import linear_sum_assignment  # type: ignore[import-untyped]
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -75,7 +75,8 @@ class KalmanBoxFilter:
         self, mean: FloatArray, cov: FloatArray, xyah: FloatArray
     ) -> tuple[FloatArray, FloatArray]:
         h = mean[3]
-        innovation_cov = np.diag(np.square([self._W_POS * h, self._W_POS * h, 1e-1, self._W_POS * h]))
+        std = [self._W_POS * h, self._W_POS * h, 1e-1, self._W_POS * h]
+        innovation_cov = np.diag(np.square(std))
         projected_mean = self._observe @ mean
         projected_cov = self._observe @ cov @ self._observe.T + innovation_cov
         gain = np.linalg.solve(projected_cov, (cov @ self._observe.T).T).T
@@ -143,7 +144,8 @@ def _fuse_score(cost: FloatArray, detections: list[_Track]) -> FloatArray:
     if cost.size == 0:
         return cost
     scores = np.array([d.score for d in detections])[None, :]
-    return 1.0 - (1.0 - cost) * scores
+    fused: FloatArray = 1.0 - (1.0 - cost) * scores
+    return fused
 
 
 def _linear_assignment(
@@ -154,7 +156,9 @@ def _linear_assignment(
         return [], list(range(rows)), list(range(cols))
     cost = np.where(cost > thresh, thresh + 1e-4, cost)
     row_ind, col_ind = linear_sum_assignment(cost)
-    matches = [(int(r), int(c)) for r, c in zip(row_ind, col_ind, strict=True) if cost[r, c] <= thresh]
+    matches = [
+        (int(r), int(c)) for r, c in zip(row_ind, col_ind, strict=True) if cost[r, c] <= thresh
+    ]
     matched_rows = {r for r, _ in matches}
     matched_cols = {c for _, c in matches}
     return (
@@ -304,7 +308,8 @@ class ByteTrack:
     @staticmethod
     def _candidate(tlbr: FloatArray, score: float, index: int) -> _Track:
         x1, y1, x2, y2 = tlbr
-        return _Track(tlwh=np.array([x1, y1, x2 - x1, y2 - y1]), score=float(score), det_index=index)
+        tlwh = np.array([x1, y1, x2 - x1, y2 - y1])
+        return _Track(tlwh=tlwh, score=float(score), det_index=index)
 
     def _predict(self, t: _Track) -> None:
         assert t.mean is not None and t.cov is not None

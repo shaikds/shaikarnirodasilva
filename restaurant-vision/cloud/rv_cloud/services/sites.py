@@ -50,7 +50,9 @@ class SiteService:
     def patch(self, scope: SiteScope, role: Role, patch: SiteSettingsPatch) -> SiteSettings:
         changes = {name: value for name, value in patch if value is not None}
         if role is not Role.OWNER and OWNER_ONLY_FIELDS & changes.keys():
-            raise Forbidden("Only owners can change " + ", ".join(sorted(OWNER_ONLY_FIELDS & changes.keys())))
+            raise Forbidden(
+                "Only owners can change " + ", ".join(sorted(OWNER_ONLY_FIELDS & changes.keys()))
+            )
         site = ScopedSiteRepository(self._session, scope).get(for_update=True)
         config = views.load_config(site)
         config_changes: dict[str, Any] = {}

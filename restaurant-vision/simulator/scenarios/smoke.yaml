@@ -1,0 +1,38 @@
+# CI smoke test: 10 simulated minutes on the sample restaurant (8 tables, 2 cameras).
+# Scripted arrivals exercise every analytics path once or twice:
+#   - eight parties fill all tables (direct seating, no queue)
+#   - p002 gets its first visit after 250 s  -> waiter_needed
+#   - p001 leaves after ~2.5 min; its table is bussed and given to queued p009
+#   - p010 and p011 run out of patience in the queue -> two walk-aways
+name: smoke
+description: Ten-minute scripted service that hits seating, a slow waiter, queueing and walk-aways.
+seed: 11
+site: sample
+run:
+  date: 2026-11-06
+  start: "18:00"
+  duration: 10m
+arrivals:
+  explicit:
+    - {at: 5, size: 2, dwell: 150, first_visit_delay: 50}
+    - {at: 12, size: 4, dwell: 470, first_visit_delay: 250}
+    - {at: 20, size: 2, dwell: 520, first_visit_delay: 45}
+    - {at: 28, size: 3, dwell: 360, first_visit_delay: 90}
+    - {at: 36, size: 4, dwell: 520, first_visit_delay: 70}
+    - {at: 44, size: 4, dwell: 540, first_visit_delay: 100}
+    - {at: 52, size: 5, dwell: 500, first_visit_delay: 80}
+    - {at: 60, size: 6, dwell: 540, first_visit_delay: 60}
+    - {at: 90, size: 2, patience: 600, dwell: 300, first_visit_delay: 60}
+    - {at: 100, size: 3, patience: 110}
+    - {at: 280, size: 2, patience: 150}
+staff:
+  count: 3
+  checkin_interval: 200
+  visit_duration: {dist: uniform, low: 15, high: 30}
+  bussing_delay: 40
+  bussing_duration: 25
+noise:
+  box_jitter: 0.003
+  seated_miss_prob: 0.05
+  occlusion_mean_s: 1.5
+  false_positives_per_frame: 0.01

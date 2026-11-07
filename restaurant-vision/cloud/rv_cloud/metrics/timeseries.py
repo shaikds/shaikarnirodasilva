@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Iterable, Sequence
 
-from rv_contracts import TimeseriesPoint
+from rv_contracts import AlertKind, TimeseriesPoint
 
 from .records import AlertRecord, SnapshotPoint
 from .stats import mean, median
@@ -22,9 +22,7 @@ def _group(
     return groups
 
 
-def _points(
-    starts: Sequence[float], values: Sequence[float | None]
-) -> list[TimeseriesPoint]:
+def _points(starts: Sequence[float], values: Sequence[float | None]) -> list[TimeseriesPoint]:
     return [TimeseriesPoint(ts=s, value=v) for s, v in zip(starts, values, strict=True)]
 
 
@@ -66,8 +64,11 @@ def response_series(
     to_ts: float,
     alerts: Iterable[AlertRecord],
     reducer: Callable[[Iterable[float]], float | None] = median,
+    kind: str = AlertKind.WAITER_NEEDED.value,
 ) -> list[TimeseriesPoint]:
-    """Median raised -> resolved seconds per bucket, bucketed by raise time."""
-    items = ((a.raised_at, a.response_s) for a in alerts if a.response_s is not None)
+    """Median raised -> resolved seconds of ``kind`` alerts per bucket, by raise time."""
+    items = (
+        (a.raised_at, a.response_s) for a in alerts if a.kind == kind and a.response_s is not None
+    )
     groups = _group(starts, to_ts, ((ts, float(v)) for ts, v in items if v is not None))
     return _points(starts, [reducer(g) for g in groups])

@@ -11,7 +11,6 @@ from typing import Any
 
 import cv2
 import numpy as np
-
 from rv_contracts import Clock, Frame
 
 from ..interfaces import SourceSpec

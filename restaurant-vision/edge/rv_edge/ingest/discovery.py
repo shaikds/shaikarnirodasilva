@@ -137,9 +137,7 @@ def discover(
     try:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
         if interface:
-            sock.setsockopt(
-                socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(interface)
-            )
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(interface))
         sock.bind((interface or "", 0))
         probe = build_probe()
         for _ in range(max(1, repeats)):

@@ -1,0 +1,44 @@
+# Live demo: a moderately busy two-hour dinner on the sample restaurant (8 tables, 32 seats).
+# Plays in 6 minutes at speed 20:  rv-edge simulate --scenario simulator/scenarios/demo_dinner.yaml --speed 20
+# Expect a queue around 19:45-20:30, a few slow first visits (waiter_needed), a slow bussing or
+# two (bussing_needed) and a handful of walk-aways. Dwell is shortened so tables turn on screen.
+name: demo_dinner
+description: Two-hour moderately busy dinner with a few slow waiters and walk-aways.
+seed: 2026
+site: sample
+run:
+  date: 2026-11-06
+  start: "19:00"
+  duration: 2h
+arrivals:
+  hourly_rates: {19: 18, 20: 15}
+  stop_before_end: 15m
+party_size: {1: 0.06, 2: 0.46, 3: 0.16, 4: 0.22, 5: 0.05, 6: 0.05}
+dwell:
+  default: {dist: lognormal, median: 1800, sigma: 0.25, min: 900, max: 3000}
+  by_party_size:
+    1: {dist: lognormal, median: 1200, sigma: 0.25, min: 600, max: 2400}
+    2: {dist: lognormal, median: 1500, sigma: 0.25, min: 720, max: 2700}
+    5: {dist: lognormal, median: 2100, sigma: 0.2, min: 1200, max: 3300}
+    6: {dist: lognormal, median: 2100, sigma: 0.2, min: 1200, max: 3300}
+patience: {dist: uniform, low: 240, high: 1080}
+staff:
+  count: 3
+  first_visit_delay:
+    dist: mixture
+    components:
+      - {weight: 0.85, value: {dist: lognormal, median: 70, sigma: 0.35, min: 20, max: 140}}
+      - {weight: 0.15, value: {dist: uniform, low: 250, high: 450}}
+  checkin_interval: {dist: uniform, low: 420, high: 780}
+  visit_duration: {dist: uniform, low: 15, high: 45}
+  bussing_delay:
+    dist: mixture
+    components:
+      - {weight: 0.85, value: {dist: uniform, low: 30, high: 150}}
+      - {weight: 0.15, value: {dist: uniform, low: 400, high: 600}}
+  bussing_duration: {dist: uniform, low: 20, high: 50}
+noise:
+  box_jitter: 0.003
+  seated_miss_prob: 0.05
+  occlusion_mean_s: 1.5
+  false_positives_per_frame: 0.01

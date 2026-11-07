@@ -6,7 +6,6 @@ import secrets
 from collections.abc import Callable
 
 import numpy as np
-
 from rv_contracts import Detection, Frame, Track
 
 from .bytetrack import ByteTrack

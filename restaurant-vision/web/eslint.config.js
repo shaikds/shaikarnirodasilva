@@ -10,6 +10,9 @@ import tseslint from 'typescript-eslint';
 // Physical ones (ml-, pr-, left-, text-right, rounded-l, border-r ...) break Hebrew layouts.
 const PHYSICAL_TW =
   String.raw`(^|\s|:)-?(ml|mr|pl|pr|left|right|scroll-ml|scroll-mr|scroll-pl|scroll-pr|rounded-l|rounded-r|rounded-tl|rounded-tr|rounded-bl|rounded-br|border-l|border-r|text-left|text-right|float-left|float-right|clear-left|clear-right)(-|\s|$)`;
+// Only strings that look like class lists (lowercase utilities, no prose punctuation).
+// esquery regexes cannot contain "/", hence \x2f.
+const CLASS_LIST = String.raw`^[-a-z0-9:\x2f\[\]._%#!&>*=()\s]+$`;
 const physicalMessage =
   'Use logical Tailwind utilities (ms-/me-/ps-/pe-/start-/end-/text-start/rounded-s ...) so layouts mirror in RTL.';
 
@@ -48,10 +51,21 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
       'no-restricted-syntax': [
         'error',
-        { selector: `Literal[value=/${PHYSICAL_TW}/]`, message: physicalMessage },
-        { selector: `TemplateElement[value.raw=/${PHYSICAL_TW}/]`, message: physicalMessage },
+        {
+          selector: `Literal[value=/${CLASS_LIST}/][value=/${PHYSICAL_TW}/]`,
+          message: physicalMessage,
+        },
+        {
+          selector: `TemplateElement[value.raw=/${CLASS_LIST}/][value.raw=/${PHYSICAL_TW}/]`,
+          message: physicalMessage,
+        },
       ],
     },
+  },
+  {
+    // The shared package is a library: fast-refresh boundaries do not apply.
+    files: ['packages/shared/**/*.{ts,tsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
     // Tests, configs and node scripts.

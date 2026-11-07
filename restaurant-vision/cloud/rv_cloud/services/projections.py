@@ -178,7 +178,9 @@ class Projector:
             ts=e.ts,
             value=float(e.people),
             zone_id=e.zone_id,
-            payload=e.model_dump(mode="json", include={"people", "parties_est", "longest_wait_s", "avg_wait_s"}),
+            payload=e.model_dump(
+                mode="json", include={"people", "parties_est", "longest_wait_s", "avg_wait_s"}
+            ),
         )
         self._queues.set_latest(
             e.zone_id,

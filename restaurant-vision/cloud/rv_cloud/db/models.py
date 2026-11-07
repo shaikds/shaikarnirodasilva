@@ -84,9 +84,7 @@ class Membership(Base):
     __tablename__ = "memberships"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[str] = mapped_column(
-        ID, ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     org_id: Mapped[str] = mapped_column(
         ID, ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
@@ -288,9 +286,7 @@ class PushSubscription(Base):
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     site_id: Mapped[str] = mapped_column(ID, ForeignKey("sites.id", ondelete="CASCADE"), index=True)
-    user_id: Mapped[str] = mapped_column(
-        ID, ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     endpoint: Mapped[str] = mapped_column(String(2048))
     endpoint_hash: Mapped[str] = mapped_column(String(64), unique=True)
     keys_json: Mapped[dict[str, Any]]

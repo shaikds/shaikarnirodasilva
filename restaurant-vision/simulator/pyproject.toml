@@ -10,8 +10,9 @@ requires-python = ">=3.11"
 dependencies = [
     "rv-contracts",
     "rv-edge",
-    "numpy>=1.26",
+    "pydantic>=2.7",
     "pyyaml>=6",
+    "tzdata; sys_platform == 'win32'",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -26,6 +27,15 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+
+[[tool.mypy.overrides]]
+# rv_edge ships no py.typed marker yet; analyze it anyway (rv_sim only imports its seams).
+module = ["rv_edge", "rv_edge.*"]
+follow_untyped_imports = true
 
 [project.scripts]
 rv-sim = "rv_sim.cli:main"

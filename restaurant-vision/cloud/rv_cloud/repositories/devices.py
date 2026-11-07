@@ -16,7 +16,7 @@ class DeviceRepository:
         self._session = session
         self._scope = scope
 
-    def list(self) -> Sequence[Device]:
+    def all(self) -> Sequence[Device]:
         return self._session.scalars(
             select(Device)
             .where(Device.site_id == self._scope.site_id)

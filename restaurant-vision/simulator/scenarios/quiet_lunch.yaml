@@ -1,0 +1,31 @@
+# Quiet weekday lunch: plenty of free tables, almost no queue, two waiters. Mostly a
+# false-alarm test: the analytics should stay quiet (one or two slow first visits at most).
+name: quiet_lunch
+description: Quiet two-hour weekday lunch with free tables and almost no queue.
+seed: 1212
+site: sample
+run:
+  date: 2026-11-04
+  start: "12:00"
+  duration: 2h
+arrivals:
+  hourly_rates: {12: 7, 13: 5}
+  stop_before_end: 20m
+party_size: {1: 0.2, 2: 0.5, 3: 0.12, 4: 0.18}
+dwell:
+  default: {dist: lognormal, median: 2100, sigma: 0.3, min: 900, max: 3600}
+  by_party_size:
+    1: {dist: lognormal, median: 1500, sigma: 0.3, min: 600, max: 2700}
+patience: {dist: uniform, low: 600, high: 1200}
+staff:
+  count: 2
+  first_visit_delay:
+    dist: mixture
+    components:
+      - {weight: 0.92, value: {dist: lognormal, median: 60, sigma: 0.3, min: 20, max: 130}}
+      - {weight: 0.08, value: {dist: uniform, low: 240, high: 360}}
+  checkin_interval: {dist: uniform, low: 600, high: 900}
+noise:
+  box_jitter: 0.002
+  seated_miss_prob: 0.03
+  false_positives_per_frame: 0.005

@@ -9,7 +9,6 @@ import time
 from typing import Any
 
 import numpy as np
-
 from rv_contracts import Clock, Frame
 
 from ..interfaces import SourceSpec
@@ -129,7 +128,10 @@ class RtspSource:
                 return None
             image, ts = self._latest
             self._delivered_seq = self._seq
-        self._next_due = max(self._next_due + self._period, time.monotonic())
+        # Keep a fixed schedule while on time; after a stall restart it from now (no bursts).
+        now = time.monotonic()
+        due = self._next_due + self._period
+        self._next_due = due if due >= now else now + self._period
         height, width = image.shape[:2]
         frame = Frame(
             camera_id=self._camera_id,

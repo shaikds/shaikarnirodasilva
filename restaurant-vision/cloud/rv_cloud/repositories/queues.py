@@ -105,7 +105,9 @@ class SnapshotRepository:
             )
         )
 
-    def between(self, kind: str, from_ts: float, to_ts: float) -> Sequence[tuple[float, float, str | None]]:
+    def between(
+        self, kind: str, from_ts: float, to_ts: float
+    ) -> Sequence[tuple[float, float, str | None]]:
         """``(ts, value, zone_id)`` rows of ``kind`` in ``[from_ts, to_ts)``, by time."""
         rows = self._session.execute(
             select(MetricSnapshot.ts, MetricSnapshot.value, MetricSnapshot.zone_id)

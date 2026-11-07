@@ -7,7 +7,6 @@ from collections.abc import Sequence
 
 import cv2
 import numpy as np
-
 from rv_contracts import Anchor, Frame, anchor_point, point_in_polygon
 
 from ..interfaces import SyntheticImage

@@ -1,0 +1,36 @@
+# Peak Friday: demand well above capacity for two and a half hours. The queue builds past the
+# long_queue thresholds (8 people / 10 min), many parties wait 10-20 min and a good share walk
+# away. Four waiters, but first visits slip when they are busy.
+name: peak_friday
+description: Heavy Friday service with a long entrance queue and many walk-aways.
+seed: 517
+site: sample
+run:
+  date: 2026-11-06
+  start: "19:30"
+  duration: 2h30m
+arrivals:
+  hourly_rates: {19: 24, 20: 28, 21: 22}
+  stop_before_end: 20m
+party_size: {1: 0.04, 2: 0.42, 3: 0.16, 4: 0.26, 5: 0.06, 6: 0.06}
+dwell:
+  default: {dist: lognormal, median: 2700, sigma: 0.25, min: 1500, max: 4500}
+  by_party_size:
+    2: {dist: lognormal, median: 2400, sigma: 0.25, min: 1200, max: 4200}
+patience: {dist: uniform, low: 360, high: 1500}
+staff:
+  count: 4
+  first_visit_delay:
+    dist: mixture
+    components:
+      - {weight: 0.8, value: {dist: lognormal, median: 80, sigma: 0.35, min: 25, max: 150}}
+      - {weight: 0.2, value: {dist: uniform, low: 240, high: 480}}
+  checkin_interval: {dist: uniform, low: 480, high: 900}
+  visit_duration: {dist: uniform, low: 15, high: 40}
+  bussing_delay: {dist: uniform, low: 20, high: 120}
+  bussing_duration: {dist: uniform, low: 20, high: 45}
+noise:
+  box_jitter: 0.003
+  seated_miss_prob: 0.08
+  occlusion_mean_s: 2.0
+  false_positives_per_frame: 0.02

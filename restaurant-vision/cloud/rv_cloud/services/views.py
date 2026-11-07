@@ -75,7 +75,9 @@ def floor_plan(site: Site) -> list[FloorPlanItem]:
     return [FloorPlanItem.model_validate(item) for item in site.floor_plan_json]
 
 
-def reconcile_floor_plan(items: Sequence[FloorPlanItem], tables: Sequence[Table]) -> list[FloorPlanItem]:
+def reconcile_floor_plan(
+    items: Sequence[FloorPlanItem], tables: Sequence[Table]
+) -> list[FloorPlanItem]:
     """Drop items of removed tables and auto-place tables that have no position yet (row-major,
     :data:`FLOOR_PLAN_COLUMNS` per row, skipping occupied cells)."""
     table_ids = [t.table_id for t in tables]

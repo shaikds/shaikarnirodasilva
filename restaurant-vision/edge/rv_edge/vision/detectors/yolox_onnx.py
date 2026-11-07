@@ -17,8 +17,7 @@ from typing import Any
 import cv2
 import numpy as np
 import numpy.typing as npt
-import onnxruntime as ort
-
+import onnxruntime as ort  # type: ignore[import-untyped]
 from rv_contracts import Detection, Frame
 
 log = logging.getLogger(__name__)
@@ -45,9 +44,7 @@ def preprocess(image: npt.NDArray[np.uint8], input_size: tuple[int, int]) -> tup
     return chw, ratio
 
 
-def make_grids(
-    input_size: tuple[int, int], strides: Sequence[int] = STRIDES
-) -> tuple[F32, F32]:
+def make_grids(input_size: tuple[int, int], strides: Sequence[int] = STRIDES) -> tuple[F32, F32]:
     """Grid cell offsets ``(N, 2)`` and strides ``(N, 1)`` matching the model's output rows."""
     in_h, in_w = input_size
     grids: list[F32] = []
@@ -97,8 +94,9 @@ def resolve_input_size(
         if isinstance(input_size, int):
             return (input_size, input_size)
         return (int(input_size[0]), int(input_size[1]))
-    if len(model_shape) == 4 and isinstance(model_shape[2], int) and isinstance(model_shape[3], int):
-        return (model_shape[2], model_shape[3])
+    dims = list(model_shape)
+    if len(dims) == 4 and isinstance(dims[2], int) and isinstance(dims[3], int):
+        return (dims[2], dims[3])
     name = model_path.name.lower()
     side = 416 if ("tiny" in name or "nano" in name) else 640
     return (side, side)
@@ -161,23 +159,51 @@ class YoloxOnnxDetector:
                 f"model output has {raw.shape[0]} rows, expected {self._grids.shape[0]} for "
                 f"input {self.input_size}; the model must be exported without decoding"
             )
-        scores = raw[:, 4] * raw[:, 5 + PERSON_CLASS]
-        keep = scores > self.score_thr
-        if not np.any(keep):
-            return []
-        pred = raw[keep]
-        kept_scores = scores[keep]
-        centers = (pred[:, :2] + self._grids[keep]) * self._strides[keep]
-        sizes = np.exp(pred[:, 2:4]) * self._strides[keep]
-        boxes = np.concatenate([centers - sizes / 2.0, centers + sizes / 2.0], axis=1) / ratio
-        detections: list[Detection] = []
-        for i in nms(boxes, kept_scores, self.nms_thr):
-            x1, y1, x2, y2 = (float(v) for v in boxes[i])
-            box = (
-                min(1.0, max(0.0, x1 / width)),
-                min(1.0, max(0.0, y1 / height)),
-                min(1.0, max(0.0, x2 / width)),
-                min(1.0, max(0.0, y2 / height)),
-            )
-            detections.append(Detection(box=box, score=float(kept_scores[i])))
-        return detections
+        return decode_persons(
+            raw,
+            self._grids,
+            self._strides,
+            ratio=ratio,
+            width=width,
+            height=height,
+            score_thr=self.score_thr,
+            nms_thr=self.nms_thr,
+        )
+
+
+def decode_persons(
+    raw: F32,
+    grids: F32,
+    strides: F32,
+    *,
+    ratio: float,
+    width: int,
+    height: int,
+    score_thr: float,
+    nms_thr: float,
+) -> list[Detection]:
+    """YOLOX ``demo_postprocess`` + NMS for the person class, as normalized boxes.
+
+    ``raw`` rows are ``(dx, dy, log_w, log_h, objectness, class scores...)`` in grid units;
+    ``score = objectness * person``, kept when ``> score_thr``.
+    """
+    scores = raw[:, 4] * raw[:, 5 + PERSON_CLASS]
+    keep = scores > score_thr
+    if not np.any(keep):
+        return []
+    pred = raw[keep]
+    kept_scores = scores[keep]
+    centers = (pred[:, :2] + grids[keep]) * strides[keep]
+    sizes = np.exp(pred[:, 2:4]) * strides[keep]
+    boxes = np.concatenate([centers - sizes / 2.0, centers + sizes / 2.0], axis=1) / ratio
+    detections: list[Detection] = []
+    for i in nms(boxes, kept_scores, nms_thr):
+        x1, y1, x2, y2 = (float(v) for v in boxes[i])
+        box = (
+            min(1.0, max(0.0, x1 / width)),
+            min(1.0, max(0.0, y1 / height)),
+            min(1.0, max(0.0, x2 / width)),
+            min(1.0, max(0.0, y2 / height)),
+        )
+        detections.append(Detection(box=box, score=float(kept_scores[i])))
+    return detections

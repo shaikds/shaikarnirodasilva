@@ -36,9 +36,13 @@ class DeviceService:
             code = new_pairing_code()
         pairing = repo.add_pairing_code(code, now + ttl_s, now)
         self._session.commit()
-        return PairingCodeInfo(code=pairing.code, site_id=scope.site_id, expires_at=pairing.expires_at)
+        return PairingCodeInfo(
+            code=pairing.code, site_id=scope.site_id, expires_at=pairing.expires_at
+        )
 
-    def pair(self, request: PairRequest, client_ip: str, limiter: RateLimiter | None) -> PairResponse:
+    def pair(
+        self, request: PairRequest, client_ip: str, limiter: RateLimiter | None
+    ) -> PairResponse:
         """Exchange a pairing code for a device token (returned once, stored hashed)."""
         if limiter is not None:
             limiter.check(client_ip)
@@ -66,7 +70,7 @@ class DeviceService:
         repo = DeviceRepository(self._session, scope)
         health = repo.health_by_device()
         now = self._clock.now()
-        return [views.device_status(d, health.get(d.id), now) for d in repo.list()]
+        return [views.device_status(d, health.get(d.id), now) for d in repo.all()]
 
     def delete(self, scope: SiteScope, device_id: str) -> None:
         """Unpair: the device token stops working immediately."""

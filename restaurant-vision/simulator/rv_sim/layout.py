@@ -63,11 +63,11 @@ class _Model(BaseModel):
 class Body(_Model):
     """Person box sizes in normalized image units."""
 
-    standing_height: float = Field(0.25, gt=0.05, le=0.6)
-    seated_height: float = Field(0.18, gt=0.05, le=0.6)
-    aspect: float = Field(0.4, gt=0.1, le=1.0)
+    standing_height: float = Field(default=0.25, gt=0.05, le=0.6)
+    seated_height: float = Field(default=0.18, gt=0.05, le=0.6)
+    aspect: float = Field(default=0.4, gt=0.1, le=1.0)
     """Box width / box height."""
-    height_sd: float = Field(0.04, ge=0.0, le=0.1)
+    height_sd: float = Field(default=0.04, ge=0.0, le=0.1)
     """Relative per-person height variation (clamped to +-3 sd)."""
 
     @property
@@ -199,7 +199,9 @@ def sample_path(points: Sequence[Pt], step: float = _SAMPLE_STEP) -> list[Pt]:
     out: list[Pt] = [points[0]]
     for a, b in zip(points, points[1:], strict=False):
         n = max(1, math.ceil(dist(a, b) / step))
-        out.extend((a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n) for i in range(1, n + 1))
+        out.extend(
+            (a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n) for i in range(1, n + 1)
+        )
     return out
 
 
@@ -251,9 +253,7 @@ class EntranceLayout(_Model):
     """Where walk-aways and departing guests vanish into the street."""
     lane_in: list[Pt] = Field(default_factory=lambda: [(0.36, 0.33), (0.86, 0.33)], min_length=1)
     """Route from the door to the dining room for parties seated straight away (no queue)."""
-    queue_exit: list[Pt] = Field(
-        default_factory=lambda: [(0.62, 0.42), (0.86, 0.37)], min_length=1
-    )
+    queue_exit: list[Pt] = Field(default_factory=lambda: [(0.62, 0.42), (0.86, 0.37)], min_length=1)
     """Route from a queue slot to the dining room; must cross the entrance line inward."""
     lane_out: list[Pt] = Field(default_factory=lambda: [(0.86, 0.28), (0.36, 0.28)], min_length=1)
     """Route of departing guests from the dining side to the door (then ``door_exit``)."""
@@ -264,7 +264,7 @@ class EntranceLayout(_Model):
 def _default_cameras() -> dict[str, CameraLayout]:
     return {
         CAM_DINING: CameraLayout(
-            entry=(0.08, 0.47), aisle=[(0.08, 0.47), (0.93, 0.47), (0.93, 0.30)]
+            entry=(0.08, 0.47), aisle=[(0.08, 0.47), (0.93, 0.47), (0.93, 0.40)]
         )
     }
 
@@ -276,7 +276,7 @@ class Layout(_Model):
     cameras: dict[str, CameraLayout] = Field(default_factory=_default_cameras)
     """Per camera with tables or the staff area."""
     staff_zone_id: str = STAFF_ZONE_ID
-    margin: float = Field(0.025, ge=0.005, le=0.1)
+    margin: float = Field(default=0.025, ge=0.005, le=0.1)
     """Minimum distance of every spot from its zone's edges."""
     departures_via_entrance: bool = True
     """Departing guests walk out through the entrance camera (crossing the line outward)."""
@@ -386,7 +386,9 @@ def compile_layout(
             errors.append(f"door point {p} is inside the queue zone")
         if segment_side(line.a, line.b, p) != out_side:
             errors.append(f"door point {p} is not on the outer side of the entrance line")
-    queue_slots = _lattice(queue_poly, ent.queue_spacing, margin, body, Posture.STANDING, ent_anchor)
+    queue_slots = _lattice(
+        queue_poly, ent.queue_spacing, margin, body, Posture.STANDING, ent_anchor
+    )
     queue_slots.sort(key=lambda p: (round(dist(p, ent.queue_exit[0]), 6), p))
     if len(queue_slots) < max_party:
         errors.append(f"queue zone has room for {len(queue_slots)} people, need {max_party}")
@@ -397,25 +399,55 @@ def compile_layout(
     queue_only = frozenset({ent.queue_zone_id})
     for spot in door_spots[:1]:
         _check_route(
-            "lane_in", line, [spot, *ent.lane_in], Crossing.IN, frozenset(), zones, ent.camera_id,
+            "lane_in",
+            line,
+            [spot, *ent.lane_in],
+            Crossing.IN,
+            frozenset(),
+            zones,
+            ent.camera_id,
             errors,
         )
     _check_route(
-        "lane_out", line, [*ent.lane_out, ent.door_exit], Crossing.OUT, frozenset(), zones,
-        ent.camera_id, errors,
+        "lane_out",
+        line,
+        [*ent.lane_out, ent.door_exit],
+        Crossing.OUT,
+        frozenset(),
+        zones,
+        ent.camera_id,
+        errors,
     )
     for slot in queue_slots:
         _check_route(
-            "queue_exit", line, [slot, *ent.queue_exit], Crossing.IN, queue_only, zones,
-            ent.camera_id, errors,
+            "queue_exit",
+            line,
+            [slot, *ent.queue_exit],
+            Crossing.IN,
+            queue_only,
+            zones,
+            ent.camera_id,
+            errors,
         )
         _check_route(
-            "walk-away", line, [slot, ent.door_exit], None, queue_only, zones, ent.camera_id,
+            "walk-away",
+            line,
+            [slot, ent.door_exit],
+            None,
+            queue_only,
+            zones,
+            ent.camera_id,
             errors,
         )
         for spot in door_spots:
             _check_route(
-                "door-to-queue", line, [spot, slot], None, queue_only, zones, ent.camera_id,
+                "door-to-queue",
+                line,
+                [spot, slot],
+                None,
+                queue_only,
+                zones,
+                ent.camera_id,
                 errors,
             )
         if errors:
@@ -464,7 +496,11 @@ def compile_layout(
             errors.append(f"staff camera {staff_camera!r} has no layout entry")
         else:
             staff_spots = _place(
-                staff_zone.polygon, staff_count, margin, body, Posture.STANDING,
+                staff_zone.polygon,
+                staff_count,
+                margin,
+                body,
+                Posture.STANDING,
                 anchors[staff_camera],
             )
             if not staff_spots:
@@ -569,7 +605,11 @@ def _fmt(p: Pt) -> str:
 
 
 def _candidates(
-    polygon: Sequence[Pt], margin: float, body: Body, posture: Posture, anchor: Anchor,
+    polygon: Sequence[Pt],
+    margin: float,
+    body: Body,
+    posture: Posture,
+    anchor: Anchor,
     step: float = 0.005,
 ) -> list[Pt]:
     xs = [p[0] for p in polygon]
@@ -603,8 +643,10 @@ def _place(
         for j in range(rows)
         for i in range(cols)
     ][:n]
-    if x2 > x1 and y2 > y1 and all(
-        deep_inside(p, polygon, margin) and body.fits(p, posture, anchor) for p in grid
+    if (
+        x2 > x1
+        and y2 > y1
+        and all(deep_inside(p, polygon, margin) and body.fits(p, posture, anchor) for p in grid)
     ):
         return grid
     cands = _candidates(polygon, margin, body, posture, anchor)
@@ -621,7 +663,11 @@ def _place(
 
 
 def _lattice(
-    polygon: Sequence[Pt], spacing: Pt, margin: float, body: Body, posture: Posture,
+    polygon: Sequence[Pt],
+    spacing: Pt,
+    margin: float,
+    body: Body,
+    posture: Posture,
     anchor: Anchor,
 ) -> list[Pt]:
     xs = [p[0] for p in polygon]

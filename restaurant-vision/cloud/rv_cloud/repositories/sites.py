@@ -91,7 +91,9 @@ class ScopedSiteRepository:
 
     def get(self, *, for_update: bool = False) -> Site:
         """The site; ``for_update`` takes a row lock (Postgres) to serialize writers."""
-        query = select(Site).where(Site.id == self._scope.site_id, Site.org_id == self._scope.org_id)
+        query = select(Site).where(
+            Site.id == self._scope.site_id, Site.org_id == self._scope.org_id
+        )
         if for_update:
             query = query.with_for_update()
         site = self._session.scalars(query).one_or_none()

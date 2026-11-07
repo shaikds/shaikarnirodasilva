@@ -31,7 +31,9 @@ SEATED = "seated"
 WALKAWAY = "walkaway"
 
 
-def response_times(alerts: Sequence[AlertRecord], kind: str = AlertKind.WAITER_NEEDED) -> list[float]:
+def response_times(
+    alerts: Sequence[AlertRecord], kind: str = AlertKind.WAITER_NEEDED
+) -> list[float]:
     return [a.response_s for a in alerts if a.kind == kind and a.response_s is not None]
 
 

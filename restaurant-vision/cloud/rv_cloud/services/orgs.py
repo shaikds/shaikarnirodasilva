@@ -85,7 +85,7 @@ class OrgService:
         scope = SiteScope(org_id=site.org_id, site_id=site.id)
         occupancy = SnapshotRepository(self._session, scope).occupancy_latest()
         now = self._clock.now()
-        devices = DeviceRepository(self._session, scope).list()
+        devices = DeviceRepository(self._session, scope).all()
         settings = views.site_settings(site)
         return SiteSummary(
             site_id=site.id,
@@ -155,9 +155,7 @@ class UserService:
         self._session.commit()
         return views.org_user(created)
 
-    def update(
-        self, user: CurrentUser, org_id: str, user_id: str, request: UserUpdate
-    ) -> OrgUser:
+    def update(self, user: CurrentUser, org_id: str, user_id: str, request: UserUpdate) -> OrgUser:
         require_own_org(user, org_id)
         repo = UserRepository(self._session, org_id)
         target = repo.get(user_id)
