@@ -59,3 +59,5 @@ export function signInAs(db: MockDb, email: string): void {
 export function signOut(): void {
   useAuthStore.getState().logout();
 }
+
+export { i18n };
