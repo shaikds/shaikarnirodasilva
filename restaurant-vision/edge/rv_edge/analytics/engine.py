@@ -108,6 +108,7 @@ class DefaultAnalyticsEngine:
             self._pending += self._alerts.resolve_all(ts, ResolveReason.STATE_CHANGE)
         for module in self.modules:
             module.configure(config)
+        self._pending += self._tables.take_pending() + self._queue.take_pending()
         cameras = {c.camera_id for c in config.cameras if c.enabled}
         self._last_frame_ts = {c: t for c, t in self._last_frame_ts.items() if c in cameras}
 
@@ -148,7 +149,7 @@ class DefaultAnalyticsEngine:
         return LiveState(
             tables=self._tables.live(),
             occupancy=self._occupancy.live(),
-            queues=self._queue.live() if self._queue.enabled else [],
+            queues=self._queue.live(),
             open_alerts=self._alerts.views(labels),
         )
 

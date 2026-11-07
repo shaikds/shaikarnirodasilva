@@ -214,7 +214,9 @@ class QueueModule:
         self._zones = zones
         self._enabled = enabled
 
-    def _take_pending(self) -> list[EdgeEvent]:
+    def take_pending(self) -> list[EdgeEvent]:
+        """Events caused by ``configure`` (resolved alerts) not yet returned. They are also
+        returned first by the next ``on_track_frame`` / ``on_tick``."""
         out, self._pending = self._pending, []
         return out
 
@@ -224,7 +226,7 @@ class QueueModule:
     # --- frames -----------------------------------------------------------------------
 
     def on_track_frame(self, tf: TrackFrame) -> list[EdgeEvent]:
-        out = self._take_pending()
+        out = self.take_pending()
         states = [q for q in self._zones.values() if q.camera_id == tf.camera_id]
         if not states:
             return out
@@ -393,7 +395,7 @@ class QueueModule:
     # --- ticks ------------------------------------------------------------------------
 
     def on_tick(self, now: float) -> list[EdgeEvent]:
-        out = self._take_pending()
+        out = self.take_pending()
         if not self._enabled:
             return out
         self._advance(now)

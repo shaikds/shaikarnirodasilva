@@ -13,8 +13,14 @@ Signals (:class:`TableSignals`, updated on every frame of the primary camera):
 * staff visit: a staff track in the zone continuously for ``staff_visit_min_s``, gaps of up to
   :data:`STAFF_GAP_S` allowed. One continuous presence is one visit, confirmed when it reaches
   the minimum; its start is the arrival time.
-* bussing visit: staff in the zone for ``bussing_visit_min_s`` *while no guests are present*
-  (measured from the later of the staff arrival and the guests' departure).
+* bussing visit: staff in the zone for ``bussing_visit_min_s`` *while no guest is seen* at the
+  table, measured from the later of the staff arrival and the moment the held (unsmoothed)
+  guest count dropped to 0. The held count is used so that the median's lag of about
+  ``count_window_s / 2`` does not swallow a waiter who clears the table right after the guests
+  leave.
+* staff visits are measured on "any staff track in the zone", so they survive track id
+  switches and the daily id rotation (with uniform calibration a new staff id is recognised
+  in its first frame).
 
 State machine (:class:`TableStateMachine`, State pattern, one per table)::
 
@@ -68,7 +74,6 @@ from rv_contracts import (
 )
 
 from .alerts import AlertManager
-from .roles import Role
 from .scene import SceneModule
 from .smoothing import GUEST_HOLD_S, SmoothedCount
 from .zones import PolygonZone, TrackKey
@@ -102,7 +107,7 @@ class FrameSignals:
     visit: StaffVisit | None = None
     """A staff visit confirmed in this frame."""
     bussed: bool = False
-    """A bussing visit confirmed in this frame (only while no guests are present)."""
+    """A bussing visit confirmed in this frame (only while no guest is seen)."""
     attending: bool = False
     """Staff is at the table in this frame as part of a confirmed visit."""
 
@@ -132,6 +137,8 @@ class TableSignals:
         """Start of the current run of smoothed count >= 1 (None while absent)."""
         self.absent_since: float | None = None
         """Start of the current run of smoothed count 0 (None while present)."""
+        self.raw_absent_since: float | None = None
+        """Start of the current run of held (unsmoothed) count 0, None while someone is seen."""
         self.last_ts: float | None = None
         self._staff_start = 0.0
         self._staff_last: float | None = None
@@ -175,6 +182,10 @@ class TableSignals:
             if self.absent_since is None:
                 self.absent_since = ts
             self.present_since = None
+        if self._guests.raw >= 1:
+            self.raw_absent_since = None
+        elif self.raw_absent_since is None:
+            self.raw_absent_since = ts
         self.last_ts = ts
         if not staff:
             return _NO_SIGNALS
@@ -188,7 +199,7 @@ class TableSignals:
             self._visit_fired = True
             visit = StaffVisit(started_at=start, confirmed_at=ts)
         bussed = False
-        absent = self.absent_since
+        absent = self.raw_absent_since
         if (
             absent is not None
             and self._bussed_for != absent
@@ -371,7 +382,7 @@ class TableStateMachine:
         """Advance the machine at ``t``. ``sig`` is given for frames of the table's camera
         (after ``signals.update``) and None for ticks, which only run alert timers."""
         if sig is not None:
-            if self.signals.present_since is not None:
+            if self.signals.raw_count >= 1:  # someone at the table after it was cleared
                 self.pre_bussed = False
             session = self.session
             if session is not None and self._state in (SEATED, ATTENDED):
@@ -580,7 +591,9 @@ class TableModule:
         for entry in entries.values():
             self._by_camera.setdefault(entry.camera_id, []).append(entry)
 
-    def _take_pending(self) -> list[EdgeEvent]:
+    def take_pending(self) -> list[EdgeEvent]:
+        """Events caused by ``configure`` (resolved alerts) not yet returned. They are also
+        returned first by the next ``on_track_frame`` / ``on_tick``."""
         out, self._pending = self._pending, []
         return out
 
@@ -588,7 +601,7 @@ class TableModule:
         self._last_t = t if self._last_t is None else max(self._last_t, t)
 
     def on_track_frame(self, tf: TrackFrame) -> list[EdgeEvent]:
-        out = self._take_pending()
+        out = self.take_pending()
         entries = self._by_camera.get(tf.camera_id)
         if not entries:
             return out
@@ -602,7 +615,7 @@ class TableModule:
         for obs in fo.tracks:
             if not obs.hits.tables:
                 continue
-            bucket = staff if obs.role is Role.STAFF else guests
+            bucket = guests if obs.role.counts_as_guest else staff
             for zone_id in obs.hits.tables:
                 bucket.setdefault(zone_id, []).append(obs.key)
         th = self._ctx.thresholds
@@ -620,7 +633,7 @@ class TableModule:
         return out
 
     def on_tick(self, now: float) -> list[EdgeEvent]:
-        out = self._take_pending()
+        out = self.take_pending()
         self._advance(now)
         if self._enabled:
             for entry in self._entries.values():

@@ -78,12 +78,11 @@ class SceneModule:
         """Rebuild the zone index; forget tracks of cameras that are gone or disabled."""
         self._zones = ZoneIndex(config)
         self._cache = None
-        for key in [k for k in self._seen if self._zones.camera(k[0]) is None]:
+        gone = {k[0] for k in self._seen} - set(self._zones.cameras)
+        for camera_id in gone:
+            self._roles.forget_camera(camera_id)
+        for key in [k for k in self._seen if k[0] in gone]:
             self._drop(key)
-            self._roles.forget(key)
-        for camera_id in {k[0] for k in self._last_offline}:
-            if self._zones.camera(camera_id) is None:
-                self._roles.forget_camera(camera_id)
 
     def observe(self, tf: TrackFrame) -> FrameObservation | None:
         """Observation of ``tf``; None if its camera is unknown or disabled."""

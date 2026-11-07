@@ -16,6 +16,11 @@ Default classifiers and weights (tunable):
 
 Downstream, ``unknown`` counts as a guest (most people in a restaurant are guests; staff needs
 positive evidence) but never as staff: see :attr:`Role.counts_as_guest`.
+
+Track id rotation (``track_id_ttl_h``) gives everyone a new id; roles are deliberately *not*
+carried over (that would link ids across the rotation). With uniform calibration a new staff
+id is recognised in its first frame; otherwise it is relearned (``StaffZoneOrigin`` only fires
+for tracks born in a staff area, ``MovementPattern`` needs two more visits).
 """
 
 from __future__ import annotations

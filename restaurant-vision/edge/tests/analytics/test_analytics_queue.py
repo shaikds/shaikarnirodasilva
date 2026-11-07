@@ -17,6 +17,7 @@ from analytics_dsl import (
     rel,
     walker,
     with_thresholds,
+    with_zones,
 )
 from rv_contracts import QueueSnapshot, SiteConfig
 
@@ -183,3 +184,23 @@ def test_people_hysteresis_levels() -> None:
     params = QueueParams()
     assert [params.people_clear_at(n) for n in (1, 2, 3, 4, 8, 12)] == [0, 0, 1, 2, 5, 8]
     assert QueueParams(people_hysteresis=0).people_clear_at(8) == 7
+
+
+def test_queued_track_recognised_as_staff_later_leaves_no_outcome() -> None:
+    # same track id: no uniform score at first (unknown, joins the queue), then the
+    # calibrated uniform score marks it as staff (e.g. a host stepping into the zone)
+    first = person(SPOT, role="unknown", camera=E, from_t=10, to_t=20, track_id="host")
+    later = walker([(20, SPOT), (100, SPOT), (102, DOOR)], role="staff", camera=E, to_t=102,
+                   track_id="host")
+    sc = run(first, later, until=150)
+    assert sc.summary() == []
+    people = [s[3] for s in sc.summary(snapshots=True) if s[1] == "queue"]
+    assert people[:4] == [0, 1, 0, 0]
+
+
+def test_queue_without_entrance_line_counts_every_exit_as_leaving() -> None:
+    cfg = with_zones(crisp_config(), remove=["z-entrance-line"])
+    sc = run(queuer(10, 100, IN, gone=1000), until=200, config=cfg)
+    # no line to cross: walking towards the dining room is just leaving the zone
+    # last inside at 101.0 (x 0.55; the zone edge is at x ~0.59), visible outside for 10 s
+    assert sc.summary() == [(111.0, "walkaway", "z-queue", 91.0, 1)]

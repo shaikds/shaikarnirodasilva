@@ -86,7 +86,11 @@ class OccupancyModule:
                 counter.window_s = window
                 areas[zone.zone_id] = (zone.camera_id, counter)
             elif zone.kind is ZoneKind.TABLE:
-                counter = self._staff.get(zone.camera_id) or SmoothedCount(window)
+                counter = (
+                    staff.get(zone.camera_id)
+                    or self._staff.get(zone.camera_id)
+                    or SmoothedCount(window)
+                )
                 counter.window_s = window
                 staff[zone.camera_id] = counter
                 if zone.primary:

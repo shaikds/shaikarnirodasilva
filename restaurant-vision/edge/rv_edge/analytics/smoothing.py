@@ -98,10 +98,6 @@ class HeldSet:
         self.hold_s = hold_s
         self._last: dict[TrackKey, float] = {}
 
-    def see(self, key: TrackKey, ts: float) -> None:
-        """Record a sighting of ``key`` at ``ts``."""
-        self._last[key] = ts
-
     def see_frame(self, ts: float, keys: Iterable[TrackKey]) -> None:
         """Record every key seen in one frame.
 

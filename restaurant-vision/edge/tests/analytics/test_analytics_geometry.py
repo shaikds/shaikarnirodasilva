@@ -15,6 +15,7 @@ from rv_contracts import (
     ZoneKind,
 )
 from rv_contracts.fixtures import sample_site_config
+
 from rv_edge.analytics import SceneModule, ZoneIndex
 from rv_edge.analytics.smoothing import HeldSet, RollingMedian, SmoothedCount
 from rv_edge.analytics.timers import IntervalTimer
@@ -63,6 +64,7 @@ def test_polygon_and_line_helpers() -> None:
     assert border_distance((0.1, 0.5)) == pytest.approx(0.1)
     with pytest.raises(ValueError):
         from rv_contracts import Zone
+
         from rv_edge.analytics.zones import PolygonZone
 
         PolygonZone.from_zone(Zone.model_construct(zone_id="x", kind=ZoneKind.QUEUE,

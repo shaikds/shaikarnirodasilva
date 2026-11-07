@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from analytics_dsl import Scenario, crisp_config, person, walker
+
 from rv_edge.analytics import (
     MovementPattern,
     Role,

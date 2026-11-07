@@ -323,3 +323,23 @@ def test_camera_without_frames_freezes_presence_but_alert_timers_run() -> None:
         (200.0, "raised", "waiter_needed", "t3"),
     ]
 
+
+
+def test_quick_clearing_counts_as_bussing_despite_the_median_lag() -> None:
+    """Default 30 s median: guests are still 'present' (smoothed) until 317.75, but the waiter
+    clearing at 305-320 is measured against the held count, which is 0 from 303.0."""
+    people = [person(**GUEST_T3, from_t=10, to_t=300), staff("t3", 100, 110),
+              staff("t3", 305, 320)]
+    sc = Scenario(sample_site_config()).add(*people)
+    sc.run(400)
+    assert sc.summary()[2:] == [
+        (362.75, "state", "t3", "attended", "needs_bussing", 0),
+        (362.75, "closed", "t3", 40.0, 362.75, 1, 60.0, 2),
+        (362.75, "state", "t3", "needs_bussing", "empty", 0),
+    ]
+    # someone seen at the cleared table before the departure is confirmed cancels it
+    passer = person(at="t3", role="unknown", from_t=330, to_t=331, offset=(0.0, 0.02))
+    sc = Scenario(sample_site_config()).add(*people, passer)
+    sc.run(400)
+    assert [s[4] for s in sc.summary() if s[1] == "state"] == [
+        "seated", "attended", "needs_bussing"]
