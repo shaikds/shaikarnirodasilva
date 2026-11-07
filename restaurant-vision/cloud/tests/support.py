@@ -99,7 +99,9 @@ class Api:
         assert me.status_code == 200, me.text
         body = me.json()
         return Account(
-            user_id=body["user"]["user_id"], org_id=body["org"]["org_id"], headers=headers,
+            user_id=body["user"]["user_id"],
+            org_id=body["org"]["org_id"],
+            headers=headers,
             tokens=tokens,
         )
 
@@ -143,9 +145,7 @@ class Api:
         return str(r.json()["site_id"])
 
     def pair(self, owner: Account, site_id: str) -> dict[str, str]:
-        r = self.client.post(
-            f"/api/v1/sites/{site_id}/devices/pairing-code", headers=owner.headers
-        )
+        r = self.client.post(f"/api/v1/sites/{site_id}/devices/pairing-code", headers=owner.headers)
         assert r.status_code == 201, r.text
         r = self.client.post("/api/v1/edge/pair", json={"code": r.json()["code"]})
         assert r.status_code == 201, r.text

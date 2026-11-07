@@ -110,8 +110,9 @@ def test_settings_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_json_logging_and_token_redaction() -> None:
-    record = logging.LogRecord("rv", logging.INFO, __file__, 1, "GET /ws?token=%s", ("abc.def",),
-                               None)
+    record = logging.LogRecord(
+        "rv", logging.INFO, __file__, 1, "GET /ws?token=%s", ("abc.def",), None
+    )
     record.request_id = "r1"
     assert RedactTokensFilter().filter(record)
     data = json.loads(JsonFormatter().format(record))
@@ -122,8 +123,9 @@ def test_json_logging_and_token_redaction() -> None:
     except ValueError:
         import sys
 
-        err = logging.LogRecord("rv", logging.ERROR, __file__, 1, "x?token=abc", None,
-                                sys.exc_info())
+        err = logging.LogRecord(
+            "rv", logging.ERROR, __file__, 1, "x?token=abc", None, sys.exc_info()
+        )
     RedactTokensFilter().filter(err)
     data = json.loads(JsonFormatter().format(err))
     assert data["msg"] == "x?token=***" and "ValueError" in data["exc"]

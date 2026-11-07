@@ -9,8 +9,15 @@ def test_cross_org_isolation(api: Api, owner: Account) -> None:
     alert_id = new_uuid7()
     api.post_events(
         device_a,
-        event(AlertRaised, site_a, api.clock.now(), alert_id=alert_id,
-              kind=AlertKind.WAITER_NEEDED, table_id="t1", severity=AlertSeverity.WARN),
+        event(
+            AlertRaised,
+            site_a,
+            api.clock.now(),
+            alert_id=alert_id,
+            kind=AlertKind.WAITER_NEEDED,
+            table_id="t1",
+            severity=AlertSeverity.WARN,
+        ),
     )
     other = api.signup("owner@b.test", "Org B")
     site_b = api.create_site(other, "B1")
@@ -19,25 +26,44 @@ def test_cross_org_isolation(api: Api, owner: Account) -> None:
     assert api.client.get(f"/api/v1/orgs/{owner.org_id}", headers=h).status_code == 404
     assert api.client.get(f"/api/v1/orgs/{owner.org_id}/sites", headers=h).status_code == 404
     assert api.client.get(f"/api/v1/orgs/{owner.org_id}/users", headers=h).status_code == 404
-    for path in ("", "/live", "/config", "/alerts", "/devices", "/metrics/summary",
-                 "/tables/stats"):
+    for path in (
+        "",
+        "/live",
+        "/config",
+        "/alerts",
+        "/devices",
+        "/metrics/summary",
+        "/tables/stats",
+    ):
         assert api.client.get(f"/api/v1/sites/{site_a}{path}", headers=h).status_code == 404, path
-    assert api.client.patch(
-        f"/api/v1/sites/{site_a}", headers=h, json={"name": "x"}
-    ).status_code == 404
-    assert api.client.post(
-        f"/api/v1/sites/{site_a}/devices/pairing-code", headers=h
-    ).status_code == 404
+    assert (
+        api.client.patch(f"/api/v1/sites/{site_a}", headers=h, json={"name": "x"}).status_code
+        == 404
+    )
+    assert (
+        api.client.post(f"/api/v1/sites/{site_a}/devices/pairing-code", headers=h).status_code
+        == 404
+    )
     assert api.client.post(f"/api/v1/alerts/{alert_id}/ack", headers=h).status_code == 404
     # A device of org A cannot post events for org B's site.
     r = api.client.post(
         "/api/v1/edge/events",
         headers=device_a,
-        json={"events": [event(AlertRaised, site_b, api.clock.now(), alert_id=new_uuid7(),
-                               kind=AlertKind.WAITER_NEEDED, table_id="t1",
-                               severity=AlertSeverity.WARN)]},
+        json={
+            "events": [
+                event(
+                    AlertRaised,
+                    site_b,
+                    api.clock.now(),
+                    alert_id=new_uuid7(),
+                    kind=AlertKind.WAITER_NEEDED,
+                    table_id="t1",
+                    severity=AlertSeverity.WARN,
+                )
+            ]
+        },
     )
-    assert r.status_code == 403
+    assert r.status_code == 422
     # Each owner only lists their own sites.
     sites_b = api.client.get(f"/api/v1/orgs/{other.org_id}/sites", headers=h).json()
     assert [s["site_id"] for s in sites_b] == [site_b]
@@ -59,16 +85,20 @@ def test_manager_limited_to_one_site(api: Api, owner: Account) -> None:
     sites = api.client.get(f"/api/v1/orgs/{owner.org_id}/sites", headers=h).json()
     assert [s["site_id"] for s in sites] == [site_1]
     # Owner-only operations.
-    assert api.client.post(
-        f"/api/v1/orgs/{owner.org_id}/sites", headers=h, json={"name": "X", "timezone": "UTC"}
-    ).status_code == 403
+    assert (
+        api.client.post(
+            f"/api/v1/orgs/{owner.org_id}/sites", headers=h, json={"name": "X", "timezone": "UTC"}
+        ).status_code
+        == 403
+    )
     assert api.client.get(f"/api/v1/orgs/{owner.org_id}/users", headers=h).status_code == 403
-    assert api.client.post(
-        f"/api/v1/sites/{site_1}/devices/pairing-code", headers=h
-    ).status_code == 403
-    assert api.client.get(
-        f"/api/v1/orgs/{owner.org_id}/reports/compare", headers=h
-    ).status_code == 403
+    assert (
+        api.client.post(f"/api/v1/sites/{site_1}/devices/pairing-code", headers=h).status_code
+        == 403
+    )
+    assert (
+        api.client.get(f"/api/v1/orgs/{owner.org_id}/reports/compare", headers=h).status_code == 403
+    )
     # Managers can read devices and change thresholds, but not owner-only settings.
     assert api.client.get(f"/api/v1/sites/{site_1}/devices", headers=h).status_code == 200
     r = api.client.patch(
@@ -76,9 +106,10 @@ def test_manager_limited_to_one_site(api: Api, owner: Account) -> None:
     )
     assert r.status_code == 200
     assert r.json()["thresholds"]["first_visit_timeout_s"] == 120
-    assert api.client.patch(
-        f"/api/v1/sites/{site_1}", headers=h, json={"name": "Renamed"}
-    ).status_code == 403
+    assert (
+        api.client.patch(f"/api/v1/sites/{site_1}", headers=h, json={"name": "Renamed"}).status_code
+        == 403
+    )
 
 
 def test_waiter_limited_to_alerts(api: Api, owner: Account) -> None:
@@ -88,18 +119,32 @@ def test_waiter_limited_to_alerts(api: Api, owner: Account) -> None:
     alert_id = new_uuid7()
     api.post_events(
         device,
-        event(AlertRaised, site_id, api.clock.now(), alert_id=alert_id,
-              kind=AlertKind.WAITER_NEEDED, table_id="t2", severity=AlertSeverity.WARN),
+        event(
+            AlertRaised,
+            site_id,
+            api.clock.now(),
+            alert_id=alert_id,
+            kind=AlertKind.WAITER_NEEDED,
+            table_id="t2",
+            severity=AlertSeverity.WARN,
+        ),
     )
     alerts = api.client.get(f"/api/v1/sites/{site_id}/alerts", headers=h)
     assert alerts.status_code == 200
     assert [a["table_label"] for a in alerts.json()] == ["2"]
     assert api.client.post(f"/api/v1/alerts/{alert_id}/ack", headers=h).status_code == 200
-    assert api.client.get(
-        f"/api/v1/sites/{site_id}/alerts?status=all", headers=h
-    ).status_code == 403
-    for path in ("", "/live", "/config", "/devices", "/metrics/summary", "/tables/stats",
-                 "/reports/shift?date=2026-11-06"):
+    assert (
+        api.client.get(f"/api/v1/sites/{site_id}/alerts?status=all", headers=h).status_code == 403
+    )
+    for path in (
+        "",
+        "/live",
+        "/config",
+        "/devices",
+        "/metrics/summary",
+        "/tables/stats",
+        "/reports/shift?date=2026-11-06",
+    ):
         assert api.client.get(f"/api/v1/sites/{site_id}{path}", headers=h).status_code == 403, path
     assert api.client.get(f"/api/v1/orgs/{owner.org_id}/sites", headers=h).status_code == 403
     assert api.client.get(f"/api/v1/orgs/{owner.org_id}", headers=h).status_code == 200
@@ -113,29 +158,40 @@ def test_user_management(api: Api, owner: Account) -> None:
     r = api.client.post(
         base,
         headers=owner.headers,
-        json={"email": "x@a.test", "name": "X", "password": "password-123",
-              "memberships": [{"role": "manager", "site_id": "no-such-site"}]},
+        json={
+            "email": "x@a.test",
+            "name": "X",
+            "password": "password-123",
+            "memberships": [{"role": "manager", "site_id": "no-such-site"}],
+        },
     )
     assert r.status_code == 422
     manager = api.add_user(owner, "m@a.test", Role.MANAGER, site_id)
     r = api.client.post(
-        base, headers=owner.headers,
-        json={"email": "M@a.test", "name": "Dup", "password": "password-123",
-              "memberships": [{"role": "waiter", "site_id": site_id}]},
+        base,
+        headers=owner.headers,
+        json={
+            "email": "M@a.test",
+            "name": "Dup",
+            "password": "password-123",
+            "memberships": [{"role": "waiter", "site_id": site_id}],
+        },
     )
     assert r.status_code == 409
     users = api.client.get(base, headers=owner.headers).json()
     assert {u["email"] for u in users} == {"owner@a.test", "m@a.test"}
     # Promote the manager to owner, then demote the original owner.
     r = api.client.patch(
-        f"{base}/{manager.user_id}", headers=owner.headers,
+        f"{base}/{manager.user_id}",
+        headers=owner.headers,
         json={"memberships": [{"role": "owner"}], "name": "Boss", "locale": "en"},
     )
     assert r.status_code == 200
     assert r.json()["memberships"] == [{"role": "owner", "site_id": None}]
     assert r.json()["locale"] == "en"
     r = api.client.patch(
-        f"{base}/{owner.user_id}", headers=owner.headers,
+        f"{base}/{owner.user_id}",
+        headers=owner.headers,
         json={"memberships": [{"role": "manager", "site_id": site_id}]},
     )
     assert r.status_code == 200
@@ -144,7 +200,8 @@ def test_user_management(api: Api, owner: Account) -> None:
     boss = api.login("m@a.test")
     # The last owner cannot be demoted or delete themselves.
     r = api.client.patch(
-        f"{base}/{boss.user_id}", headers=boss.headers,
+        f"{base}/{boss.user_id}",
+        headers=boss.headers,
         json={"memberships": [{"role": "waiter", "site_id": site_id}]},
     )
     assert r.status_code == 409
@@ -168,7 +225,13 @@ def test_site_creation_and_settings(api: Api, owner: Account) -> None:
     assert org == {"org_id": owner.org_id, "name": "Org A", "plan": "pro"}
     summary = api.client.get(base, headers=owner.headers).json()[0]
     assert summary == {
-        "site_id": site_id, "org_id": owner.org_id, "name": "Sydney",
-        "timezone": "Australia/Sydney", "locale": "he", "currency": "AUD",
-        "guests": None, "open_alerts": 0, "edge_online": False,
+        "site_id": site_id,
+        "org_id": owner.org_id,
+        "name": "Sydney",
+        "timezone": "Australia/Sydney",
+        "locale": "he",
+        "currency": "AUD",
+        "guests": None,
+        "open_alerts": 0,
+        "edge_online": False,
     }

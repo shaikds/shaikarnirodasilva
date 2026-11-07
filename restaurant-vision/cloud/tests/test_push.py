@@ -40,8 +40,15 @@ def subscribe(api: Api, user: Account, site_id: str, endpoint: str) -> dict[str,
 
 
 def raised(site: str, ts: float, alert_id: str, table: str = "t6") -> dict[str, object]:
-    return event(AlertRaised, site, ts, alert_id=alert_id, kind=AlertKind.WAITER_NEEDED,
-                 table_id=table, severity=AlertSeverity.WARN)
+    return event(
+        AlertRaised,
+        site,
+        ts,
+        alert_id=alert_id,
+        kind=AlertKind.WAITER_NEEDED,
+        table_id=table,
+        severity=AlertSeverity.WARN,
+    )
 
 
 def test_alert_raised_notifies_site_subscriptions(api: Api, owner: Account) -> None:
@@ -56,11 +63,17 @@ def test_alert_raised_notifies_site_subscriptions(api: Api, owner: Account) -> N
     api.post_events(device, raised(site, t, alert_id))
     sent = api.notifier.sent
     assert {target.endpoint for target, _ in sent} == {
-        "https://push.example.com/w1", "https://push.example.com/gone"
+        "https://push.example.com/w1",
+        "https://push.example.com/gone",
     }
     payload = sent[0][1]
-    assert payload == {"alert_id": alert_id, "site_id": site, "kind": "waiter_needed",
-                       "table_label": "6", "raised_at": t}
+    assert payload == {
+        "alert_id": alert_id,
+        "site_id": site,
+        "kind": "waiter_needed",
+        "table_label": "6",
+        "raised_at": t,
+    }
     target = next(tg for tg, _ in sent if tg.endpoint.endswith("w1"))
     assert (target.p256dh, target.auth) == (KEYS["p256dh"], KEYS["auth"])
     # The gone subscription was deleted; the next alert reaches only the live one.
@@ -85,8 +98,14 @@ def test_no_push_for_duplicates_or_alerts_already_resolved(api: Api, owner: Acco
     api.post_events(  # raised and resolved within one (buffered) batch
         device,
         raised(site, t + 1, other),
-        event(AlertResolved, site, t + 2, alert_id=other, resolved_at=t + 2,
-              reason=ResolveReason.STATE_CHANGE),
+        event(
+            AlertResolved,
+            site,
+            t + 2,
+            alert_id=other,
+            resolved_at=t + 2,
+            reason=ResolveReason.STATE_CHANGE,
+        ),
     )
     assert len(api.notifier.sent) == 1
 
@@ -104,12 +123,14 @@ def test_subscription_ownership(api: Api, owner: Account) -> None:
     assert api.client.delete(path, headers=waiter.headers).status_code == 404
     other_site = api.create_site(owner, "Other")
     r = api.client.post(
-        "/api/v1/push/subscriptions", headers=waiter.headers,
+        "/api/v1/push/subscriptions",
+        headers=waiter.headers,
         json={"site_id": other_site, "endpoint": "https://push.example.com/x", "keys": KEYS},
     )
     assert r.status_code == 403
     r = api.client.post(
-        "/api/v1/push/subscriptions", headers=waiter.headers,
+        "/api/v1/push/subscriptions",
+        headers=waiter.headers,
         json={"site_id": site, "endpoint": "http://insecure.example.com/x", "keys": KEYS},
     )
     assert r.status_code == 422
@@ -161,12 +182,16 @@ def test_web_push_notifier_outcomes(fake_webpush: list[dict[str, Any]]) -> None:
     assert notifier.send(target, payload) is SendOutcome.SENT
     call = fake_webpush[0]
     assert call["subscription_info"] == {
-        "endpoint": "https://push.example.com/1", "keys": {"p256dh": "p256", "auth": "auth"}
+        "endpoint": "https://push.example.com/1",
+        "keys": {"p256dh": "p256", "auth": "auth"},
     }
     assert call["data"] == '{"alert_id":"a1","kind":"waiter_needed"}'
     assert call["vapid_claims"] == {"sub": "mailto:ops@example.com"}
-    for status, outcome in ((410, SendOutcome.GONE), (404, SendOutcome.GONE),
-                            (500, SendOutcome.FAILED)):
+    for status, outcome in (
+        (410, SendOutcome.GONE),
+        (404, SendOutcome.GONE),
+        (500, SendOutcome.FAILED),
+    ):
         behaviour["status"] = status
         assert notifier.send(target, payload) is outcome
     behaviour["status"] = None

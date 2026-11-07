@@ -65,7 +65,10 @@ def test_refresh_flow_and_expiry(api: Api, owner: Account) -> None:
     # An access token is not a refresh token, and vice versa.
     r = api.client.post("/api/v1/auth/refresh", json={"refresh_token": r.json()["access_token"]})
     assert r.status_code == 401
-    assert api.client.get("/api/v1/me", headers=bearer(owner.tokens["refresh_token"])).status_code == 401
+    assert (
+        api.client.get("/api/v1/me", headers=bearer(owner.tokens["refresh_token"])).status_code
+        == 401
+    )
     # Refresh tokens expire after 30 days.
     api.clock.advance(31 * 86400)
     r = api.client.post(
@@ -99,6 +102,8 @@ def test_password_change_revokes_tokens(api: Api, owner: Account) -> None:
 def test_deleted_user_tokens_stop_working(api: Api, owner: Account) -> None:
     site_id = api.create_site(owner)
     waiter = api.add_user(owner, "w@a.test", Role.WAITER, site_id)
-    r = api.client.delete(f"/api/v1/orgs/{owner.org_id}/users/{waiter.user_id}", headers=owner.headers)
+    r = api.client.delete(
+        f"/api/v1/orgs/{owner.org_id}/users/{waiter.user_id}", headers=owner.headers
+    )
     assert r.status_code == 204
     assert api.client.get("/api/v1/me", headers=waiter.headers).status_code == 401

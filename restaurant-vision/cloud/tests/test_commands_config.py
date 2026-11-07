@@ -31,8 +31,15 @@ def test_ack_creates_command_for_edge(api: Api, owner: Account) -> None:
     alert_id = new_uuid7()
     api.post_events(
         device,
-        event(AlertRaised, site, t, alert_id=alert_id, kind=AlertKind.WAITER_NEEDED,
-              table_id="t5", severity=AlertSeverity.WARN),
+        event(
+            AlertRaised,
+            site,
+            t,
+            alert_id=alert_id,
+            kind=AlertKind.WAITER_NEEDED,
+            table_id="t5",
+            severity=AlertSeverity.WARN,
+        ),
     )
     first = _poll(api, device)
     # The sample config upload already produced one config_changed command.
@@ -60,16 +67,27 @@ def test_ack_creates_command_for_edge(api: Api, owner: Account) -> None:
     assert command["ack_at"] == t + 12 and command["site_id"] == site
     assert int(str(page["cursor"])) > int(cursor)
     # Idempotent: a second ack (or acking a resolved alert) adds no command.
-    assert api.client.post(f"/api/v1/alerts/{alert_id}/ack", headers=owner.headers).status_code == 200
+    assert (
+        api.client.post(f"/api/v1/alerts/{alert_id}/ack", headers=owner.headers).status_code == 200
+    )
     api.post_events(
         device,
-        event(AlertResolved, site, t + 60, alert_id=alert_id, resolved_at=t + 60,
-              reason=ResolveReason.STAFF_VISIT),
+        event(
+            AlertResolved,
+            site,
+            t + 60,
+            alert_id=alert_id,
+            resolved_at=t + 60,
+            reason=ResolveReason.STAFF_VISIT,
+        ),
     )
     r = api.client.post(f"/api/v1/alerts/{alert_id}/ack", headers=owner.headers)
     assert r.json()["status"] == "resolved"
     assert _poll(api, device, str(page["cursor"]))["commands"] == []
-    assert api.client.post(f"/api/v1/alerts/{new_uuid7()}/ack", headers=owner.headers).status_code == 404
+    assert (
+        api.client.post(f"/api/v1/alerts/{new_uuid7()}/ack", headers=owner.headers).status_code
+        == 404
+    )
 
 
 def test_command_cursor_validation_and_reset(api: Api, owner: Account) -> None:
@@ -80,8 +98,11 @@ def test_command_cursor_validation_and_reset(api: Api, owner: Account) -> None:
     assert len(page["commands"]) == 1 and page["cursor"] == "1"  # type: ignore[arg-type]
     # Paging with limit.
     for _ in range(3):
-        api.client.patch(f"/api/v1/sites/{site}", headers=owner.headers,
-                         json={"locale": "en" if _ % 2 == 0 else "he"})
+        api.client.patch(
+            f"/api/v1/sites/{site}",
+            headers=owner.headers,
+            json={"locale": "en" if _ % 2 == 0 else "he"},
+        )
     r = api.client.get("/api/v1/edge/commands?after=1&limit=2", headers=device).json()
     assert [c["config_version"] for c in r["commands"]] == [3, 4]
     assert r["cursor"] == "3"
@@ -106,7 +127,8 @@ def test_edge_config_etag(api: Api, owner: Account) -> None:
 def test_edge_put_config_merges_and_versions(api: Api, owner: Account) -> None:
     site, device = api.site_with_config(owner)
     api.client.patch(
-        f"/api/v1/sites/{site}", headers=owner.headers,
+        f"/api/v1/sites/{site}",
+        headers=owner.headers,
         json={"thresholds": {"first_visit_timeout_s": 90}},
     )
     stale = sample_site_config(site_id=site).model_dump(mode="json")  # version 1, old thresholds
@@ -139,16 +161,22 @@ def test_patch_site_bumps_config_and_notifies_edge(api: Api, owner: Account) -> 
     site, device = api.site_with_config(owner)
     cursor = str(_poll(api, device)["cursor"])
     r = api.client.patch(
-        f"/api/v1/sites/{site}", headers=owner.headers,
+        f"/api/v1/sites/{site}",
+        headers=owner.headers,
         json={"name": "Renamed", "currency": "USD", "avg_check_per_guest": 30.5},
     )
     assert r.status_code == 200
     assert (r.json()["name"], r.json()["currency"]) == ("Renamed", "USD")
     assert _poll(api, device, cursor)["commands"] == []  # not part of SiteConfig
     r = api.client.patch(
-        f"/api/v1/sites/{site}", headers=owner.headers,
-        json={"thresholds": {"seat_confirm_s": 15}, "modules": {"queue": False},
-              "timezone": "Europe/London", "locale": "en"},
+        f"/api/v1/sites/{site}",
+        headers=owner.headers,
+        json={
+            "thresholds": {"seat_confirm_s": 15},
+            "modules": {"queue": False},
+            "timezone": "Europe/London",
+            "locale": "en",
+        },
     )
     assert r.status_code == 200
     body = r.json()
@@ -171,9 +199,15 @@ def test_patch_site_bumps_config_and_notifies_edge(api: Api, owner: Account) -> 
         {"floor_plan": [{"table_id": "t1", "x": 0, "y": 0}, {"table_id": "t1", "x": 1, "y": 0}]},
     ]
     for body in bad:
-        assert api.client.patch(f"/api/v1/sites/{site}", headers=owner.headers, json=body).status_code == 422
-    r = api.client.patch(f"/api/v1/sites/{site}", headers=owner.headers,
-                         json={"floor_plan": [{"table_id": "t1", "x": 5, "y": 6, "w": 2}]})
+        assert (
+            api.client.patch(f"/api/v1/sites/{site}", headers=owner.headers, json=body).status_code
+            == 422
+        )
+    r = api.client.patch(
+        f"/api/v1/sites/{site}",
+        headers=owner.headers,
+        json={"floor_plan": [{"table_id": "t1", "x": 5, "y": 6, "w": 2}]},
+    )
     assert r.json()["floor_plan"] == [{"table_id": "t1", "x": 5, "y": 6, "w": 2, "h": 1}]
 
 
@@ -185,8 +219,9 @@ def test_starter_plan_gates_pro_modules(api: Api, owner: Account) -> None:
     site = api.create_site(owner)
     modules = api.client.get(f"/api/v1/sites/{site}", headers=owner.headers).json()["modules"]
     assert modules == {"occupancy": True, "queue": True, "tables": False, "alerts": False}
-    r = api.client.patch(f"/api/v1/sites/{site}", headers=owner.headers,
-                         json={"modules": {"tables": True}})
+    r = api.client.patch(
+        f"/api/v1/sites/{site}", headers=owner.headers, json={"modules": {"tables": True}}
+    )
     assert r.status_code == 403
     r = api.client.get(f"/api/v1/orgs/{owner.org_id}/reports/compare", headers=owner.headers)
     assert r.status_code == 403

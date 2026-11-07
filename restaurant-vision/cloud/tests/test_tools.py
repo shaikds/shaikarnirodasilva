@@ -45,8 +45,9 @@ def test_seed_demo_is_idempotent(tmp_path: Path, capsys: pytest.CaptureFixture[s
     with engine.connect() as conn:
         assert conn.scalar(select(func.count()).select_from(Organization)) == 1
         assert conn.scalar(select(func.count()).select_from(User)) == 3
-        sites = conn.execute(select(Site.name, Site.timezone, Site.currency, Site.locale,
-                                    Site.config_json)).all()
+        sites = conn.execute(
+            select(Site.name, Site.timezone, Site.currency, Site.locale, Site.config_json)
+        ).all()
     engine.dispose()
     assert sorted((s[0], s[1], s[2], s[3]) for s in sites) == [
         ("Sydney", "Australia/Sydney", "AUD", "en"),
@@ -58,9 +59,11 @@ def test_seed_demo_is_idempotent(tmp_path: Path, capsys: pytest.CaptureFixture[s
     # The seeded accounts work against the app, with the expected roles.
     app = create_app(make_settings(database_url=url))
     with TestClient(app) as client:
+
         def login(email: str) -> dict[str, str]:
-            r = client.post("/api/v1/auth/login",
-                            json={"email": email, "password": seed_demo.PASSWORD})
+            r = client.post(
+                "/api/v1/auth/login", json={"email": email, "password": seed_demo.PASSWORD}
+            )
             assert r.status_code == 200
             return {"Authorization": f"Bearer {r.json()['access_token']}"}
 

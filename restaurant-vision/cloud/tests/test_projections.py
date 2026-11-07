@@ -35,17 +35,44 @@ from rv_cloud.db.models import (
 E, S, A, B = TableState.EMPTY, TableState.SEATED, TableState.ATTENDED, TableState.NEEDS_BUSSING
 
 
-def state_change(site: str, ts: float, table: str, frm: TableState, to: TableState,
-                 session: str, guests: int = 2) -> dict[str, object]:
-    return event(TableStateChanged, site, ts, table_id=table, from_state=frm, to_state=to,
-                 guest_count=guests, session_id=session)
+def state_change(
+    site: str, ts: float, table: str, frm: TableState, to: TableState, session: str, guests: int = 2
+) -> dict[str, object]:
+    return event(
+        TableStateChanged,
+        site,
+        ts,
+        table_id=table,
+        from_state=frm,
+        to_state=to,
+        guest_count=guests,
+        session_id=session,
+    )
 
 
-def closed(site: str, ts: float, table: str, session: str, seated: float, left: float,
-           guests: int = 2, bussing: float | None = None) -> dict[str, object]:
-    return event(TableSessionClosed, site, ts, table_id=table, session_id=session,
-                 seated_at=seated, left_at=left, max_guests=guests, first_visit_delay_s=240.0,
-                 visits=3, bussing_delay_s=bussing)
+def closed(
+    site: str,
+    ts: float,
+    table: str,
+    session: str,
+    seated: float,
+    left: float,
+    guests: int = 2,
+    bussing: float | None = None,
+) -> dict[str, object]:
+    return event(
+        TableSessionClosed,
+        site,
+        ts,
+        table_id=table,
+        session_id=session,
+        seated_at=seated,
+        left_at=left,
+        max_guests=guests,
+        first_visit_delay_s=240.0,
+        visits=3,
+        bussing_delay_s=bussing,
+    )
 
 
 def test_table_state_and_session_projection(api: Api, owner: Account) -> None:
@@ -101,10 +128,25 @@ def test_alert_lifecycle_projection(api: Api, owner: Account) -> None:
     a1, a2 = new_uuid7(), new_uuid7()
     api.post_events(
         device,
-        event(AlertRaised, site, t, alert_id=a1, kind=AlertKind.WAITER_NEEDED, table_id="t4",
-              zone_id="z-t4", severity=AlertSeverity.WARN),
-        event(AlertRaised, site, t + 1, alert_id=a2, kind=AlertKind.LONG_QUEUE,
-              zone_id="z-queue", severity=AlertSeverity.URGENT),
+        event(
+            AlertRaised,
+            site,
+            t,
+            alert_id=a1,
+            kind=AlertKind.WAITER_NEEDED,
+            table_id="t4",
+            zone_id="z-t4",
+            severity=AlertSeverity.WARN,
+        ),
+        event(
+            AlertRaised,
+            site,
+            t + 1,
+            alert_id=a2,
+            kind=AlertKind.LONG_QUEUE,
+            zone_id="z-queue",
+            severity=AlertSeverity.URGENT,
+        ),
         event(AlertAcknowledged, site, t + 30, alert_id=a1, ack_at=t + 30, via=AckVia.LOCAL),
     )
     # A later ack keeps the earliest; an earlier one replaces it. Unknown alerts are ignored.
@@ -112,17 +154,43 @@ def test_alert_lifecycle_projection(api: Api, owner: Account) -> None:
         device,
         event(AlertAcknowledged, site, t + 50, alert_id=a1, ack_at=t + 50, via=AckVia.CLOUD),
         event(AlertAcknowledged, site, t + 20, alert_id=a1, ack_at=t + 20, via=AckVia.LOCAL),
-        event(AlertResolved, site, t + 90, alert_id=a1, resolved_at=t + 90,
-              reason=ResolveReason.STAFF_VISIT),
-        event(AlertResolved, site, t + 95, alert_id=a1, resolved_at=t + 95,
-              reason=ResolveReason.EXPIRED),
-        event(AlertResolved, site, t + 95, alert_id=new_uuid7(), resolved_at=t + 95,
-              reason=ResolveReason.EXPIRED),
-        event(AlertAcknowledged, site, t + 95, alert_id=new_uuid7(), ack_at=t + 95,
-              via=AckVia.LOCAL),
+        event(
+            AlertResolved,
+            site,
+            t + 90,
+            alert_id=a1,
+            resolved_at=t + 90,
+            reason=ResolveReason.STAFF_VISIT,
+        ),
+        event(
+            AlertResolved,
+            site,
+            t + 95,
+            alert_id=a1,
+            resolved_at=t + 95,
+            reason=ResolveReason.EXPIRED,
+        ),
+        event(
+            AlertResolved,
+            site,
+            t + 95,
+            alert_id=new_uuid7(),
+            resolved_at=t + 95,
+            reason=ResolveReason.EXPIRED,
+        ),
+        event(
+            AlertAcknowledged, site, t + 95, alert_id=new_uuid7(), ack_at=t + 95, via=AckVia.LOCAL
+        ),
         # Re-raise of an existing alert id is ignored.
-        event(AlertRaised, site, t + 99, alert_id=a1, kind=AlertKind.CHECKIN_NEEDED,
-              table_id="t4", severity=AlertSeverity.INFO),
+        event(
+            AlertRaised,
+            site,
+            t + 99,
+            alert_id=a1,
+            kind=AlertKind.CHECKIN_NEEDED,
+            table_id="t4",
+            severity=AlertSeverity.INFO,
+        ),
     )
     with api.app.state.rv.session_factory() as db:
         alert = db.get(Alert, (site, a1))
@@ -147,46 +215,109 @@ def test_queue_and_occupancy_projection(api: Api, owner: Account) -> None:
     t = api.clock.now()
     api.post_events(
         device,
-        event(QueueSnapshot, site, t + 10, zone_id="z-queue", people=3, parties_est=2,
-              longest_wait_s=120.0, avg_wait_s=60.0),
-        event(QueueSnapshot, site, t + 20, zone_id="z-queue", people=1, parties_est=1,
-              longest_wait_s=130.0, avg_wait_s=130.0),
+        event(
+            QueueSnapshot,
+            site,
+            t + 10,
+            zone_id="z-queue",
+            people=3,
+            parties_est=2,
+            longest_wait_s=120.0,
+            avg_wait_s=60.0,
+        ),
+        event(
+            QueueSnapshot,
+            site,
+            t + 20,
+            zone_id="z-queue",
+            people=1,
+            parties_est=1,
+            longest_wait_s=130.0,
+            avg_wait_s=130.0,
+        ),
         event(QueueSeated, site, t + 25, zone_id="z-queue", waited_s=130.0),
         event(QueueWalkaway, site, t + 26, zone_id="z-queue", waited_s=200.0, party_size_est=3),
-        event(OccupancySnapshot, site, t + 30, guests=12, tables_occupied=4, tables_total=8,
-              staff_on_floor=2),
+        event(
+            OccupancySnapshot,
+            site,
+            t + 30,
+            guests=12,
+            tables_occupied=4,
+            tables_total=8,
+            staff_on_floor=2,
+        ),
     )
     # Late, older snapshots are kept for time series but do not replace "latest".
     api.post_events(
         device,
-        event(QueueSnapshot, site, t + 5, zone_id="z-queue", people=9, parties_est=4,
-              longest_wait_s=10.0, avg_wait_s=5.0),
-        event(OccupancySnapshot, site, t + 1, guests=99, tables_occupied=8, tables_total=8,
-              staff_on_floor=9),
+        event(
+            QueueSnapshot,
+            site,
+            t + 5,
+            zone_id="z-queue",
+            people=9,
+            parties_est=4,
+            longest_wait_s=10.0,
+            avg_wait_s=5.0,
+        ),
+        event(
+            OccupancySnapshot,
+            site,
+            t + 1,
+            guests=99,
+            tables_occupied=8,
+            tables_total=8,
+            staff_on_floor=9,
+        ),
     )
     with api.app.state.rv.session_factory() as db:
         kinds = [(q.kind, q.waited_s, q.party_size_est) for q in db.scalars(select(QueueEvent))]
         assert sorted(kinds) == [("seated", 130.0, None), ("walkaway", 200.0, 3)]
         snaps = db.scalars(select(MetricSnapshot).order_by(MetricSnapshot.ts)).all()
         assert [(s.kind, s.value) for s in snaps] == [
-            ("occupancy", 99.0), ("queue", 9.0), ("queue", 3.0), ("queue", 1.0),
+            ("occupancy", 99.0),
+            ("queue", 9.0),
+            ("queue", 3.0),
+            ("queue", 1.0),
             ("occupancy", 12.0),
         ]
     live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
-    assert live["occupancy"] == {"ts": t + 30, "guests": 12, "tables_occupied": 4,
-                                 "tables_total": 8, "staff_on_floor": 2}
-    assert live["queues"] == [{"zone_id": "z-queue", "ts": t + 20, "people": 1, "parties_est": 1,
-                               "longest_wait_s": 130.0, "avg_wait_s": 130.0}]
+    assert live["occupancy"] == {
+        "ts": t + 30,
+        "guests": 12,
+        "tables_occupied": 4,
+        "tables_total": 8,
+        "staff_on_floor": 2,
+    }
+    assert live["queues"] == [
+        {
+            "zone_id": "z-queue",
+            "ts": t + 20,
+            "people": 1,
+            "parties_est": 1,
+            "longest_wait_s": 130.0,
+            "avg_wait_s": 130.0,
+        }
+    ]
     summary = api.client.get(f"/api/v1/orgs/{owner.org_id}/sites", headers=owner.headers).json()
     assert summary[0]["guests"] == 12
 
 
 def heartbeat(site: str, ts: float) -> dict[str, object]:
     return event(
-        EdgeHeartbeat, site, ts, device_id="edge-1", version="0.1.0",
-        cameras=[CameraHealth(camera_id="cam-dining", status=CameraStatus.OK, fps=5.0,
-                              last_frame_age_s=0.2)],
-        cpu_pct=30.0, mem_mb=500.0, outbox_depth=2,
+        EdgeHeartbeat,
+        site,
+        ts,
+        device_id="edge-1",
+        version="0.1.0",
+        cameras=[
+            CameraHealth(
+                camera_id="cam-dining", status=CameraStatus.OK, fps=5.0, last_frame_age_s=0.2
+            )
+        ],
+        cpu_pct=30.0,
+        mem_mb=500.0,
+        outbox_depth=2,
     )
 
 
@@ -198,8 +329,9 @@ def test_heartbeat_projection_and_online_window(api: Api, owner: Account) -> Non
     assert len(devices) == 1
     d = devices[0]
     assert d["online"] is True and d["last_seen_at"] == t and d["version"] == "0.1.0"
-    assert d["cameras"] == [{"camera_id": "cam-dining", "status": "ok", "fps": 5.0,
-                             "last_frame_age_s": 0.2}]
+    assert d["cameras"] == [
+        {"camera_id": "cam-dining", "status": "ok", "fps": 5.0, "last_frame_age_s": 0.2}
+    ]
     assert (d["cpu_pct"], d["mem_mb"], d["outbox_depth"]) == (30.0, 500.0, 2)
     # An old buffered heartbeat delivered later does not overwrite newer health.
     api.clock.advance(60)
@@ -223,18 +355,39 @@ def test_live_snapshot(api: Api, owner: Account) -> None:
         device,
         heartbeat(site, t),
         state_change(site, t, "t3", E, S, s1, guests=4),
-        event(AlertRaised, site, t + 180, alert_id=a1, kind=AlertKind.WAITER_NEEDED,
-              table_id="t3", severity=AlertSeverity.WARN),
-        event(AlertRaised, site, t + 200, alert_id=a2, kind=AlertKind.LONG_QUEUE,
-              zone_id="z-queue", severity=AlertSeverity.URGENT),
+        event(
+            AlertRaised,
+            site,
+            t + 180,
+            alert_id=a1,
+            kind=AlertKind.WAITER_NEEDED,
+            table_id="t3",
+            severity=AlertSeverity.WARN,
+        ),
+        event(
+            AlertRaised,
+            site,
+            t + 200,
+            alert_id=a2,
+            kind=AlertKind.LONG_QUEUE,
+            zone_id="z-queue",
+            severity=AlertSeverity.URGENT,
+        ),
     )
     api.clock.advance(60)
     live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
     assert live["site_id"] == site and live["ts"] == t + 60
     tables = {row["table_id"]: row for row in live["tables"]}
     assert len(tables) == 8
-    assert tables["t3"] == {"table_id": "t3", "label": "3", "seats": 4, "state": "seated",
-                            "guest_count": 4, "since_ts": t, "open_alert_ids": [a1]}
+    assert tables["t3"] == {
+        "table_id": "t3",
+        "label": "3",
+        "seats": 4,
+        "state": "seated",
+        "guest_count": 4,
+        "since_ts": t,
+        "open_alert_ids": [a1],
+    }
     assert tables["t1"]["state"] == "empty" and tables["t1"]["since_ts"] is None
     assert [a["alert_id"] for a in live["open_alerts"]] == [a1, a2]
     assert live["occupancy"] is None and live["queues"] == []

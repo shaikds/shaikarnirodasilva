@@ -65,8 +65,15 @@ QUEUE = [
 
 def test_summarize() -> None:
     s = summarize(
-        site_id="s", from_ts=T, to_ts=T + 7200, currency=Currency.ILS, avg_check_per_guest=100.0,
-        table_count=8, sessions=SESSIONS, alerts=ALERTS, queue=QUEUE,
+        site_id="s",
+        from_ts=T,
+        to_ts=T + 7200,
+        currency=Currency.ILS,
+        avg_check_per_guest=100.0,
+        table_count=8,
+        sessions=SESSIONS,
+        alerts=ALERTS,
+        queue=QUEUE,
     )
     assert s.sessions == 3 and s.guests_served == 9
     assert s.avg_dwell_s == pytest.approx((3600 + 1200 + 600) / 3)
@@ -81,8 +88,15 @@ def test_summarize() -> None:
 
 def test_summarize_empty_and_unknown_check() -> None:
     s = summarize(
-        site_id="s", from_ts=T, to_ts=T + 1, currency=Currency.AUD, avg_check_per_guest=0.0,
-        table_count=0, sessions=[], alerts=[], queue=QUEUE[2:],
+        site_id="s",
+        from_ts=T,
+        to_ts=T + 1,
+        currency=Currency.AUD,
+        avg_check_per_guest=0.0,
+        table_count=0,
+        sessions=[],
+        alerts=[],
+        queue=QUEUE[2:],
     )
     assert s.sessions == 0 and s.avg_dwell_s is None and s.turnover_per_table is None
     assert s.waiter_response_p50_s is None and s.queue_avg_wait_s is None
@@ -90,8 +104,11 @@ def test_summarize_empty_and_unknown_check() -> None:
 
 
 def test_table_stats() -> None:
-    tables = [Table(table_id="t1", label="1", seats=2), Table(table_id="t2", label="2", seats=4),
-              Table(table_id="t3", label="3", seats=6)]
+    tables = [
+        Table(table_id="t1", label="1", seats=2),
+        Table(table_id="t2", label="2", seats=4),
+        Table(table_id="t3", label="3", seats=6),
+    ]
     rows = {r.table_id: r for r in table_stats(tables, SESSIONS)}
     assert rows["t1"].sessions == 2 and rows["t1"].guests == 5
     assert rows["t1"].avg_dwell_s == pytest.approx(2100.0)
@@ -143,13 +160,27 @@ def test_business_day_range() -> None:
 
 def test_timeseries_functions() -> None:
     starts = [T, T + 900, T + 1800]
-    occ = ts.mean_series(starts, T + 2700, [SnapshotPoint(T, 10), SnapshotPoint(T + 300, 20),
-                                             SnapshotPoint(T + 960, 30), SnapshotPoint(T + 9999, 1)])
+    occ = ts.mean_series(
+        starts,
+        T + 2700,
+        [
+            SnapshotPoint(T, 10),
+            SnapshotPoint(T + 300, 20),
+            SnapshotPoint(T + 960, 30),
+            SnapshotPoint(T + 9999, 1),
+        ],
+    )
     assert [p.value for p in occ] == [15.0, 30.0, None]
-    queue = ts.zone_sum_series(starts, T + 2700, [
-        SnapshotPoint(T, 2, "q1"), SnapshotPoint(T + 60, 4, "q1"), SnapshotPoint(T + 30, 1, "q2"),
-        SnapshotPoint(T + 1000, 5, "q2"),
-    ])
+    queue = ts.zone_sum_series(
+        starts,
+        T + 2700,
+        [
+            SnapshotPoint(T, 2, "q1"),
+            SnapshotPoint(T + 60, 4, "q1"),
+            SnapshotPoint(T + 30, 1, "q2"),
+            SnapshotPoint(T + 1000, 5, "q2"),
+        ],
+    )
     assert [p.value for p in queue] == [4.0, 5.0, None]
     counts = ts.count_series(starts, T + 2700, [T + 1, T + 2, T + 1801, T - 5])
     assert [p.value for p in counts] == [2.0, 0.0, 1.0]
@@ -162,22 +193,32 @@ def test_roi_block_math() -> None:
     first = T - 30 * 86400
     assert baseline_window(None) is None
     assert baseline_window(first) == (first, first + 7 * 86400)
-    baseline_sessions = [SessionRecord("t1", first, first + 3600, 2),
-                         SessionRecord("t2", first, first + 3000, 2, bussing_delay_s=600.0)]
+    baseline_sessions = [
+        SessionRecord("t1", first, first + 3600, 2),
+        SessionRecord("t2", first, first + 3000, 2, bussing_delay_s=600.0),
+    ]
     current = [
         SessionRecord("t1", T, T + 2700, 4, bussing_delay_s=300.0),  # turn 3000, queued hour
         SessionRecord("t2", T + 3600, T + 6600, 2),  # turn 3000, hour without a queue
     ]
     hours = queued_hours(JLM, [SnapshotPoint(T + 60, 3), SnapshotPoint(T + 3700, 0)], [])
     assert hours == {T}
-    roi = roi_block(RoiInputs(
-        currency=Currency.ILS, avg_check_per_guest=100.0, tz=JLM, queue=QUEUE,
-        alerts=ALERTS[:3],  # responses 60, 120, 300 -> p50 120
-        sessions=current,
-        baseline_alerts=[AlertRecord("waiter_needed", first, first + 300),
-                         AlertRecord("waiter_needed", first, first + 500)],  # p50 400
-        baseline_sessions=baseline_sessions, queued_hours=hours,
-    ))
+    roi = roi_block(
+        RoiInputs(
+            currency=Currency.ILS,
+            avg_check_per_guest=100.0,
+            tz=JLM,
+            queue=QUEUE,
+            alerts=ALERTS[:3],  # responses 60, 120, 300 -> p50 120
+            sessions=current,
+            baseline_alerts=[
+                AlertRecord("waiter_needed", first, first + 300),
+                AlertRecord("waiter_needed", first, first + 500),
+            ],  # p50 400
+            baseline_sessions=baseline_sessions,
+            queued_hours=hours,
+        )
+    )
     assert roi.is_estimate is True
     assert roi.walkaways == 2 and roi.lost_revenue.value == 500.0
     assert roi.response_time_baseline_p50_s == 400.0
@@ -190,17 +231,34 @@ def test_roi_block_math() -> None:
 
 
 def test_roi_without_baseline_or_check() -> None:
-    roi = roi_block(RoiInputs(
-        currency=Currency.USD, avg_check_per_guest=0.0, tz=JLM, queue=[], alerts=[],
-        sessions=SESSIONS, baseline_alerts=[], baseline_sessions=[], queued_hours={T},
-    ))
+    roi = roi_block(
+        RoiInputs(
+            currency=Currency.USD,
+            avg_check_per_guest=0.0,
+            tz=JLM,
+            queue=[],
+            alerts=[],
+            sessions=SESSIONS,
+            baseline_alerts=[],
+            baseline_sessions=[],
+            queued_hours={T},
+        )
+    )
     assert roi.lost_revenue.value is None
     assert roi.response_time_improvement_s.value is None
     assert roi.extra_covers.value is None and roi.extra_revenue.value is None
     # Slower than baseline: never negative.
-    slower = roi_block(RoiInputs(
-        currency=Currency.USD, avg_check_per_guest=10.0, tz=JLM, queue=[], alerts=[],
-        sessions=[SessionRecord("t1", T, T + 5000, 2)],
-        baseline_alerts=[], baseline_sessions=[SessionRecord("t1", 0, 3000, 2)], queued_hours={T},
-    ))
+    slower = roi_block(
+        RoiInputs(
+            currency=Currency.USD,
+            avg_check_per_guest=10.0,
+            tz=JLM,
+            queue=[],
+            alerts=[],
+            sessions=[SessionRecord("t1", T, T + 5000, 2)],
+            baseline_alerts=[],
+            baseline_sessions=[SessionRecord("t1", 0, 3000, 2)],
+            queued_hours={T},
+        )
+    )
     assert slower.extra_covers.value == 0.0 and slower.extra_revenue.value == 0.0

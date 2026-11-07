@@ -76,8 +76,9 @@ def test_device_auth_required_and_revocable(api: Api, owner: Account) -> None:
 def test_ingest_is_idempotent(api: Api, owner: Account) -> None:
     site_id, device = api.site_with_config(owner)
     t = api.clock.now()
-    a = event(OccupancySnapshot, site_id, t, guests=4, tables_occupied=1, tables_total=8,
-              staff_on_floor=1)
+    a = event(
+        OccupancySnapshot, site_id, t, guests=4, tables_occupied=1, tables_total=8, staff_on_floor=1
+    )
     b = event(QueueSeated, site_id, t, zone_id="z-queue", waited_s=30.0)
     assert api.post_events(device, a, b) == {"accepted": 2, "duplicates": 0}
     # Retry of the same batch, plus one in-batch duplicate of a new event.
@@ -107,7 +108,15 @@ def test_ingest_batch_limit_and_validation(api: Api, owner: Account) -> None:
 def test_ingest_rejects_events_of_another_site(api: Api, owner: Account) -> None:
     site_id, device = api.site_with_config(owner)
     other_site = api.create_site(owner, "Other")
-    e = event(AlertRaised, other_site, api.clock.now(), alert_id=new_uuid7(),
-              kind=AlertKind.LONG_QUEUE, zone_id="z-queue", severity=AlertSeverity.INFO)
+    e = event(
+        AlertRaised,
+        other_site,
+        api.clock.now(),
+        alert_id=new_uuid7(),
+        kind=AlertKind.LONG_QUEUE,
+        zone_id="z-queue",
+        severity=AlertSeverity.INFO,
+    )
     r = api.client.post("/api/v1/edge/events", headers=device, json={"events": [e]})
-    assert r.status_code == 403
+    assert r.status_code == 422
+    assert "site_id" in r.json()["detail"]

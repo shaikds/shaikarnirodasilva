@@ -43,12 +43,13 @@ class RedactTokensFilter(logging.Filter):
     """Masks ``token=...`` in log messages and arguments (e.g. uvicorn access lines)."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if isinstance(record.msg, str):
-            record.msg = _TOKEN_RE.sub(r"\1***", record.msg)
-        if isinstance(record.args, tuple):
-            record.args = tuple(
-                _TOKEN_RE.sub(r"\1***", a) if isinstance(a, str) else a for a in record.args
-            )
+        try:
+            message = record.getMessage()
+        except Exception:  # malformed record: leave it to the handler's error path
+            return True
+        if "token=" in message:
+            record.msg = _TOKEN_RE.sub(r"\1***", message)
+            record.args = None
         return True
 
 

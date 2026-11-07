@@ -29,20 +29,48 @@ def local_ts(y: int, m: int, d: int, h: int, minute: int = 0, tz: ZoneInfo = JLM
     return dt.datetime(y, m, d, h, minute, tzinfo=tz).timestamp()
 
 
-def session(site: str, table: str, seated: float, left: float, guests: int,
-            bussing: float | None = None) -> dict[str, object]:
-    return event(TableSessionClosed, site, left, table_id=table, session_id=new_uuid7(),
-                 seated_at=seated, left_at=left, max_guests=guests, first_visit_delay_s=120.0,
-                 visits=2, bussing_delay_s=bussing)
+def session(
+    site: str, table: str, seated: float, left: float, guests: int, bussing: float | None = None
+) -> dict[str, object]:
+    return event(
+        TableSessionClosed,
+        site,
+        left,
+        table_id=table,
+        session_id=new_uuid7(),
+        seated_at=seated,
+        left_at=left,
+        max_guests=guests,
+        first_visit_delay_s=120.0,
+        visits=2,
+        bussing_delay_s=bussing,
+    )
 
 
 def waiter_alert(site: str, raised: float, response: float | None) -> list[dict[str, object]]:
     alert_id = new_uuid7()
-    events = [event(AlertRaised, site, raised, alert_id=alert_id, kind=AlertKind.WAITER_NEEDED,
-                    table_id="t1", severity=AlertSeverity.WARN)]
+    events = [
+        event(
+            AlertRaised,
+            site,
+            raised,
+            alert_id=alert_id,
+            kind=AlertKind.WAITER_NEEDED,
+            table_id="t1",
+            severity=AlertSeverity.WARN,
+        )
+    ]
     if response is not None:
-        events.append(event(AlertResolved, site, raised + response, alert_id=alert_id,
-                            resolved_at=raised + response, reason=ResolveReason.STAFF_VISIT))
+        events.append(
+            event(
+                AlertResolved,
+                site,
+                raised + response,
+                alert_id=alert_id,
+                resolved_at=raised + response,
+                reason=ResolveReason.STAFF_VISIT,
+            )
+        )
     return events
 
 
@@ -52,13 +80,38 @@ def test_summary_timeseries_and_table_stats(api: Api, owner: Account) -> None:
     sid = new_uuid7()
     api.post_events(
         device,
-        event(TableStateChanged, site, t, table_id="t1", from_state=TableState.EMPTY,
-              to_state=TableState.SEATED, guest_count=2, session_id=sid),
-        event(TableSessionClosed, site, t + 3600, table_id="t1", session_id=sid, seated_at=t,
-              left_at=t + 3600, max_guests=2, first_visit_delay_s=240.0, visits=3),
-        event(TableStateChanged, site, t + 3900, table_id="t1",
-              from_state=TableState.NEEDS_BUSSING, to_state=TableState.EMPTY, guest_count=0,
-              session_id=sid),
+        event(
+            TableStateChanged,
+            site,
+            t,
+            table_id="t1",
+            from_state=TableState.EMPTY,
+            to_state=TableState.SEATED,
+            guest_count=2,
+            session_id=sid,
+        ),
+        event(
+            TableSessionClosed,
+            site,
+            t + 3600,
+            table_id="t1",
+            session_id=sid,
+            seated_at=t,
+            left_at=t + 3600,
+            max_guests=2,
+            first_visit_delay_s=240.0,
+            visits=3,
+        ),
+        event(
+            TableStateChanged,
+            site,
+            t + 3900,
+            table_id="t1",
+            from_state=TableState.NEEDS_BUSSING,
+            to_state=TableState.EMPTY,
+            guest_count=0,
+            session_id=sid,
+        ),
         session(site, "t2", t + 600, t + 1800, 4, bussing=100.0),
         *waiter_alert(site, t + 100, 60.0),
         *waiter_alert(site, t + 200, 120.0),
@@ -68,16 +121,53 @@ def test_summary_timeseries_and_table_stats(api: Api, owner: Account) -> None:
         event(QueueSeated, site, t + 20, zone_id="z-queue", waited_s=200.0),
         event(QueueWalkaway, site, t + 30, zone_id="z-queue", waited_s=90.0, party_size_est=2),
         event(QueueWalkaway, site, t + 1000, zone_id="z-queue", waited_s=95.0, party_size_est=3),
-        event(OccupancySnapshot, site, t, guests=10, tables_occupied=2, tables_total=8,
-              staff_on_floor=2),
-        event(OccupancySnapshot, site, t + 300, guests=20, tables_occupied=3, tables_total=8,
-              staff_on_floor=2),
-        event(OccupancySnapshot, site, t + 960, guests=30, tables_occupied=4, tables_total=8,
-              staff_on_floor=2),
-        event(QueueSnapshot, site, t, zone_id="z-queue", people=2, parties_est=1,
-              longest_wait_s=1.0, avg_wait_s=1.0),
-        event(QueueSnapshot, site, t + 60, zone_id="z-queue", people=4, parties_est=2,
-              longest_wait_s=1.0, avg_wait_s=1.0),
+        event(
+            OccupancySnapshot,
+            site,
+            t,
+            guests=10,
+            tables_occupied=2,
+            tables_total=8,
+            staff_on_floor=2,
+        ),
+        event(
+            OccupancySnapshot,
+            site,
+            t + 300,
+            guests=20,
+            tables_occupied=3,
+            tables_total=8,
+            staff_on_floor=2,
+        ),
+        event(
+            OccupancySnapshot,
+            site,
+            t + 960,
+            guests=30,
+            tables_occupied=4,
+            tables_total=8,
+            staff_on_floor=2,
+        ),
+        event(
+            QueueSnapshot,
+            site,
+            t,
+            zone_id="z-queue",
+            people=2,
+            parties_est=1,
+            longest_wait_s=1.0,
+            avg_wait_s=1.0,
+        ),
+        event(
+            QueueSnapshot,
+            site,
+            t + 60,
+            zone_id="z-queue",
+            people=4,
+            parties_est=2,
+            longest_wait_s=1.0,
+            avg_wait_s=1.0,
+        ),
     )
     base = f"/api/v1/sites/{site}"
     h = owner.headers
@@ -132,8 +222,15 @@ def test_shift_report_uses_site_timezone_and_business_day(api: Api, owner: Accou
         session(site, "t2", local_ts(2026, 11, 6, 4), local_ts(2026, 11, 6, 5, 0), 2),  # Nov 6
         session(site, "t3", seat, local_ts(2026, 11, 7, 4, 30), 3),  # after midnight: Nov 6
         session(site, "t4", seat, local_ts(2026, 11, 7, 5, 0), 4),  # Nov 7
-        event(OccupancySnapshot, site, local_ts(2026, 11, 6, 20, 10), guests=6,
-              tables_occupied=2, tables_total=8, staff_on_floor=1),
+        event(
+            OccupancySnapshot,
+            site,
+            local_ts(2026, 11, 6, 20, 10),
+            guests=6,
+            tables_occupied=2,
+            tables_total=8,
+            staff_on_floor=1,
+        ),
     )
 
     def report(date: str) -> dict[str, object]:
@@ -173,10 +270,17 @@ def test_shift_report_roi_against_baseline(api: Api, owner: Account) -> None:
         *waiter_alert(site, day, 100.0),
         session(site, "t2", day, day + 2700, 4, bussing=300.0),  # turn 3000, queued hour
         session(site, "t3", day + 7200, day + 10200, 2),  # turn 3000, no queue
-        event(QueueSnapshot, site, day + 2700 - 600, zone_id="z-queue", people=5, parties_est=2,
-              longest_wait_s=300.0, avg_wait_s=200.0),
-        event(QueueWalkaway, site, day + 100, zone_id="z-queue", waited_s=300.0,
-              party_size_est=2),
+        event(
+            QueueSnapshot,
+            site,
+            day + 2700 - 600,
+            zone_id="z-queue",
+            people=5,
+            parties_est=2,
+            longest_wait_s=300.0,
+            avg_wait_s=200.0,
+        ),
+        event(QueueWalkaway, site, day + 100, zone_id="z-queue", waited_s=300.0, party_size_est=2),
     )
     roi = api.client.get(
         f"/api/v1/sites/{site}/reports/shift?date=2026-11-06", headers=owner.headers
@@ -196,8 +300,11 @@ def test_branch_comparison(api: Api, owner: Account) -> None:
     site_b, device_b = api.site_with_config(owner, "Sydney", "Australia/Sydney")
     t = api.clock.now()
     api.post_events(device_a, session(site_a, "t1", t - 3600, t - 60, 2))
-    api.post_events(device_b, session(site_b, "t1", t - 3600, t - 60, 3),
-                    session(site_b, "t2", t - 3600, t - 30, 1))
+    api.post_events(
+        device_b,
+        session(site_b, "t1", t - 3600, t - 60, 3),
+        session(site_b, "t2", t - 3600, t - 30, 1),
+    )
     r = api.client.get(
         f"/api/v1/orgs/{owner.org_id}/reports/compare?from={t - DAY}&to={t}", headers=owner.headers
     )

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..clock import Clock
 from ..db.models import Site
-from ..errors import Forbidden
+from ..errors import InvalidInput
 from ..realtime import BrokerMessage, EventBroker
 from ..repositories import (
     AlertRepository,
@@ -52,7 +52,10 @@ class IngestService:
         """
         foreign = [e.event_id for e in events if e.site_id != device.site_id]
         if foreign:
-            raise Forbidden("Events must belong to the device's site")
+            # 422, not 403: distinct from auth failures (401 = unknown/revoked device token).
+            raise InvalidInput(
+                f"{len(foreign)} event(s) carry a site_id other than the device's site"
+            )
         try:
             return self._ingest_once(device, events)
         except IntegrityError:

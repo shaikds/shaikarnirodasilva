@@ -47,7 +47,7 @@ def post_events(
     background: BackgroundTasks,
 ) -> EventsAccepted:
     """Up to 500 events; idempotent on ``event_id``. Every event must carry the device's
-    ``site_id`` (403 otherwise)."""
+    ``site_id``; otherwise the whole batch is rejected with 422 (401 means a bad token)."""
     result = IngestService(session, state.clock, state.broker).ingest(device, body.events)
     if result.push_payloads:
         background.add_task(
