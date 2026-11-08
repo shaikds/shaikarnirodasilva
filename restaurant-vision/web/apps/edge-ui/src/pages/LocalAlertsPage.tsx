@@ -21,7 +21,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BellRing, CircleCheck, Hand, Users, Volume2, Wifi } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useLocalApi } from '../api/LocalApiProvider';
+import { useLocalApi } from '../api/context';
 import { Logo } from '../components/Logo';
 import { alertTitle, freshAlerts, sortAlerts } from '../lib/alerts';
 import { audioLocked, installAudioUnlock, playBeep, vibrate } from '../lib/sound';

@@ -60,9 +60,10 @@ export function stepBlocker(step: StepId, f: WizardFacts): BlockReason | null {
     case 'cameras':
       return f.cameraCount > 0 ? null : 'cameraRequired';
     case 'tables':
-      if (f.tableCount === 0) return 'tableRequired';
+      // Zero tables is fine here: the zones step can auto-detect them.
       return f.tableErrors > 0 ? 'tableErrors' : null;
     case 'zones':
+      if (f.tableCount === 0) return 'tableRequired';
       if (f.zoneCount === 0) return 'zoneRequired';
       return f.zoneErrors > 0 ? 'zoneErrors' : null;
     case 'review':

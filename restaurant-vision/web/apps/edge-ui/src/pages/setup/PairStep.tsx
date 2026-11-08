@@ -4,7 +4,7 @@ import { Badge, Button, TextField, useTranslation } from '@rv/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Cloud, CloudOff, Link2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { useLocalApi } from '../../api/LocalApiProvider';
+import { useLocalApi } from '../../api/context';
 import { ServerErrors } from '../../components/ServerErrors';
 import type { StepProps } from './SetupLayout';
 import { CONFIG_KEY, SETUP_STATUS_KEY, useSetup } from './SetupContext';

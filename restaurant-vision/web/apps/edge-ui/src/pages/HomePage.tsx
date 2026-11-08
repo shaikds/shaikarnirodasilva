@@ -16,7 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { BellRing, Camera, Cloud, CloudOff, Cpu, Users, Utensils, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useLocalApi } from '../api/LocalApiProvider';
+import { useLocalApi } from '../api/context';
 import { useEdgeNow, useLocalLive } from '../live/useLocalLive';
 import { SETUP_STATUS_KEY } from './setup/SetupContext';
 

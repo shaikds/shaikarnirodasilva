@@ -11,7 +11,8 @@ Open on the LAN (waiter phones, no accounts):
 * ``POST /local/setup-pin`` ``{pin}``: choose the setup PIN, first time only
 
 Setup (header ``X-Setup-Pin`` required; 401 otherwise, 429 after repeated wrong PINs):
-cameras CRUD (credentials are write-only), discovery, blurred snapshot, config, coverage,
+cameras CRUD (credentials are write-only), discovery, blurred snapshot, automatic table
+suggestions (``POST /local/cameras/{id}/suggest-tables``, polygons only), config, coverage,
 uniform calibration and pairing. The custom header also blocks cross-site requests (it forces
 a CORS preflight, which this app never allows).
 
@@ -22,11 +23,13 @@ The built edge-ui is served at ``/`` (SPA fallback, e.g. ``/local-alerts``) when
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import logging
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import (
     APIRouter,
@@ -53,8 +56,10 @@ from rv_contracts import (
     HealthStatus,
     Id,
     LiveSnapshot,
+    Polygon,
     SiteConfig,
 )
+from rv_contracts.geometry import Coord
 from starlette.concurrency import run_in_threadpool
 
 from .pairing import PairingError
@@ -63,6 +68,9 @@ from .runtime import CalibrationError, ConfigRejected, EdgeRuntime
 from .secrets_store import CameraSecret, OptionValue, with_credentials
 from .settings import EdgeSettings
 from .setup_pin import PIN_MAX_LEN, PIN_MIN_LEN, PinGuard, hash_pin, verify_pin
+
+if TYPE_CHECKING:
+    from rv_edge.vision.table_suggest import MultiClassDetector
 
 log = logging.getLogger(__name__)
 
@@ -175,6 +183,37 @@ class DiscoveryOut(_Model):
     error: str | None
 
 
+SuggestNote = Literal["simulated_camera", "no_model", "no_frame"]
+DEFAULT_SUGGEST_CONFIDENCE = 0.25
+
+
+class SuggestTablesIn(_Model):
+    min_confidence: float = Field(default=DEFAULT_SUGGEST_CONFIDENCE, ge=0.0, le=1.0)
+
+
+class TableSuggestionOut(_Model):
+    """One suggested table zone (normalized coordinates)."""
+
+    suggestion_id: str
+    polygon: Polygon
+    """3-12 points around the table and its chairs, slightly padded."""
+    table_box: tuple[Coord, Coord, Coord, Coord]
+    seats_est: int = Field(ge=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class SuggestTablesOut(_Model):
+    camera_id: str
+    suggestions: list[TableSuggestionOut]
+    note: SuggestNote | None = None
+    """Why the result is degraded (then ``suggestions`` may be empty); None when it is not."""
+
+
+TableDetectorProvider = Callable[[], "MultiClassDetector"]
+"""Returns the multi-class detector for table suggestions; raises ``FileNotFoundError`` when
+the model is missing."""
+
+
 # ----------------------------------------------------------------------------- app factory
 def create_local_app(
     runtime: EdgeRuntime,
@@ -182,8 +221,12 @@ def create_local_app(
     *,
     state_interval_s: float = 5.0,
     pin_guard: PinGuard | None = None,
+    table_detector: TableDetectorProvider | None = None,
 ) -> FastAPI:
-    """Build the LAN app for ``runtime``. The runtime is started/stopped by the caller."""
+    """Build the LAN app for ``runtime``. The runtime is started/stopped by the caller.
+
+    ``table_detector`` provides the detector for table suggestions (tests pass a fake); by
+    default it is the shared YOLOX session of the camera pipelines, loaded on first use."""
     app = FastAPI(
         title="Restaurant Vision edge (LAN)",
         version=runtime.version,
@@ -397,6 +440,69 @@ def create_local_app(
             log.warning("snapshot of camera %s failed: %s", camera_id, exc)
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "snapshot failed") from exc
         return Response(content=jpeg, media_type="image/jpeg", headers=NO_STORE)
+
+    def suggest_detector() -> MultiClassDetector:
+        if table_detector is not None:
+            return table_detector()
+        module = importlib.import_module("rv_edge.vision.table_suggest")
+        detector: MultiClassDetector = module.default_table_detector(runtime.settings.model_path)
+        return detector
+
+    @setup.post("/cameras/{camera_id}/suggest-tables", response_model=SuggestTablesOut)
+    def suggest_tables(
+        camera_id: Annotated[str, PathParam(pattern=ID_PATTERN)],
+        body: SuggestTablesIn | None = None,
+    ) -> SuggestTablesOut:
+        """Suggested table polygons for ``camera_id``, found by the detector on the current
+        frame. The frame stays in RAM on the edge; only polygons are returned."""
+        min_confidence = body.min_confidence if body is not None else DEFAULT_SUGGEST_CONFIDENCE
+
+        def degraded(note: SuggestNote) -> SuggestTablesOut:
+            return SuggestTablesOut(camera_id=camera_id, suggestions=[], note=note)
+
+        try:
+            cap = runtime.capture(camera_id)
+        except KeyError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown camera") from exc
+        except FileNotFoundError:  # a temporary pipeline could not load the model
+            return degraded("no_model")
+        except Exception as exc:
+            log.warning("table suggestions: capture of camera %s failed: %s", camera_id, exc)
+            return degraded("no_frame")
+        if cap.kind == "simulated":
+            return degraded("simulated_camera")
+        suggest = importlib.import_module("rv_edge.vision.table_suggest")
+        if not suggest.has_pixels(cap.frame):
+            return degraded("no_frame")
+        try:
+            detector = suggest_detector()
+        except FileNotFoundError:
+            return degraded("no_model")
+        config = runtime.config
+        masks = config.privacy_masks_for(camera_id) if config is not None else []
+        try:
+            found = suggest.suggest_tables_in_frame(
+                cap.frame, detector, privacy_masks=masks, min_confidence=min_confidence
+            )
+        except Exception as exc:
+            log.warning("table suggestions for camera %s failed: %s", camera_id, exc)
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE, "table detection failed"
+            ) from exc
+        return SuggestTablesOut(
+            camera_id=camera_id,
+            suggestions=[
+                TableSuggestionOut(
+                    suggestion_id=s.suggestion_id,
+                    polygon=[(x, y) for x, y in s.polygon],
+                    table_box=s.table_box,
+                    seats_est=s.seats_est,
+                    confidence=s.confidence,
+                )
+                for s in found
+            ],
+            note=None,
+        )
 
     @setup.get("/config", response_model=SiteConfig)
     def get_config() -> SiteConfig:

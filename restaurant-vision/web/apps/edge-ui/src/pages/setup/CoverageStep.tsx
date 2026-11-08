@@ -5,7 +5,7 @@ import { Badge, buttonClass, Button, Card, LoadingBlock, useTranslation } from '
 import { useQuery } from '@tanstack/react-query';
 import { Camera, CircleCheck, Lightbulb, PenLine, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useLocalApi } from '../../api/LocalApiProvider';
+import { useLocalApi } from '../../api/context';
 import { ServerErrors } from '../../components/ServerErrors';
 import { setPrimary } from '../../lib/zones';
 import type { StepProps } from './SetupLayout';

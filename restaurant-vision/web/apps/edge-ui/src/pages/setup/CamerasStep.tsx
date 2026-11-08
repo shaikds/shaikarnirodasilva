@@ -12,7 +12,7 @@ import {
 } from '@rv/shared';
 import { Camera, ImageIcon, KeyRound, Pencil, Plus, Radar, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { useLocalApi } from '../../api/LocalApiProvider';
+import { useLocalApi } from '../../api/context';
 import type { DiscoveredDevice, DiscoveryOut } from '../../api/types';
 import { ServerErrors } from '../../components/ServerErrors';
 import { SnapshotFrame } from '../../components/SnapshotFrame';

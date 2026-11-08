@@ -2,7 +2,7 @@
 // never written to any storage; the URL is revoked as soon as it is replaced or unmounted, and
 // every request is cache-busted and `no-store`.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocalApi } from '../api/LocalApiProvider';
+import { useLocalApi } from '../api/context';
 
 export interface SnapshotState {
   url: string | null;

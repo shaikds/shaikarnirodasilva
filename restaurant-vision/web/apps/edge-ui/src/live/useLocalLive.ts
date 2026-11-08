@@ -10,7 +10,7 @@ import {
 } from '@rv/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { useLocalApi } from '../api/LocalApiProvider';
+import { useLocalApi } from '../api/context';
 
 export const LOCAL_STATE_KEY = ['local', 'state'] as const;
 

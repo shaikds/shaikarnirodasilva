@@ -184,7 +184,7 @@ export function validateConfig(config: SiteConfig): Issue[] {
         code: 'multiplePrimary',
         entity: 'table',
         id: tableId,
-        params: { count: zoneIds.length, zones: zoneIds.join(', ') },
+        params: { n: zoneIds.length, zones: zoneIds.join(', ') },
       });
   }
 

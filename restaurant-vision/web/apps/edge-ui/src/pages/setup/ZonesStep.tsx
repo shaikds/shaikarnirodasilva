@@ -7,7 +7,9 @@ import {
   cn,
   SelectField,
   Switch,
+  TextField,
   useTranslation,
+  type Table,
   type Zone,
   type ZoneKind,
 } from '@rv/shared';
@@ -35,6 +37,7 @@ import {
   removeVertex,
   type Pt,
 } from '../../lib/geometry';
+import { LABEL_MAX, SEATS_MAX, SEATS_MIN } from '../../lib/validation';
 import {
   createZone,
   isLineKind,
@@ -46,6 +49,7 @@ import {
 } from '../../lib/zones';
 import type { StepProps } from './SetupLayout';
 import { useSetup } from './SetupContext';
+import { AutoDetectBar, SuggestionsPanel, useTableSuggestions } from './TableSuggestions';
 
 const MIN_POLYGON_POINTS = 3;
 
@@ -65,6 +69,7 @@ export function ZonesStep(_: StepProps) {
     if (!camera && config.cameras[0]) setCameraId(config.cameras[0].camera_id);
   }, [camera, config.cameras]);
 
+  const suggestions = useTableSuggestions(camera?.camera_id ?? cameraId, config, ctx.setConfig);
   const zones = useMemo(() => config.zones.filter((z) => z.camera_id === camera?.camera_id), [config.zones, camera]);
   const selected = zones.find((z) => z.zone_id === selectedZoneId) ?? null;
 
@@ -79,6 +84,17 @@ export function ZonesStep(_: StepProps) {
   const updateZones = (fn: (zones: Zone[]) => Zone[]) => ctx.setConfig((c) => ({ ...c, zones: fn(c.zones) }));
   const patchZone = (zoneId: string, patch: Partial<Zone>) =>
     updateZones((all) => all.map((z) => (z.zone_id === zoneId ? { ...z, ...patch } : z)));
+  const patchTable = (tableId: string, patch: Partial<Table>) =>
+    ctx.setConfig((c) => ({
+      ...c,
+      tables: c.tables.map((tb) => (tb.table_id === tableId ? { ...tb, ...patch } : tb)),
+    }));
+  const selectZone = (zoneId: string | null) => {
+    setDrawing(null);
+    setSelectedZoneId(zoneId);
+    setSelectedVertex(null);
+    suggestions.setActive(null);
+  };
 
   const startDrawing = (kind: ZoneKind) => {
     setSelectedZoneId(null);
@@ -178,6 +194,7 @@ export function ZonesStep(_: StepProps) {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-3">
+          <AutoDetectBar state={suggestions} />
           <DrawToolbar
             drawing={drawing}
             hasTables={config.tables.length > 0}
@@ -196,8 +213,15 @@ export function ZonesStep(_: StepProps) {
             selectedZoneId={selectedZoneId}
             selectedVertex={selectedVertex}
             drawing={drawing}
+            suggestions={suggestions.shapes(t)}
+            activeSuggestionId={suggestions.active}
+            onSuggestionClick={(id) => {
+              setSelectedZoneId(null);
+              suggestions.setActive(id);
+            }}
             onSelect={(id) => {
               setSelectedZoneId(id);
+              suggestions.setActive(null);
               setMessage(null);
             }}
             onSelectVertex={setSelectedVertex}
@@ -227,6 +251,12 @@ export function ZonesStep(_: StepProps) {
         </div>
 
         <div className="flex flex-col gap-3">
+          <SuggestionsPanel
+            state={suggestions}
+            tables={config.tables}
+            onEditTable={patchTable}
+            onSelectZone={selectZone}
+          />
           {selected ? (
             <ZonePanel
               key={selected.zone_id}
@@ -234,6 +264,7 @@ export function ZonesStep(_: StepProps) {
               title={zoneTitle(selected)}
               selectedVertex={selectedVertex}
               onPatch={(patch) => patchZone(selected.zone_id, patch)}
+              onPatchTable={patchTable}
               onPrimary={(primary) => updateZones((all) => setPrimary(all, selected.zone_id, primary))}
               onDeleteVertex={() => selectedVertex !== null && deleteVertex(selected.zone_id, selectedVertex)}
               onDelete={() => deleteZone(selected.zone_id)}
@@ -258,11 +289,7 @@ export function ZonesStep(_: StepProps) {
                       <button
                         type="button"
                         aria-pressed={active}
-                        onClick={() => {
-                          setDrawing(null);
-                          setSelectedZoneId(active ? null : z.zone_id);
-                          setSelectedVertex(null);
-                        }}
+                        onClick={() => selectZone(active ? null : z.zone_id)}
                         className={cn(
                           'flex min-h-tap w-full items-center gap-2 px-4 py-2 text-start text-sm hover:bg-surface-2',
                           active && 'bg-primary-soft',
@@ -376,6 +403,7 @@ function ZonePanel({
   title,
   selectedVertex,
   onPatch,
+  onPatchTable,
   onPrimary,
   onDeleteVertex,
   onDelete,
@@ -385,6 +413,7 @@ function ZonePanel({
   title: string;
   selectedVertex: number | null;
   onPatch: (patch: Partial<Zone>) => void;
+  onPatchTable: (tableId: string, patch: Partial<Table>) => void;
   onPrimary: (primary: boolean) => void;
   onDeleteVertex: () => void;
   onDelete: () => void;
@@ -404,6 +433,7 @@ function ZonePanel({
     ? (config.cameras.find((c) => c.camera_id === otherPrimary.camera_id)?.name ?? otherPrimary.camera_id)
     : null;
   const errors = ctx.issues.filter((i) => i.severity === 'error' && i.entity === 'zone' && i.id === zone.zone_id);
+  const table = zone.table_id ? config.tables.find((tb) => tb.table_id === zone.table_id) : undefined;
 
   return (
     <Card
@@ -442,6 +472,26 @@ function ZonePanel({
                 </option>
               ))}
             </SelectField>
+            {table && (
+              <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
+                <TextField
+                  label={t('tables.label')}
+                  value={table.label}
+                  maxLength={LABEL_MAX}
+                  dir="auto"
+                  onChange={(e) => onPatchTable(table.table_id, { label: e.target.value })}
+                />
+                <TextField
+                  label={t('tables.seats')}
+                  type="number"
+                  inputMode="numeric"
+                  min={SEATS_MIN}
+                  max={SEATS_MAX}
+                  value={table.seats > 0 ? String(table.seats) : ''}
+                  onChange={(e) => onPatchTable(table.table_id, { seats: Math.floor(Number(e.target.value) || 0) })}
+                />
+              </div>
+            )}
             <Switch
               checked={zone.primary}
               onChange={onPrimary}

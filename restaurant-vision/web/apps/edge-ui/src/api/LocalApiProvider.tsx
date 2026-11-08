@@ -1,23 +1,8 @@
 // Provides the LAN API client plus the setup-PIN session (sessionStorage) to the tree.
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { createLocalApi, type LocalApi, type PinProblem } from './localApi';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { LocalApiContext, type LocalApiContextValue } from './context';
+import { createLocalApi, type PinProblem } from './localApi';
 import { clearPin, readPin, storePin } from './pin';
-
-interface PinSession {
-  /** The PIN this tab has unlocked setup with, or null. */
-  pin: string | null;
-  /** Why the last setup call was rejected (cleared on the next successful unlock). */
-  problem: PinProblem | null;
-  unlock: (pin: string) => void;
-  lock: (problem?: PinProblem | null) => void;
-}
-
-interface LocalApiContextValue {
-  api: LocalApi;
-  session: PinSession;
-}
-
-const LocalApiContext = createContext<LocalApiContextValue | null>(null);
 
 export interface LocalApiProviderProps {
   children: ReactNode;
@@ -60,16 +45,4 @@ export function LocalApiProvider({ children, baseUrl, fetchImpl }: LocalApiProvi
     [api, pin, problem, unlock, lock],
   );
   return <LocalApiContext.Provider value={value}>{children}</LocalApiContext.Provider>;
-}
-
-export function useLocalApi(): LocalApi {
-  const ctx = useContext(LocalApiContext);
-  if (!ctx) throw new Error('useLocalApi must be used inside <LocalApiProvider>');
-  return ctx.api;
-}
-
-export function usePinSession(): PinSession {
-  const ctx = useContext(LocalApiContext);
-  if (!ctx) throw new Error('usePinSession must be used inside <LocalApiProvider>');
-  return ctx.session;
 }

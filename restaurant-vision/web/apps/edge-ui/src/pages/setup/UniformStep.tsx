@@ -4,7 +4,7 @@
 import { Button, SelectField, useTranslation } from '@rv/shared';
 import { CircleCheck, RefreshCw, Shirt } from 'lucide-react';
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { useLocalApi } from '../../api/LocalApiProvider';
+import { useLocalApi } from '../../api/context';
 import type { CalibrateOut } from '../../api/types';
 import { ServerErrors } from '../../components/ServerErrors';
 import { SnapshotFrame } from '../../components/SnapshotFrame';

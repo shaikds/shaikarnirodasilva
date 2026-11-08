@@ -3,14 +3,16 @@
 Pre- and post-processing follow the official demo ``demo/ONNXRuntime/onnx_inference.py``
 (YOLOX 0.1.1rc0 release models): letterbox resize with pad value 114 at the bottom/right, BGR
 ``float32`` CHW **without** normalization, grid/stride decode over strides 8/16/32,
-``score = objectness * class``, then NMS. Only the person class (COCO 0) is returned, as
-normalized boxes.
+``score = objectness * class``, then NMS. ``detect`` returns only the person class (COCO 0),
+as normalized boxes. ``detect_classes`` decodes any set of COCO classes with per-class NMS
+(the official ``multiclass_nms_class_aware``); the setup wizard uses it to find dining tables
+and chairs.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -143,22 +145,58 @@ class YoloxOnnxDetector:
             ",".join(self.providers),
         )
 
-    def detect(self, frame: Frame) -> list[Detection]:
+    def _infer(self, frame: Frame) -> tuple[F32, float, int, int]:
+        """Run the model on ``frame``: raw output rows, letterbox ratio, image width/height."""
         image = frame.image
         if not isinstance(image, np.ndarray) or image.ndim != 3 or image.shape[2] != 3:
             raise TypeError("YoloxOnnxDetector needs BGR HxWx3 numpy frames")
         blob, ratio = preprocess(image, self.input_size)
         outputs = self._session.run(None, {self._input_name: blob[None]})
         raw = np.asarray(outputs[0])[0]
-        return self.postprocess(raw, ratio, image.shape[1], image.shape[0])
+        return raw, ratio, image.shape[1], image.shape[0]
 
-    def postprocess(self, raw: F32, ratio: float, width: int, height: int) -> list[Detection]:
-        """Decode raw ``(N, 5 + classes)`` output into normalized person detections."""
+    def _check_rows(self, raw: F32) -> None:
         if raw.shape[0] != self._grids.shape[0]:
             raise ValueError(
                 f"model output has {raw.shape[0]} rows, expected {self._grids.shape[0]} for "
                 f"input {self.input_size}; the model must be exported without decoding"
             )
+
+    def detect(self, frame: Frame) -> list[Detection]:
+        raw, ratio, width, height = self._infer(frame)
+        return self.postprocess(raw, ratio, width, height)
+
+    def detect_classes(
+        self,
+        frame: Frame,
+        classes: Iterable[int],
+        *,
+        score_thr: float | None = None,
+        nms_thr: float | None = None,
+    ) -> dict[int, list[Detection]]:
+        """Normalized detections of each COCO class in ``classes`` (per-class NMS).
+
+        ``score_thr``/``nms_thr`` default to the detector's own thresholds. Every requested
+        class is a key of the result (an empty list when nothing was found). The frame is only
+        read; nothing is retained.
+        """
+        raw, ratio, width, height = self._infer(frame)
+        self._check_rows(raw)
+        return decode_classes(
+            raw,
+            self._grids,
+            self._strides,
+            classes=classes,
+            ratio=ratio,
+            width=width,
+            height=height,
+            score_thr=self.score_thr if score_thr is None else score_thr,
+            nms_thr=self.nms_thr if nms_thr is None else nms_thr,
+        )
+
+    def postprocess(self, raw: F32, ratio: float, width: int, height: int) -> list[Detection]:
+        """Decode raw ``(N, 5 + classes)`` output into normalized person detections."""
+        self._check_rows(raw)
         return decode_persons(
             raw,
             self._grids,
@@ -207,3 +245,63 @@ def decode_persons(
         )
         detections.append(Detection(box=box, score=float(kept_scores[i])))
     return detections
+
+
+def _normalized_detections(
+    boxes: npt.NDArray[Any], scores: npt.NDArray[Any], keep: Sequence[int], width: int, height: int
+) -> list[Detection]:
+    detections: list[Detection] = []
+    for i in keep:
+        x1, y1, x2, y2 = (float(v) for v in boxes[i])
+        box = (
+            min(1.0, max(0.0, x1 / width)),
+            min(1.0, max(0.0, y1 / height)),
+            min(1.0, max(0.0, x2 / width)),
+            min(1.0, max(0.0, y2 / height)),
+        )
+        detections.append(Detection(box=box, score=float(scores[i])))
+    return detections
+
+
+def decode_classes(
+    raw: F32,
+    grids: F32,
+    strides: F32,
+    *,
+    classes: Iterable[int],
+    ratio: float,
+    width: int,
+    height: int,
+    score_thr: float,
+    nms_thr: float,
+) -> dict[int, list[Detection]]:
+    """Class-aware YOLOX decode: :func:`decode_persons` for each class in ``classes``.
+
+    For every class ``c``: ``score = objectness * class_c``, rows with ``score > score_thr``
+    are decoded and NMS runs within the class only (one anchor may yield boxes of several
+    classes, as in the official ``multiclass_nms_class_aware``). Returns ``{c: detections}``
+    sorted by descending score, with a (possibly empty) entry for every requested class.
+    Raises ``ValueError`` for a class index the model does not have.
+    """
+    num_classes = raw.shape[1] - 5
+    result: dict[int, list[Detection]] = {}
+    for cls in classes:
+        c = int(cls)
+        if not 0 <= c < num_classes:
+            raise ValueError(f"class {c} is out of range for a {num_classes}-class model")
+        if c in result:
+            continue
+        scores = raw[:, 4] * raw[:, 5 + c]
+        keep = scores > score_thr
+        if not np.any(keep):
+            result[c] = []
+            continue
+        pred = raw[keep]
+        kept_scores = scores[keep]
+        centers = (pred[:, :2] + grids[keep]) * strides[keep]
+        sizes = np.exp(pred[:, 2:4]) * strides[keep]
+        boxes = np.concatenate([centers - sizes / 2.0, centers + sizes / 2.0], axis=1) / ratio
+        result[c] = _normalized_detections(
+            boxes, kept_scores, nms(boxes, kept_scores, nms_thr), width, height
+        )
+    return result

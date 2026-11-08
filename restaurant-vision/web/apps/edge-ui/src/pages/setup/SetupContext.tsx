@@ -13,7 +13,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useLocalApi, usePinSession } from '../../api/LocalApiProvider';
+import { useLocalApi, usePinSession } from '../../api/context';
 import type { CameraOut, SetupStatus } from '../../api/types';
 import { emptyConfig, forSite, sameConfig } from '../../lib/config';
 import { isStatus } from '../../lib/errors';

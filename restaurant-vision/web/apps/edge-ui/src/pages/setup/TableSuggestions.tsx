@@ -4,7 +4,7 @@
 import { Badge, Button, Card, TextField, useTranslation, type SiteConfig, type Table } from '@rv/shared';
 import { Check, ScanSearch, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
-import { useLocalApi } from '../../api/LocalApiProvider';
+import { useLocalApi } from '../../api/context';
 import type { SuggestNote, TableSuggestion } from '../../api/types';
 import { ServerErrors } from '../../components/ServerErrors';
 import type { SuggestionShape } from '../../components/ZoneCanvas';

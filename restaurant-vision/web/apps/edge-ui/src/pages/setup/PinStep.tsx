@@ -5,7 +5,7 @@ import { Button, TextField, useTranslation } from '@rv/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
-import { usePinSession, useLocalApi } from '../../api/LocalApiProvider';
+import { usePinSession, useLocalApi } from '../../api/context';
 import { PIN_MAX_LEN, PIN_MIN_LEN } from '../../api/types';
 import { errorKind, isStatus } from '../../lib/errors';
 import type { StepProps } from './SetupLayout';
