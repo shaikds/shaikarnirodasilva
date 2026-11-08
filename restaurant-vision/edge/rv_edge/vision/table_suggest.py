@@ -15,9 +15,10 @@ in pixels so padding is the same horizontally and vertically):
    every side, contains the seat's centre. Unassigned seats are ignored, except that clusters
    of 2+ nearby unassigned chairs become low-confidence suggestions (``chair_clusters``).
 4. Polygon: convex hull of the table box corners and the assigned seat box corners (a table
-   with no detected seat is grown by ``no_seat_margin`` so people seated around it still
-   fall inside), padded by ``pad_frac`` of the shorter image side, clipped to the image and
-   reduced to at most ``max_points`` vertices without uncovering any box corner.
+   with no detected seat is grown by ``no_seat_margin`` of its longer side so people seated
+   around it still fall inside), padded by ``pad_frac`` of the shorter image side, clipped
+   to the image and reduced to at most ``max_points`` vertices without uncovering any box
+   corner.
 5. ``seats_est``: assigned chairs (a couch counts ``seats_per_couch``); with none, 2, 4 or 6
    from the table box's aspect ratio and size.
 6. ``confidence``: table score plus a small bonus per assigned seat (minus a small penalty
@@ -70,9 +71,9 @@ class SuggestParams:
     assign_expand: float = 0.6
     """A seat belongs to a table when its centre is inside the table box grown by this
     fraction of the table's width/height on every side."""
-    no_seat_margin: float = 0.3
-    """A table with no detected seat is grown by this fraction of its size on every side
-    before padding, so guests seated around it are covered."""
+    no_seat_margin: float = 0.5
+    """A table with no detected seat is grown on every side by this fraction of its longer
+    side (in pixels) before padding, so guests seated around it are covered."""
     pad_frac: float = 0.03
     """Polygon padding, as a fraction of the shorter image side."""
     max_points: int = 12
@@ -157,6 +158,16 @@ class _PxBox:
         dx, dy = frac * self.w, frac * self.h
         return _PxBox(
             self.x1 - dx, self.y1 - dy, self.x2 + dx, self.y2 + dy, self.score, self.seats
+        )
+
+    def grown_by(self, margin: float) -> _PxBox:
+        return _PxBox(
+            self.x1 - margin,
+            self.y1 - margin,
+            self.x2 + margin,
+            self.y2 + margin,
+            self.score,
+            self.seats,
         )
 
     def contains(self, p: Point) -> bool:
@@ -541,7 +552,7 @@ def suggest_tables(
     drafts: list[_Draft] = []
     for table, seats in zip(tables, assigned, strict=True):
         core = [c for s in seats for c in s.corners()]
-        base = table if seats else table.grown(params.no_seat_margin)
+        base = table if seats else table.grown_by(params.no_seat_margin * max(table.w, table.h))
         polygon = _polygon(table.corners() + base.corners() + core, size, params)
         if polygon is None:
             continue
