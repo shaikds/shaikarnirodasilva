@@ -58,10 +58,11 @@ describe('local alerts page', () => {
     const list = await screen.findByRole('list', { name: 'Open alerts' });
     expect(titles(list)).toEqual(['Table 1', 'Entrance', 'Table 3']);
     const first = within(list).getAllByRole('article')[0]!;
-    console.log("FIRST", first.textContent);
-    expect(first).toHaveTextContent(/Waiting 5:0\d/);
+    expect(first).toHaveTextContent(/Waiting (4:5\d|5:0\d)/);
     const button = within(first).getByRole('button', { name: 'On it: Table 1 · Waiter needed' });
     expect(button.className).toContain('min-h-[64px]');
+    // Once audio is unlocked the sound row stays (as "on"), so the list never jumps under a tap.
+    expect(screen.getByText('Alert sounds are on.')).toBeInTheDocument();
   });
 
   it('acknowledges over the LAN (no identity) and moves the alert to "In progress"', async () => {

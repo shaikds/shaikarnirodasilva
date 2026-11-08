@@ -144,10 +144,17 @@ export function LocalAlertsPage() {
         <p aria-live="assertive" className="sr-only">
           {announcement}
         </p>
-        {soundOn && !audioReady && (
-          <p className="mb-3 flex items-center gap-2 rounded-xl border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning">
+        {soundOn && (
+          // The row keeps its place once sound is unlocked: the first tap (often "On it") unlocks
+          // audio, and removing the row mid-tap would move the button away from the finger.
+          <p
+            className={cn(
+              'mb-3 flex min-h-[2.5rem] items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              audioReady ? 'border-success/30 bg-success-soft text-success' : 'border-warning/40 bg-warning-soft text-warning',
+            )}
+          >
             <Volume2 aria-hidden="true" className="h-4 w-4 shrink-0" />
-            {t('alerts.enableSound')}
+            {audioReady ? t('alerts.soundOn') : t('alerts.enableSound')}
           </p>
         )}
         {live.isError && !live.data && (
@@ -164,42 +171,40 @@ export function LocalAlertsPage() {
 
         {live.isLoading ? (
           <LoadingBlock />
-        ) : open.length === 0 && taken.length === 0 ? (
+        ) : open.length === 0 ? (
           <EmptyState
             icon={<CircleCheck className="h-12 w-12 text-success" />}
             title={t('alerts.none')}
             description={t('alerts.noneBody')}
           />
         ) : (
-          <>
-            <ul className="flex flex-col gap-3" aria-label={t('alerts.title')}>
-              {open.map((a) => (
+          <ul className="flex flex-col gap-3" aria-label={t('alerts.title')}>
+            {open.map((a) => (
+              <li key={a.alert_id}>
+                <AlertCard
+                  alert={a}
+                  now={now}
+                  pending={ack.isPending && ack.variables === a.alert_id}
+                  failed={failedId === a.alert_id}
+                  onAck={(id) => ack.mutate(id)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        {taken.length > 0 && (
+          <section aria-labelledby="taken-title" className="mt-6">
+            <h2 id="taken-title" className="mb-2 text-base font-semibold text-muted">
+              {t('alerts.inProgress')}
+            </h2>
+            <ul className="flex flex-col gap-3">
+              {taken.map((a) => (
                 <li key={a.alert_id}>
-                  <AlertCard
-                    alert={a}
-                    now={now}
-                    pending={ack.isPending && ack.variables === a.alert_id}
-                    failed={failedId === a.alert_id}
-                    onAck={(id) => ack.mutate(id)}
-                  />
+                  <AlertCard alert={a} now={now} pending={false} failed={false} onAck={() => undefined} />
                 </li>
               ))}
             </ul>
-            {taken.length > 0 && (
-              <section aria-labelledby="taken-title" className="mt-6">
-                <h2 id="taken-title" className="mb-2 text-base font-semibold text-muted">
-                  {t('alerts.inProgress')}
-                </h2>
-                <ul className="flex flex-col gap-3">
-                  {taken.map((a) => (
-                    <li key={a.alert_id}>
-                      <AlertCard alert={a} now={now} pending={false} failed={false} onAck={() => undefined} />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-          </>
+          </section>
         )}
 
         <div className="mt-8 rounded-xl border border-border bg-surface px-3">

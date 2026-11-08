@@ -58,7 +58,11 @@ export function App() {
   return (
     <RvProvider>
       <ErrorBoundary>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <BrowserRouter
+          // Served under a sub-path in production (/waiter/): routes are relative to it.
+          basename={import.meta.env.BASE_URL.replace(/\/+$/, '') || '/'}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
           <WaiterRoutes />
         </BrowserRouter>
       </ErrorBoundary>

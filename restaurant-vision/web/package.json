@@ -8,8 +8,8 @@
     "pnpm": ">=10"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @rv/dashboard --filter @rv/waiter dev",
-    "dev:mock": "pnpm --parallel --filter @rv/dashboard --filter @rv/waiter dev:mock",
+    "dev": "pnpm --parallel --filter @rv/dashboard --filter @rv/waiter --filter @rv/edge-ui dev",
+    "dev:mock": "pnpm --parallel --filter @rv/dashboard --filter @rv/waiter --filter @rv/edge-ui dev:mock",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",

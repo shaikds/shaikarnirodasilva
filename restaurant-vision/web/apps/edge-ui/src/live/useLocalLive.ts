@@ -78,6 +78,8 @@ export function useLocalLive(options: UseLocalLiveOptions = {}): LocalLive {
         if (current) qc.setQueryData<LiveSnapshot>(LOCAL_STATE_KEY, applyEvent(current, event));
         else pending.push(event);
         setLastUpdateAt(Date.now());
+        // An event can be newer than the last snapshot's clock (e.g. a simulator at 20x).
+        setClockOffsetS((o) => Math.max(o, event.ts - Date.now() / 1000));
         onEventRef.current?.(event);
       },
     });

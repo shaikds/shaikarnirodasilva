@@ -790,8 +790,8 @@ export function ZoneLegend({ kinds, className }: { kinds?: readonly ZoneKind[]; 
         <li key={k} className="inline-flex items-center gap-1.5">
           <span
             aria-hidden="true"
-            className="inline-block h-3 w-3 rounded-sm border"
-            style={{ background: ZONE_STYLE[k].color, borderColor: ZONE_STYLE[k].color }}
+            className="inline-block h-3 w-3 rounded-sm ring-1 ring-fg/30"
+            style={{ background: ZONE_STYLE[k].color }}
           />
           {t(`zoneKind.${k}`)}
         </li>

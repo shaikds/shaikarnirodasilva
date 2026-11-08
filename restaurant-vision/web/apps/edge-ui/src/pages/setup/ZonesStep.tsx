@@ -296,7 +296,7 @@ export function ZonesStep(_: StepProps) {
                           active && 'bg-primary-soft',
                         )}
                       >
-                        <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-sm" style={{ background: ZONE_STYLE[z.kind].color }} />
+                        <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-sm ring-1 ring-fg/30" style={{ background: ZONE_STYLE[z.kind].color }} />
                         <span className="min-w-0 flex-1 truncate" dir="auto">
                           {zoneTitle(z)}
                           {z.kind === 'table' && <span className="text-muted"> · {t(`zoneKind.${z.kind}`)}</span>}
@@ -354,7 +354,7 @@ function DrawToolbar({
     return (
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/40 bg-primary-soft p-2" role="toolbar" aria-label={t('zones.drawingToolbar')}>
         <span className="flex items-center gap-2 px-1 text-sm font-medium text-primary">
-          <span aria-hidden="true" className="h-3 w-3 rounded-sm" style={{ background: ZONE_STYLE[drawing.kind].color }} />
+          <span aria-hidden="true" className="h-3 w-3 rounded-sm ring-1 ring-fg/30" style={{ background: ZONE_STYLE[drawing.kind].color }} />
           {t('zones.drawing', { kind: t(`zoneKind.${drawing.kind}`), count: drawing.points.length })}
         </span>
         <span className="ms-auto flex flex-wrap gap-2">
@@ -390,7 +390,7 @@ function DrawToolbar({
             title={disabled ? t('zones.needTables') : t(`zoneKindHint.${kind}`)}
             onClick={() => onStart(kind)}
           >
-            <span aria-hidden="true" className="h-3 w-3 rounded-sm" style={{ background: ZONE_STYLE[kind].color }} />
+            <span aria-hidden="true" className="h-3 w-3 rounded-sm ring-1 ring-fg/30" style={{ background: ZONE_STYLE[kind].color }} />
             {t(`zoneKind.${kind}`)}
           </Button>
         );
@@ -441,7 +441,7 @@ function ZonePanel({
       level={3}
       title={
         <span className="flex items-center gap-2">
-          <span aria-hidden="true" className="h-3 w-3 rounded-sm" style={{ background: ZONE_STYLE[zone.kind].color }} />
+          <span aria-hidden="true" className="h-3 w-3 rounded-sm ring-1 ring-fg/30" style={{ background: ZONE_STYLE[zone.kind].color }} />
           <span dir="auto">{title}</span>
         </span>
       }

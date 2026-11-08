@@ -104,7 +104,8 @@ function WizardFrame({ step }: { step: StepId }) {
   // Move focus to the step heading on step change (screen readers, keyboard users).
   useEffect(() => {
     setAttempted(false);
-    headingRef.current?.focus();
+    window.scrollTo?.({ top: 0 });
+    headingRef.current?.focus({ preventScroll: true });
   }, [step]);
 
   const leave = async (target: StepId | null) => {

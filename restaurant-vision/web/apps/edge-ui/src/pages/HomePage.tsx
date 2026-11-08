@@ -46,10 +46,12 @@ export function HomePage() {
         actions={
           <>
             <ConnectionBadge status={live.status} />
-            <Link to="/setup" className={buttonClass(setupDone ? 'secondary' : 'primary')}>
-              <Wrench aria-hidden="true" className="h-4 w-4" />
-              {setupDone ? t('home.openSetup') : t('home.startSetup')}
-            </Link>
+            {setupDone && (
+              <Link to="/setup" className={buttonClass('secondary')}>
+                <Wrench aria-hidden="true" className="h-4 w-4" />
+                {t('home.openSetup')}
+              </Link>
+            )}
             <Link to="/local-alerts" className={buttonClass('secondary')}>
               <BellRing aria-hidden="true" className="h-4 w-4" />
               {t('home.alertsButton')}
@@ -75,6 +77,7 @@ export function HomePage() {
                 <p className="text-sm text-fg">{t('home.notSetUpBody')}</p>
               </div>
               <Link to="/setup" className={buttonClass('primary', 'lg')}>
+                <Wrench aria-hidden="true" className="h-4 w-4" />
                 {t('home.startSetup')}
               </Link>
             </div>

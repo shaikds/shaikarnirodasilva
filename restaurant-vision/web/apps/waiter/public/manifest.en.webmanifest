@@ -4,22 +4,22 @@
   "name": "Restaurant Vision – Waiter alerts",
   "short_name": "RV Waiter",
   "description": "Live table alerts with an \"On it\" button. Anonymous, no per-employee data.",
-  "id": "/",
-  "start_url": "/",
-  "scope": "/",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#0f6c6e",
   "background_color": "#f6f7f9",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable.svg",
+      "src": "icon-maskable.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"
