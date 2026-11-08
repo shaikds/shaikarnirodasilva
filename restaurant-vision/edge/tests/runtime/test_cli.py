@@ -4,6 +4,7 @@ import functools
 import json
 import subprocess
 import sys
+import time
 import types
 from pathlib import Path
 from typing import Any
@@ -84,8 +85,10 @@ def _fake_simulator(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     calls: dict[str, Any] = {}
     config = sample_site_config()
 
-    def load_simulation(path: Path, *, speed: float, seed: int) -> Any:
-        calls.update(path=path, speed=speed, seed=seed)
+    def load_simulation(
+        path: Path, *, speed: float, seed: int, start_ts: float | None = None
+    ) -> Any:
+        calls.update(path=path, speed=speed, seed=seed, start_ts=start_ts)
         sources = {c.camera_id: object() for c in config.cameras}
         return types.SimpleNamespace(config=config, clock=ManualClock(), sources=sources)
 
@@ -121,6 +124,8 @@ def test_simulate_runs_the_engine_on_a_scenario(
     )
     assert code == 0
     assert calls["speed"] == 5 and calls["seed"] == 3
+    assert abs(calls["start_ts"] - time.time()) < 60  # --rebase-to-now is the default
+    assert all(p.spec.options["track_id_ttl_h"] == 24.0 for p in factory_of(calls).built)
     factory: FakeFactory = calls["factory"]
     assert {p.spec.kind for p in factory.built} == {"simulated"}
     assert all("source" in p.spec.options for p in factory.built)
@@ -154,3 +159,27 @@ def test_invalid_settings_file(tmp_path: Path) -> None:
     bad = tmp_path / "edge.yaml"
     bad.write_text("local_port: not-a-port\n")
     assert cli.main(["check", "--config", str(bad)]) == 2
+
+
+def factory_of(calls: dict[str, Any]) -> FakeFactory:
+    factory: FakeFactory = calls["factory"]
+    return factory
+
+
+def test_simulate_no_rebase_keeps_the_scenario_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _fake_simulator(monkeypatch)
+    args = ["simulate", "--scenario", "s.yaml", "--no-rebase-to-now", "--no-api"]
+    assert cli.main([*args, "--duration", "0.1", "--data-dir", str(tmp_path)]) == 0
+    assert calls["start_ts"] is None
+
+
+def test_listen_address_feeds_the_local_url(tmp_path: Path) -> None:
+    from rv_edge.runtime.settings import EdgeSettings
+
+    base = EdgeSettings(data_dir=tmp_path)
+    assert cli.with_listen_address(base, None, None) is base
+    assert cli.with_listen_address(base, None, 0) is base  # ephemeral test port
+    moved = cli.with_listen_address(base, "127.0.0.1", 9100)
+    assert (moved.local_host, moved.local_port) == ("127.0.0.1", 9100)

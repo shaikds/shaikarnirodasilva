@@ -10,11 +10,13 @@ Open on the LAN (waiter phones, no accounts):
 * ``POST /local/alerts/{alert_id}/ack`` -> ``AlertView`` (``via="local"``, no identity)
 * ``POST /local/setup-pin`` ``{pin}``: choose the setup PIN, first time only
 
-Setup (header ``X-Setup-Pin`` required; 401 otherwise, 429 after repeated wrong PINs):
-cameras CRUD (credentials are write-only), discovery, blurred snapshot, automatic table
-suggestions (``POST /local/cameras/{id}/suggest-tables``, polygons only), config, coverage,
-uniform calibration and pairing. The custom header also blocks cross-site requests (it forces
-a CORS preflight, which this app never allows).
+Setup (header ``X-Setup-Pin`` required; 401 otherwise, 429 with ``Retry-After`` after repeated
+wrong PINs): ``GET /local/setup/pin-check`` (204: the PIN is right), cameras CRUD (credentials
+are write-only; listings show only non-secret parts: brand, host, port, channel, substream;
+simulated cameras of ``rv-edge simulate`` are listed read-only), discovery, blurred snapshot,
+automatic table suggestions (``POST /local/cameras/{id}/suggest-tables``, polygons only),
+config, coverage, uniform calibration and pairing. The custom header also blocks cross-site
+requests (it forces a CORS preflight, which this app never allows).
 
 The built edge-ui is served at ``/`` (SPA fallback, e.g. ``/local-alerts``) when
 ``settings.edge_ui_dir`` exists.
@@ -24,8 +26,8 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import json
 import logging
+import math
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -49,6 +51,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from rv_contracts import (
     ID_PATTERN,
+    LIVE_SNAPSHOT_MESSAGE_TYPE,
     AckVia,
     AlertView,
     CameraStatus,
@@ -56,11 +59,15 @@ from rv_contracts import (
     HealthStatus,
     Id,
     LiveSnapshot,
+    LiveSnapshotMessage,
     Polygon,
     SiteConfig,
 )
 from rv_contracts.geometry import Coord
 from starlette.concurrency import run_in_threadpool
+
+from rv_edge.ingest.rtsp_templates import normalize_brand, parse_rtsp_url
+from rv_edge.interfaces import SourceSpec
 
 from .pairing import PairingError
 from .probes import run_discovery
@@ -74,7 +81,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-STATE_MESSAGE_TYPE = "live.snapshot"
+STATE_MESSAGE_TYPE = LIVE_SNAPSHOT_MESSAGE_TYPE
 NO_STORE = {"Cache-Control": "no-store, max-age=0", "Pragma": "no-cache"}
 
 
@@ -97,6 +104,9 @@ class SetupStatus(_Model):
     pending_config_push: bool
     outbox_depth: int
     camera_count: int
+    """Cameras the edge can open (stored ones, plus simulated ones in ``rv-edge simulate``)."""
+    uniform_calibrated: bool
+    """A staff uniform colour was calibrated (``POST /local/uniform/calibrate``)."""
 
 
 class SetupPinIn(_Model):
@@ -135,13 +145,21 @@ class CameraUpdate(_Model):
 
 
 class CameraOut(_Model):
-    """A camera as listed to the setup wizard. ``url`` is always redacted."""
+    """A camera as listed to the setup wizard. ``url`` is always redacted; credentials are
+    never returned. ``brand``/``channel``/``substream`` come from the camera's ``options`` when
+    the wizard stored them, else from matching the URL against the brand templates; None when
+    unknown (custom path, file or simulated source)."""
 
     camera_id: str
     kind: str
     url: str
     has_credentials: bool
     loop: bool
+    brand: str | None
+    host: str | None
+    port: int | None
+    channel: int | None
+    substream: bool | None
     in_config: bool
     name: str | None
     enabled: bool | None
@@ -209,6 +227,27 @@ class SuggestTablesOut(_Model):
     """Why the result is degraded (then ``suggestions`` may be empty); None when it is not."""
 
 
+def _address(kind: str, url: str, options: dict[str, Any]) -> dict[str, Any]:
+    """Non-secret address fields of :class:`CameraOut` (see its docstring)."""
+    parts = parse_rtsp_url(url) if kind == "rtsp" else None
+    brand = options.get("brand")
+    channel = options.get("channel")
+    substream = options.get("substream")
+    return {
+        "brand": normalize_brand(brand)
+        if isinstance(brand, str) and brand
+        else (parts.brand if parts else None),
+        "host": parts.host if parts else None,
+        "port": parts.port if parts else None,
+        "channel": channel
+        if isinstance(channel, int) and not isinstance(channel, bool) and channel >= 1
+        else (parts.channel if parts else None),
+        "substream": substream if isinstance(substream, bool) else (
+            parts.substream if parts else None
+        ),
+    }
+
+
 TableDetectorProvider = Callable[[], "MultiClassDetector"]
 """Returns the multi-class detector for table suggestions; raises ``FileNotFoundError`` when
 the model is missing."""
@@ -253,8 +292,13 @@ def create_local_app(
         x_setup_pin: Annotated[str | None, Header(alias="X-Setup-Pin")] = None,
     ) -> None:
         client = request.client.host if request.client else "unknown"
-        if guard.locked(client):
-            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too many wrong PINs; wait")
+        wait_s = guard.retry_after(client)
+        if wait_s > 0:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "too many wrong PINs; wait",
+                headers={"Retry-After": str(max(1, math.ceil(wait_s)))},
+            )
         stored = stored_pin_hash()
         if stored is None:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "setup PIN not set")
@@ -289,7 +333,8 @@ def create_local_app(
             config_version=runtime.config_store.config_version,
             pending_config_push=runtime.config_store.has_pending_push,
             outbox_depth=runtime.outbox_depth(),
-            camera_count=len(secrets.cameras()),
+            camera_count=len(runtime.camera_specs()),
+            uniform_calibrated=secrets.uniform_hsv is not None,
         )
 
     @app.post("/local/alerts/{alert_id}/ack", response_model=AlertView)
@@ -320,9 +365,7 @@ def create_local_app(
 
         async def state_message() -> str:
             snapshot = await run_in_threadpool(runtime.live_snapshot)
-            return json.dumps(
-                {"type": STATE_MESSAGE_TYPE, "snapshot": snapshot.model_dump(mode="json")}
-            )
+            return LiveSnapshotMessage(snapshot=snapshot).model_dump_json()
 
         async def receiver() -> None:
             while True:
@@ -360,19 +403,30 @@ def create_local_app(
     # --------------------------------------------------------------- setup (PIN required)
     setup = APIRouter(prefix="/local", dependencies=[Depends(require_pin)])
 
-    def camera_out(camera: CameraSecret) -> CameraOut:
+    def camera_out(camera: CameraSecret | SourceSpec) -> CameraOut:
         config = runtime.config
         cam_cfg = next(
             (c for c in (config.cameras if config else []) if c.camera_id == camera.camera_id),
             None,
         )
         health = next((h for h in runtime.camera_health() if h.camera_id == camera.camera_id), None)
+        if isinstance(camera, CameraSecret):
+            url, redacted, has_creds = (
+                camera.url.get_secret_value(),
+                camera.redacted_url,
+                camera.has_credentials,
+            )
+        else:  # a simulated camera of ``rv-edge simulate``: no address, no credentials
+            url = redacted = f"{camera.kind}://{camera.camera_id}"
+            has_creds = False
+        address = _address(camera.kind, url, camera.options)
         return CameraOut(
             camera_id=camera.camera_id,
             kind=camera.kind,
-            url=camera.redacted_url,
-            has_credentials=camera.has_credentials,
+            url=redacted,
+            has_credentials=has_creds,
             loop=camera.loop,
+            **address,
             in_config=cam_cfg is not None,
             name=cam_cfg.name if cam_cfg else None,
             enabled=cam_cfg.enabled if cam_cfg else None,
@@ -381,9 +435,17 @@ def create_local_app(
             last_frame_age_s=health.last_frame_age_s if health else None,
         )
 
+    @setup.get("/setup/pin-check", status_code=status.HTTP_204_NO_CONTENT)
+    def pin_check() -> Response:
+        """Cheap PIN verification for the wizard: 204 when ``X-Setup-Pin`` is right."""
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
     @setup.get("/cameras", response_model=list[CameraOut])
     def list_cameras() -> list[CameraOut]:
-        return [camera_out(c) for c in runtime.secrets.cameras().values()]
+        stored = runtime.secrets.cameras()
+        listed: list[CameraSecret | SourceSpec] = list(stored.values())
+        listed += [s for cid, s in runtime.camera_specs().items() if cid not in stored]
+        return [camera_out(c) for c in listed]
 
     @setup.post("/cameras", response_model=CameraOut, status_code=status.HTTP_201_CREATED)
     def add_camera(body: CameraIn) -> CameraOut:

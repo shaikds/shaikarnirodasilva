@@ -15,6 +15,9 @@
   (``sim.clock.advance(sim.dt)`` per frame, or :meth:`Simulation.step`). ``speed`` is ignored.
 * ``seed`` is added to the scenario's own ``seed``: 0 reproduces the scenario as written, other
   values give independent variations of it.
+* ``start_ts`` (epoch seconds) moves the whole run to start then instead of at the scenario's
+  ``run.date`` / ``run.start`` (``rv-edge simulate --rebase-to-now`` passes the current time).
+  Only timestamps shift: the same parties arrive at the same offsets.
 """
 
 from __future__ import annotations
@@ -80,18 +83,28 @@ class Simulation:
 
 
 def load_simulation(
-    scenario_path: str | Path, *, speed: float = 1.0, seed: int = 0, manual: bool = False
+    scenario_path: str | Path,
+    *,
+    speed: float = 1.0,
+    seed: int = 0,
+    manual: bool = False,
+    start_ts: float | None = None,
 ) -> Simulation:
     """Load a scenario and build its world, clock and per-camera sources (see module doc)."""
     scenario = load_scenario(scenario_path)
-    return build_simulation(scenario, speed=speed, seed=seed, manual=manual)
+    return build_simulation(scenario, speed=speed, seed=seed, manual=manual, start_ts=start_ts)
 
 
 def build_simulation(
-    scenario: Scenario, *, speed: float = 1.0, seed: int = 0, manual: bool = False
+    scenario: Scenario,
+    *,
+    speed: float = 1.0,
+    seed: int = 0,
+    manual: bool = False,
+    start_ts: float | None = None,
 ) -> Simulation:
     """Like :func:`load_simulation` for an already validated :class:`Scenario`."""
-    world = World(scenario, seed=seed)
+    world = World(scenario, seed=seed, start_ts=start_ts)
     clock: ManualClock | AcceleratedClock = (
         ManualClock(world.start_ts) if manual else AcceleratedClock(world.start_ts, speed)
     )

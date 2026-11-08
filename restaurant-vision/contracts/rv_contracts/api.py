@@ -9,8 +9,17 @@ Conventions:
   as float; every money figure is an estimate and wrapped in :class:`Estimate`.
 * Privacy: no alert, ack or metric shape carries a user or employee identity. Metrics are per
   site or per table only.
-* WebSockets (cloud ``WS /ws`` and edge ``WS /local/ws``) send one :data:`EdgeEvent` JSON
-  object per message.
+* WebSockets: the cloud ``WS /ws?token=<access JWT>&site_id=<id>`` and the edge
+  ``WS /local/ws`` send one JSON object per message, either an :data:`EdgeEvent` or a
+  :class:`LiveSnapshotMessage` (``{"type": "live.snapshot", "snapshot": LiveSnapshot}``, the
+  full state; replace the cached snapshot). Dispatch on ``type``. The edge sends a snapshot on
+  connect and every few seconds; the cloud sends one on connect to owners and managers
+  (waiters receive ``alert.*`` events only). Client messages are ignored. The cloud closes a
+  socket it refuses with a :class:`WsCloseCode`: 4400 missing parameters, 4401 bad or expired
+  token (refresh and reconnect), 4403 no access to the site (do not retry). The token is
+  checked only at connect; after a reconnect, re-sync from the next snapshot or
+  ``GET /sites/{id}/live``.
+* Web Push: each push message body is an :class:`AlertPush` JSON object.
 * ``LiveSnapshot`` is served both by the cloud (``GET /sites/{id}/live``) and by the edge on
   the LAN (``GET /local/state``), so the waiter app's offline mode reuses the same types.
 
@@ -28,7 +37,9 @@ Endpoint -> model map (``/api/v1`` prefix):
 ``GET|POST /orgs/{org_id}/users``                      ``list[OrgUser]`` / ``UserCreate``
 ``PATCH|DELETE /orgs/{org_id}/users/{user_id}``        ``UserUpdate`` -> ``OrgUser``
 ``POST /sites/{site_id}/devices/pairing-code``         ``PairingCodeInfo``
-``GET /sites/{site_id}/devices``                       ``list[DeviceStatus]``
+``GET /sites/{site_id}/devices``                       ``list[DeviceStatus]`` (waiters: only
+                                                       id, online, last_seen_at, local_url)
+``DELETE /sites/{site_id}/devices/{device_id}``        204, no body (owner; unpairs the edge)
 ``POST /edge/pair``                                    ``PairRequest`` -> ``PairResponse``
 ``POST /edge/events``                                  ``EventBatch`` -> ``EventsAccepted``
 ``GET|PUT /edge/config``, ``GET /sites/{id}/config``   ``SiteConfig``
@@ -44,7 +55,11 @@ Endpoint -> model map (``/api/v1`` prefix):
 ``GET /push/vapid-public-key``                         ``VapidPublicKey``
 ``POST /push/subscriptions``                           ``PushSubscriptionIn`` ->
                                                        ``PushSubscriptionOut``
-``GET /healthz``, edge ``GET /local/health``           ``HealthStatus``
+``DELETE /push/subscriptions/{subscription_id}``       204, no body
+Web Push message body                                  ``AlertPush``
+``WS /ws``, edge ``WS /local/ws``                      ``EdgeEvent | LiveSnapshotMessage``
+``GET /healthz`` (also ``/api/v1/healthz``),           ``HealthStatus``
+edge ``GET /local/health``
 edge ``GET /local/coverage``                           ``CoverageReport``
 =====================================================  =======================================
 
@@ -53,7 +68,7 @@ Additions beyond 7.3, kept minimal: ``Me.sites`` (names for the waiter app's sit
 """
 
 import datetime as dt
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from typing import Annotated, Final, Literal, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
@@ -317,6 +332,10 @@ class DeviceStatus(ContractModel):
     cpu_pct: NonNegative | None
     mem_mb: NonNegative | None
     outbox_depth: Count | None
+    local_url: str | None = None
+    """The edge's LAN base URL from its latest heartbeat (e.g. ``http://192.168.1.20:8787``);
+    the waiter app links to ``<local_url>/local-alerts`` when the cloud is unreachable. Only
+    reachable from the restaurant's network. None if unknown. Since 1.1."""
 
 
 class EventsAccepted(ContractModel):
@@ -401,6 +420,10 @@ class AlertView(ContractModel):
     ack_via: AckVia | None
     resolved_at: EpochSeconds | None
     resolve_reason: ResolveReason | None
+    condition_since_ts: EpochSeconds | None = None
+    """When the underlying condition began (``AlertRaised.condition_since_ts``), e.g. when the
+    guests were seated for ``waiter_needed``. Show elapsed time ("waiting 3:20") from here,
+    falling back to ``raised_at`` when None. Since 1.1."""
 
 
 class TableLive(ContractModel):
@@ -410,7 +433,9 @@ class TableLive(ContractModel):
     state: TableState
     guest_count: Count
     since_ts: EpochSeconds | None
-    """When the current state started; None if unknown (no event yet)."""
+    """When the current state really started (backdated to the evidence, see
+    ``TableStateChanged.since_ts``; the transition time for 1.0 producers). None if unknown
+    (no event yet)."""
     open_alert_ids: list[Id]
 
 
@@ -447,6 +472,28 @@ class LiveSnapshot(ContractModel):
     open_alerts: list[AlertView]
     """Unresolved alerts, oldest first."""
     devices: list[DeviceStatus]
+
+
+LIVE_SNAPSHOT_MESSAGE_TYPE: Final = "live.snapshot"
+
+
+class LiveSnapshotMessage(ContractModel):
+    """WebSocket state message: the full live state, sent alongside ``EdgeEvent`` messages
+    (see the module docstring). Replaces the client's cached ``LiveSnapshot``. Since 1.1."""
+
+    type: Literal["live.snapshot"] = LIVE_SNAPSHOT_MESSAGE_TYPE
+    snapshot: LiveSnapshot
+
+
+class WsCloseCode(IntEnum):
+    """Close codes of the cloud ``WS /ws`` when it refuses a connection. Since 1.1."""
+
+    BAD_REQUEST = 4400
+    """Missing ``token`` or ``site_id``."""
+    UNAUTHORIZED = 4401
+    """Bad or expired access token: refresh it and reconnect."""
+    FORBIDDEN = 4403
+    """No access to the site (or it does not exist): do not retry."""
 
 
 class CoverageReport(ContractModel):
@@ -502,6 +549,12 @@ class TimeseriesMetric(StrEnum):
     """Number of walk-away events in the bucket."""
     RESPONSE_TIME = "response_time"
     """Median ``waiter_needed`` raised -> resolved seconds, by raise time."""
+    RESPONSE_TIME_P90 = "response_time_p90"
+    """90th percentile ``waiter_needed`` raised -> resolved seconds, by raise time. Since 1.1."""
+    QUEUE_WAIT = "queue_wait"
+    """Mean wait in seconds of people seated from the queue (``queue.seated`` ``waited_s``) in
+    the bucket, by seating time; the per-bucket version of ``MetricsSummary.queue_avg_wait_s``.
+    None when nobody was seated from the queue. Since 1.1."""
 
 
 class Bucket(StrEnum):
@@ -614,6 +667,21 @@ class PushSubscriptionOut(ContractModel):
     subscription_id: Id
     site_id: Id
     endpoint: str
+
+
+class AlertPush(ContractModel):
+    """Body of a Web Push message, sent for a newly raised alert that is still unresolved
+    when its ingest batch completes. Anonymous: no user, no staff identity. Since 1.1."""
+
+    alert_id: Id
+    site_id: Id
+    kind: AlertKind
+    severity: AlertSeverity
+    table_label: Label | None
+    """Label of the alert's table; None for ``long_queue``."""
+    raised_at: EpochSeconds
+    condition_since_ts: EpochSeconds | None
+    """When the condition began (e.g. guests seated); None if unknown: use ``raised_at``."""
 
 
 class HealthStatus(ContractModel):

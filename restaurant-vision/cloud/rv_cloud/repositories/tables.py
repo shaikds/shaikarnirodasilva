@@ -26,19 +26,30 @@ class TableRepository:
         return self._session.get(TableStateCurrent, (self._scope.site_id, table_id))
 
     def set_state(
-        self, table_id: str, *, state: str, guest_count: int, session_id: str, since_ts: float
+        self,
+        table_id: str,
+        *,
+        state: str,
+        guest_count: int,
+        session_id: str,
+        since_ts: float,
+        changed_at: float,
     ) -> bool:
-        """Record a transition unless a later one is already stored. True if applied."""
+        """Record a transition unless a later one is already stored. True if applied.
+
+        Transitions are ordered by ``changed_at`` (the event ``ts``); ``since_ts`` is the
+        backdated start of the state, for display."""
         row = self.get_state(table_id)
         if row is None:
             row = TableStateCurrent(site_id=self._scope.site_id, table_id=table_id)
             self._session.add(row)
-        elif row.since_ts > since_ts:
+        elif (row.changed_at if row.changed_at is not None else row.since_ts) > changed_at:
             return False
         row.state = state
         row.guest_count = guest_count
         row.session_id = session_id
         row.since_ts = since_ts
+        row.changed_at = changed_at
         return True
 
     # ------------------------------------------------------------------ sessions

@@ -9,8 +9,10 @@ from rv_contracts import (
     AlertKind,
     AlertRaised,
     AlertSeverity,
+    LiveSnapshotMessage,
     OccupancySnapshot,
     Role,
+    WsCloseCode,
     new_uuid7,
     parse_event,
 )
@@ -41,6 +43,10 @@ def test_ws_broadcasts_ingested_events_and_cloud_acks(api: Api, owner: Account) 
         severity=AlertSeverity.WARN,
     )
     with api.client.websocket_connect(ws_url(owner.tokens["access_token"], site)) as ws:
+        # Owners and managers start with the full state (contracts 1.1 LiveSnapshotMessage).
+        state = LiveSnapshotMessage.model_validate_json(ws.receive_text())
+        assert state.type == "live.snapshot" and state.snapshot.site_id == site
+        assert len(state.snapshot.tables) == 8 and state.snapshot.devices
         api.post_events(device, snapshot, raised)
         first = ws.receive_json()
         second = ws.receive_json()
@@ -93,6 +99,7 @@ def test_ws_only_receives_own_site(api: Api, owner: Account) -> None:
         OccupancySnapshot, site_b, t, guests=1, tables_occupied=0, tables_total=8, staff_on_floor=0
     )
     with api.client.websocket_connect(ws_url(owner.tokens["access_token"], site_b)) as ws:
+        assert ws.receive_json()["snapshot"]["site_id"] == site_b
         api.post_events(
             device_a,
             event(
@@ -111,7 +118,7 @@ def test_ws_only_receives_own_site(api: Api, owner: Account) -> None:
 
 @pytest.mark.parametrize(
     ("query", "code"),
-    [("", 4400), ("token=garbage&site_id=x", 4401)],
+    [("", WsCloseCode.BAD_REQUEST), ("token=garbage&site_id=x", WsCloseCode.UNAUTHORIZED)],
 )
 def test_ws_rejects_bad_credentials(api: Api, query: str, code: int) -> None:
     with (

@@ -18,15 +18,18 @@ Demo logins (all with password `demo-password-123`):
 | `waiter@example.com` | waiter | Tel Aviv alerts, "On it" button |
 
 The simulated edge is paired with **Tel Aviv** and plays `demo_dinner.yaml`: a 2-hour dinner
-(19:00 to 21:00) with about 31 parties, a queue that peaks around 12 people, a few slow first
+with about 31 parties, a queue that peaks around 12 people, a few slow first
 visits (`waiter_needed`), slow bussing (`bussing_needed`) and walk-aways. At speed 20 it takes
-about 6 minutes.
+about 6 minutes. `rv-edge simulate` moves the scenario to start *now* (`--rebase-to-now`, the
+default), so "waiting since" timers and today's shift report work; the simulated clock then runs
+20x faster than the wall clock. `--no-rebase-to-now` replays the scenario's own date and time
+(19:00 on 2026-11-06) for reproducible runs.
 
 ## A. UI only
 
 ```bash
 cd web && pnpm install && pnpm dev:mock
-# dashboard http://localhost:5173  waiter http://localhost:5174  (mock password: demo1234)
+# dashboard http://localhost:5173  waiter http://localhost:5174  (same logins as below)
 ```
 
 ## B. Local demo (no Docker)
@@ -92,9 +95,11 @@ RV_NODE_IMAGE=mirror.gcr.io/library/node:22-slim RV_POSTGRES_IMAGE=mirror.gcr.io
    arrives (push if allowed); tap **On it**. The dashboard shows it acknowledged, with no name
    attached. Point this out: acknowledgements carry no identity.
 4. **Offline mode**: open `http://localhost:8787/local-alerts` (when edge-ui is built): the same
-   alerts straight from the edge, which is what waiters use if the internet drops.
-5. **Reports**: shift report and ROI for the scenario date (`demo_dinner`: 2026-11-06), with
-   walk-aways converted to estimated lost revenue.
+   alerts straight from the edge, which is what waiters use if the internet drops. The edge
+   reports this LAN address in every heartbeat (`DeviceStatus.local_url`, for the waiter app's
+   offline link; `RV_EDGE_LOCAL_URL` overrides it, as the Docker demo does).
+5. **Reports**: today's shift report and ROI (the scenario was rebased to now), with walk-aways
+   converted to estimated lost revenue.
 6. **Compliance page**: the signage and staff-notice templates (PDF downloads in the Docker
    demo).
 7. **Privacy**: `http://localhost:8787/local/state` is everything the edge knows: tables, counts,

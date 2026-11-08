@@ -100,8 +100,27 @@ def pairing_code(access: OwnerSiteDep, state: StateDep, session: SessionDep) -> 
 
 
 @router.get("/devices", response_model=list[DeviceStatus])
-def list_devices(access: StaffSiteDep, state: StateDep, session: SessionDep) -> list[DeviceStatus]:
-    return DeviceService(session, state.clock).statuses(access.scope)
+def list_devices(access: AnySiteDep, state: StateDep, session: SessionDep) -> list[DeviceStatus]:
+    """Edge devices of the site. Waiters get a reduced view (``device_id``, ``online``,
+    ``last_seen_at`` and ``local_url``, for the waiter app's offline link); health details are
+    for owners and managers."""
+    statuses = DeviceService(session, state.clock).statuses(access.scope)
+    if access.role is not Role.WAITER:
+        return statuses
+    return [
+        DeviceStatus(
+            device_id=d.device_id,
+            version=None,
+            last_seen_at=d.last_seen_at,
+            online=d.online,
+            cameras=[],
+            cpu_pct=None,
+            mem_mb=None,
+            outbox_depth=None,
+            local_url=d.local_url,
+        )
+        for d in statuses
+    ]
 
 
 @router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)

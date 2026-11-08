@@ -59,8 +59,12 @@ class PinGuard:
         self._locked_until: dict[str, float] = {}
 
     def locked(self, client: str) -> bool:
+        return self.retry_after(client) > 0
+
+    def retry_after(self, client: str) -> float:
+        """Seconds until ``client`` may try again (0 when it is not locked out)."""
         with self._lock:
-            return self._locked_until.get(client, 0.0) > self._now()
+            return max(0.0, self._locked_until.get(client, 0.0) - self._now())
 
     def failure(self, client: str) -> None:
         with self._lock:

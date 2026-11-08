@@ -50,7 +50,7 @@ IP camera / NVR ──RTSP (LAN only)──► edge computer in the restaurant (
 | Track labels (48-bit random, per camera) | Edge RAM | Seconds to minutes; all mappings discarded at least every 24 h | No |
 | Uniform-colour score (one number 0..1, "how close is this torso colour to the staff uniform") | Edge RAM | Per frame, then discarded | No |
 | Role (guest / staff / unknown) per track | Edge RAM | Life of the track | No |
-| Anonymous events: table states and guest counts, alerts, queue and occupancy snapshots, walk-aways, device health | Edge outbox, cloud database | Edge: 7 days after delivery. Cloud: [RETENTION] | Yes |
+| Anonymous events: table states and guest counts, alerts, queue and occupancy snapshots, walk-aways, device health | Edge outbox, cloud database | Edge: 7 days after delivery. Cloud: raw events 90 days, derived metrics and reports 400 days (defaults; `RV_RETENTION_RAW_EVENTS_DAYS`, `RV_RETENTION_METRICS_DAYS`), then deleted automatically | Yes |
 | Setup snapshot (one frame, every person blurred, masks blacked out) | Edge RAM, shown to the PIN-protected setup page on the LAN | Generated on request, never stored (`Cache-Control: no-store`) | No |
 | Camera RTSP URLs and credentials | Edge `secrets.json` (owner-only permissions) | Until changed | No |
 

@@ -75,6 +75,9 @@ services:
       cloud:
         condition: service_healthy
     init: true
+    environment:
+      # The container IP is not reachable from the host: advertise the published port.
+      RV_EDGE_LOCAL_URL: ${RV_EDGE_LOCAL_URL:-http://localhost:${RV_EDGE_PORT:-8787}}
     command:
       - simulate
       - --scenario

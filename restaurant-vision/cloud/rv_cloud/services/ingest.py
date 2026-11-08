@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from rv_contracts import EdgeEvent
+from rv_contracts import AlertKind, AlertPush, AlertSeverity, EdgeEvent
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -28,7 +28,8 @@ class IngestResult:
     accepted: int
     duplicates: int
     push_payloads: list[dict[str, Any]] = field(default_factory=list)
-    """One payload per alert raised by this batch and still unresolved after it."""
+    """One ``AlertPush`` (as JSON-safe dict) per alert raised by this batch and still
+    unresolved after it."""
 
 
 def broker_message(event: EdgeEvent) -> BrokerMessage:
@@ -101,7 +102,8 @@ class IngestService:
     def _push_payloads(
         self, scope: SiteScope, alert_ids: Sequence[str], site: Site
     ) -> list[dict[str, Any]]:
-        """Push payloads (no PII) for raised alerts still unresolved after the batch."""
+        """``AlertPush`` payloads (no PII) for raised alerts still unresolved after the
+        batch."""
         if not alert_ids:
             return []
         labels = views.table_labels(views.load_config(site))
@@ -111,13 +113,14 @@ class IngestService:
             alert = alerts.get(alert_id)
             if alert is None or alert.resolved_at is not None:
                 continue
-            payloads.append(
-                {
-                    "alert_id": alert.alert_id,
-                    "site_id": alert.site_id,
-                    "kind": alert.kind,
-                    "table_label": labels.get(alert.table_id) if alert.table_id else None,
-                    "raised_at": alert.raised_at,
-                }
+            push = AlertPush(
+                alert_id=alert.alert_id,
+                site_id=alert.site_id,
+                kind=AlertKind(alert.kind),
+                severity=AlertSeverity(alert.severity),
+                table_label=labels.get(alert.table_id) if alert.table_id else None,
+                raised_at=alert.raised_at,
+                condition_since_ts=alert.condition_since_ts,
             )
+            payloads.append(push.model_dump(mode="json"))
         return payloads

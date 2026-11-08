@@ -153,12 +153,12 @@ def sample_events(site_id: str = SAMPLE_SITE_ID, ts: float = SAMPLE_TS) -> list[
         make_event(
             TableStateChanged, site_id, ts - 3600.0,
             table_id="t3", from_state=TableState.EMPTY, to_state=TableState.SEATED,
-            guest_count=3, session_id=session_id,
+            guest_count=3, session_id=session_id, since_ts=ts - 3632.0,
         ),
         make_event(
             AlertRaised, site_id, ts - 3420.0,
             alert_id=alert_id, kind=AlertKind.WAITER_NEEDED, table_id="t3", zone_id="z-t3",
-            severity=AlertSeverity.WARN,
+            severity=AlertSeverity.WARN, condition_since_ts=ts - 3632.0,
         ),
         make_event(
             AlertAcknowledged, site_id, ts - 3400.0,
@@ -194,7 +194,7 @@ def sample_events(site_id: str = SAMPLE_SITE_ID, ts: float = SAMPLE_TS) -> list[
                 CameraHealth(camera_id=CAM_ENTRANCE, status=CameraStatus.DEGRADED, fps=3.1,
                              last_frame_age_s=0.6),
             ],
-            cpu_pct=38.5, mem_mb=612.0, outbox_depth=0,
+            cpu_pct=38.5, mem_mb=612.0, outbox_depth=0, local_url="http://192.168.1.20:8787",
         ),
     ]
 

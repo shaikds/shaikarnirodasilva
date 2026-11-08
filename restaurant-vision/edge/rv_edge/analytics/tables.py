@@ -48,9 +48,11 @@ state changed; *when* it changed is taken from the sightings:
 
 A deadline that already passed at confirmation fires at once. A staff visit that started
 after the guests arrived but was confirmed before seating was confirmed counts as the first
-visit. ``table.state_changed`` events keep ``ts`` = confirmation time (the contract has no
-separate "since" field; see :attr:`TableStateMachine.state_since`), so the event stream stays
-in emission order.
+visit. ``table.state_changed`` events keep ``ts`` = confirmation time, so the event stream
+stays in emission order, and carry the backdated start as ``since_ts`` (also
+:attr:`TableStateMachine.state_since`). Table alerts carry the start of their condition as
+``condition_since_ts``: seating (``waiter_needed``), the last staff attention
+(``checkin_needed``) or the guests' departure (``bussing_needed``).
 
 Alerts (each raised at most once per condition episode, auto-resolved):
 
@@ -328,7 +330,7 @@ class SeatedState(TableStateHandler):
 
     def on_timer(self, m: TableStateMachine, t: float) -> None:
         if m.in_state_for(t) >= m.thresholds.first_visit_timeout_s:
-            m.raise_once(AlertKind.WAITER_NEEDED, t)
+            m.raise_once(AlertKind.WAITER_NEEDED, t, since=m.state_since)
 
 
 class AttendedState(TableStateHandler):
@@ -348,7 +350,7 @@ class AttendedState(TableStateHandler):
 
     def on_timer(self, m: TableStateMachine, t: float) -> None:
         if t - m.last_attention_at >= m.thresholds.checkin_timeout_s:
-            m.raise_once(AlertKind.CHECKIN_NEEDED, t)
+            m.raise_once(AlertKind.CHECKIN_NEEDED, t, since=m.last_attention_at or m.state_since)
 
 
 class NeedsBussingState(TableStateHandler):
@@ -365,7 +367,7 @@ class NeedsBussingState(TableStateHandler):
 
     def on_timer(self, m: TableStateMachine, t: float) -> None:
         if m.in_state_for(t) >= m.thresholds.bussing_timeout_s:
-            m.raise_once(AlertKind.BUSSING_NEEDED, t)
+            m.raise_once(AlertKind.BUSSING_NEEDED, t, since=m.state_since)
 
 
 EMPTY = EmptyState()
@@ -457,6 +459,10 @@ class TableStateMachine:
         session = self.session
         assert session is not None  # every state but empty belongs to a session
         site_id = self._ctx.site_id
+        if target is ATTENDED:  # attended since the waiter arrived
+            since = self._backdate(session.first_visit_at, session.seated_at, t)
+        elif target is NEEDS_BUSSING:  # since the last guest sighting
+            since = self._backdate(self.signals.departed_at, session.seated_at, t)
         self._out.append(
             make_event(
                 TableStateChanged,
@@ -467,12 +473,10 @@ class TableStateMachine:
                 to_state=target.kind,
                 guest_count=count,
                 session_id=session.session_id,
+                since_ts=since,
             )
         )
-        if target is ATTENDED:  # attended since the waiter arrived
-            since = self._backdate(session.first_visit_at, session.seated_at, t)
         if target is NEEDS_BUSSING:
-            since = self._backdate(self.signals.departed_at, session.seated_at, t)
             first = session.first_visit_at
             self._out.append(
                 make_event(
@@ -531,12 +535,13 @@ class TableStateMachine:
         if alert_id is not None:
             self._out += self._ctx.alerts.resolve(alert_id, t, ResolveReason.STAFF_VISIT)
 
-    def raise_once(self, kind: AlertKind, t: float) -> None:
-        """Raise ``kind`` unless it was already raised in the current episode."""
+    def raise_once(self, kind: AlertKind, t: float, *, since: float | None = None) -> None:
+        """Raise ``kind`` unless it was already raised in the current episode. ``since`` is
+        when the condition began (``condition_since_ts``)."""
         if kind in self._raised:
             return
         record, events = self._ctx.alerts.raise_alert(
-            kind, t, table_id=self.table_id, zone_id=self.zone_id
+            kind, t, table_id=self.table_id, zone_id=self.zone_id, condition_since=since
         )
         if record is None:
             return

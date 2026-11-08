@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     signup_plan: Plan = Plan.PRO
     """Plan given to organizations created by ``POST /auth/signup``."""
 
+    retention_raw_events_days: int = Field(default=90, ge=1)
+    """Raw edge events (and processed edge commands) are deleted after this many days."""
+    retention_metrics_days: int = Field(default=400, ge=1)
+    """Derived metrics (snapshots, queue facts, alerts, table sessions) are deleted after this
+    many days. Reports cannot reach further back."""
+    retention_interval_s: float = Field(default=6 * 3600.0, ge=0)
+    """How often the app applies retention (first run shortly after startup); 0 disables it
+    (then run ``python -m rv_cloud.tools.retention`` from cron)."""
+
     log_level: str = "INFO"
     log_json: bool = True
 

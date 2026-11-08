@@ -76,9 +76,14 @@ crosses the entrance line exactly once inward.
 ```python
 from rv_sim.adapter import load_simulation
 
-sim = load_simulation(path, speed=20.0, seed=0, manual=False)
+sim = load_simulation(path, speed=20.0, seed=0, manual=False, start_ts=None)
 sim.config, sim.clock, sim.sources, sim.world, sim.ground_truth, sim.close()
 ```
+
+- `start_ts` (epoch seconds) moves the run to start then instead of at the scenario's `run.date`
+  and `run.start`; `rv-edge simulate` passes the current time by default (`--rebase-to-now`).
+  Only timestamps shift: arrivals (including `hourly_rates`, looked up on the scenario's own
+  local hours) and everything random stay the same.
 
 - `manual=False`: `AcceleratedClock`, scenario time = start + speed × real time, anchored on the
   first `now()` call. `manual=True`: `ManualClock`; advance it with `sim.step()` or

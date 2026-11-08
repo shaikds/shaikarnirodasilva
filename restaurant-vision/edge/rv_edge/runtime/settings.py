@@ -6,7 +6,7 @@ Example ``edge.yaml``::
     cloud_url: https://app.example.com
     local_port: 8787
     detector_backend: auto
-    model_path: /opt/rv-edge/models/yolox_s.onnx
+    model_path: /opt/rv-edge/models/yolox_tiny.onnx
     cpu_limit_pct: 70
 
 Every field can be overridden by an environment variable named ``RV_EDGE_<FIELD>`` (for
@@ -57,11 +57,17 @@ class EdgeSettings(BaseModel):
     which then takes precedence."""
     local_host: str = "0.0.0.0"
     local_port: int = Field(default=8787, ge=1, le=65535)
+    local_url: str | None = None
+    """The LAN base URL waiter phones use for offline alerts, reported to the cloud in every
+    heartbeat (``DeviceStatus.local_url``). Default: derived from the LAN IP and
+    ``local_port`` (:mod:`rv_edge.runtime.netinfo`); set it behind NAT or Docker port mappings
+    or to use a DNS name, e.g. ``http://rv-edge.local:8787``."""
     setup_pin_hash: str | None = None
     """Pre-provisioned setup PIN hash (see :func:`rv_edge.runtime.setup_pin.hash_pin`).
     When unset, the PIN is chosen once through ``POST /local/setup-pin``."""
     detector_backend: DetectorBackend = "auto"
     model_path: Path | None = None
+    """YOLOX model; default ``edge/models/yolox_tiny.onnx`` (or ``$RV_EDGE_MODEL``)."""
     cpu_limit_pct: float = Field(default=70.0, gt=0, le=100)
     """Back off frame processing when this process uses more than this share of the machine's
     total CPU (percent)."""
@@ -77,6 +83,18 @@ class EdgeSettings(BaseModel):
         value = value.strip().rstrip("/")
         if not value.startswith(("http://", "https://")):
             raise ValueError("cloud_url must start with http:// or https://")
+        return value
+
+    @field_validator("local_url")
+    @classmethod
+    def _normalize_local_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip().rstrip("/")
+        if not value.startswith(("http://", "https://")) or any(c.isspace() for c in value):
+            raise ValueError("local_url must be an http:// or https:// URL")
+        if len(value) > 256:
+            raise ValueError("local_url is too long")
         return value
 
     @field_validator("log_level")

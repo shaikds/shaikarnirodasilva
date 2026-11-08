@@ -2,16 +2,19 @@
 
 Rules (robust to retries and to old events arriving late):
 
-* ``table.state_changed``: current state is replaced only by a transition with a later ``ts``.
-  ``empty -> seated`` opens the session (``seated_at``); ``needs_bussing -> empty`` records
-  ``bussed_at`` and, once ``left_at`` is known, ``bussing_delay_s = bussed_at - left_at``.
+* ``table.state_changed``: current state is replaced only by a transition with a later ``ts``;
+  the stored ``since_ts`` is the backdated start (``since_ts``, contracts 1.1; ``ts`` for 1.0
+  producers). ``empty -> seated`` opens the session (``seated_at``); ``needs_bussing -> empty``
+  records ``bussed_at`` and, once ``left_at`` is known, ``bussing_delay_s = bussed_at -
+  left_at``.
 * ``table.session_closed``: fills the session; a producer-supplied ``bussing_delay_s`` wins.
-* Alerts: raise once per ``alert_id``; the earliest acknowledgement wins (time and channel
-  only); the first resolution wins. Acks/resolutions of unknown alerts are ignored.
+* Alerts: raise once per ``alert_id`` (with ``condition_since_ts``); the earliest
+  acknowledgement wins (time and channel only); the first resolution wins. Acks/resolutions
+  of unknown alerts are ignored.
 * Queue facts are appended; occupancy/queue snapshots are appended for time series and replace
   the "latest" rows only when newer.
-* ``edge.heartbeat`` updates the sending device: its health (if newer) and ``last_seen_at``
-  (cloud receive time).
+* ``edge.heartbeat`` updates the sending device: its health and ``local_url`` (if newer) and
+  ``last_seen_at`` (cloud receive time).
 """
 
 import logging
@@ -104,23 +107,25 @@ class Projector:
     # ------------------------------------------------------------------ tables
 
     def _table_state_changed(self, e: TableStateChanged) -> None:
+        since = e.since_ts if e.since_ts is not None else e.ts
         self._tables.set_state(
             e.table_id,
             state=e.to_state.value,
             guest_count=e.guest_count,
             session_id=e.session_id,
-            since_ts=e.ts,
+            since_ts=since,
+            changed_at=e.ts,
         )
         if e.from_state is TableState.EMPTY and e.to_state is TableState.SEATED:
             session = self._tables.get_or_create_session(e.session_id, e.table_id)
             if session.seated_at is None:
-                session.seated_at = e.ts
+                session.seated_at = since
         elif e.from_state is TableState.NEEDS_BUSSING and e.to_state is TableState.EMPTY:
             session = self._tables.get_or_create_session(e.session_id, e.table_id)
             if session.bussed_at is None:
-                session.bussed_at = e.ts
+                session.bussed_at = since
             if session.bussing_delay_s is None and session.left_at is not None:
-                session.bussing_delay_s = max(0.0, e.ts - session.left_at)
+                session.bussing_delay_s = max(0.0, since - session.left_at)
 
     def _session_closed(self, e: TableSessionClosed) -> None:
         session = self._tables.get_or_create_session(e.session_id, e.table_id)
@@ -148,6 +153,7 @@ class Projector:
                 table_id=e.table_id,
                 zone_id=e.zone_id,
                 raised_at=e.ts,
+                condition_since_ts=e.condition_since_ts,
             )
         )
         self.raised_alert_ids.append(e.alert_id)
@@ -223,6 +229,7 @@ class Projector:
             cpu_pct=e.cpu_pct,
             mem_mb=e.mem_mb,
             outbox_depth=e.outbox_depth,
+            local_url=e.local_url,
         )
         device.version = e.version
         if device.last_seen_at is None or device.last_seen_at < self._now:

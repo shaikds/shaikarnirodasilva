@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from rv_edge.ingest.rtsp_templates import BRANDS, guess_brand, normalize_brand, redact_url, rtsp_url
+from rv_edge.ingest.rtsp_templates import (
+    BRANDS,
+    RtspParts,
+    guess_brand,
+    normalize_brand,
+    parse_rtsp_url,
+    redact_url,
+    rtsp_url,
+)
 
 
 @pytest.mark.parametrize(
@@ -85,3 +93,22 @@ def test_redact_url_keeps_harmless_urls_and_never_raises() -> None:
     )
     assert redact_url("not a url") == "not a url"
     assert redact_url("rtsp://[broken") == "rtsp://[broken"
+
+
+@pytest.mark.parametrize("brand", sorted(BRANDS))
+@pytest.mark.parametrize(("channel", "substream"), [(1, True), (4, False), (12, True)])
+def test_parse_rtsp_url_inverts_rtsp_url(brand: str, channel: int, substream: bool) -> None:
+    url = rtsp_url(brand, "192.168.1.64", "admin", "p@ss:w/rd", channel, substream, port=8554)
+    parts = parse_rtsp_url(url)
+    assert parts is not None
+    assert (parts.brand, parts.host, parts.port) == (brand, "192.168.1.64", 8554)
+    assert parts.channel in (channel, None)  # provision_isr ignores the channel
+    assert parts.substream in (substream, None)
+    assert "admin" not in repr(parts) and "p@ss" not in repr(parts)
+
+
+def test_parse_rtsp_url_custom_paths_and_files() -> None:
+    assert parse_rtsp_url("rtsp://u:p@cam.local/live/main") == RtspParts("cam.local", 554)
+    assert parse_rtsp_url("rtsps://cam.local/x") == RtspParts("cam.local", 322)
+    assert parse_rtsp_url("/videos/demo.mp4") is None
+    assert parse_rtsp_url("rtsp://cam:notaport/x") is None

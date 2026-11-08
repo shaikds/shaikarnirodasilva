@@ -56,8 +56,10 @@ class Track:
 
 @dataclass(frozen=True, slots=True)
 class Frame:
-    """A decoded frame. ``image`` is a numpy ``HxWx3`` uint8 BGR array (or None for simulated
-    sources); it lives only in RAM and is never persisted."""
+    """A decoded frame. For real cameras ``image`` is a numpy ``HxWx3`` uint8 BGR array that
+    lives only in RAM and is never persisted. Simulated sources (``rv_sim``) put a
+    ``rv_edge.interfaces.SyntheticImage`` there instead: ground-truth person boxes and uniform
+    scores, no pixels (the simulated detector and hint extractor read it)."""
 
     camera_id: str
     ts: float
@@ -69,7 +71,9 @@ class Frame:
     height: int
     """Source image height in pixels."""
     image: Any
-    """numpy array, never persisted. Typed ``Any`` to keep numpy out of the contracts."""
+    """numpy array (never persisted) or ``SyntheticImage``; typed ``Any`` to keep numpy and
+    edge internals out of the contracts. Check ``hasattr(image, "shape")`` before treating it
+    as pixels."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -12,6 +12,9 @@ Raise -> (acknowledge) -> resolve, all while offline if need be:
 * An ack does not resolve: the alert stays open (status ``acknowledged``) until the matching
   staff visit or state change resolves it.
 * With the ``alerts`` module disabled nothing is raised (``raise_alert`` returns None).
+* ``condition_since`` is when the underlying condition began (e.g. guests seated for
+  ``waiter_needed``), backdated by the caller; it travels in ``alert.raised`` and the views as
+  ``condition_since_ts`` so staff apps can show "waiting 3:20" since seating.
 """
 
 from __future__ import annotations
@@ -56,6 +59,8 @@ class AlertRecord:
     raised_at: float
     acked_at: float | None = None
     ack_via: AckVia | None = None
+    condition_since: float | None = None
+    """When the condition began (``<= raised_at``); None if unknown."""
 
     @property
     def status(self) -> AlertStatus:
@@ -83,9 +88,11 @@ class AlertManager:
         *,
         table_id: str | None = None,
         zone_id: str | None = None,
+        condition_since: float | None = None,
     ) -> tuple[AlertRecord | None, list[EdgeEvent]]:
         """Raise an alert at ``ts``. Returns ``(record, events)``: the new or already open
-        record (None when alerts are disabled) and the ``alert.raised`` event if new."""
+        record (None when alerts are disabled) and the ``alert.raised`` event if new.
+        ``condition_since`` is clamped to ``ts``."""
         if not self.enabled:
             return None, []
         for record in self._open.values():
@@ -98,6 +105,7 @@ class AlertManager:
             table_id=table_id,
             zone_id=zone_id,
             raised_at=ts,
+            condition_since=None if condition_since is None else min(condition_since, ts),
         )
         self._open[record.alert_id] = record
         event = make_event(
@@ -109,6 +117,7 @@ class AlertManager:
             table_id=table_id,
             zone_id=zone_id,
             severity=record.severity,
+            condition_since_ts=record.condition_since,
         )
         return record, [event]
 
@@ -200,6 +209,7 @@ class AlertManager:
                 ack_via=r.ack_via,
                 resolved_at=None,
                 resolve_reason=None,
+                condition_since_ts=r.condition_since,
             )
             for r in self.open_alerts()
         ]
@@ -215,6 +225,7 @@ class AlertManager:
                     "table_id": r.table_id,
                     "zone_id": r.zone_id,
                     "raised_at": r.raised_at,
+                    "condition_since": r.condition_since,
                     "status": r.status.value,
                 }
                 for r in self.open_alerts()

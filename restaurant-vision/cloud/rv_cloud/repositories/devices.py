@@ -68,6 +68,7 @@ class DeviceRepository:
         cpu_pct: float,
         mem_mb: float,
         outbox_depth: int,
+        local_url: str | None = None,
     ) -> None:
         """Store a heartbeat unless a newer one (by edge ``ts``) is already stored."""
         row = self.get_health(device_id)
@@ -82,6 +83,7 @@ class DeviceRepository:
         row.cpu_pct = cpu_pct
         row.mem_mb = mem_mb
         row.outbox_depth = outbox_depth
+        row.local_url = local_url
 
     def add_pairing_code(self, code: str, expires_at: float, now: float) -> PairingCode:
         pairing = PairingCode(

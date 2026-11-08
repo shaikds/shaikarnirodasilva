@@ -11,6 +11,14 @@ Threads:
   ``LiveState`` for thread-safe reads;
 * the cloud sync thread (:mod:`rv_edge.runtime.sync`).
 
+``start(threaded=False)`` runs nothing in the background instead: the caller drives the engine
+deterministically with :meth:`EdgeRuntime.step` (one frame per camera, then analytics, acks,
+config changes, timers and heartbeats on the runtime clock) and the cloud sync with
+``runtime.sync.run_once()``. The end-to-end test uses this with a manual simulator clock.
+
+Runtime-owned pipeline options: every camera's ``SourceSpec.options["track_id_ttl_h"]`` is set
+from the site's ``Thresholds.track_id_ttl_h`` (a change restarts the camera pipelines).
+
 The camera pipeline factory and the analytics engine builder are injected (tests pass fakes);
 by default they are imported lazily from ``rv_edge.vision.factory`` and
 ``rv_edge.analytics.engine``.
@@ -18,6 +26,7 @@ by default they are imported lazily from ``rv_edge.vision.factory`` and
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import importlib
 import logging
@@ -26,10 +35,10 @@ import queue
 import threading
 import time
 from collections import deque
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future
 from dataclasses import dataclass, field
-from typing import Any, Generic, Protocol, TypeVar, cast, runtime_checkable
+from typing import Any, Generic, Protocol, TypeVar, cast
 
 import httpx
 from rv_contracts import (
@@ -67,6 +76,7 @@ from .bus import EventBus, LocalBroadcastSink, LogSink, OutboxSink
 from .clock import SystemClock
 from .config_store import ConfigStore
 from .governor import ResourceGovernor
+from .netinfo import resolve_local_url
 from .outbox import Outbox
 from .pairing import pair as pair_device
 from .secrets_store import SecretsStore
@@ -79,6 +89,8 @@ log = logging.getLogger(__name__)
 UNCONFIGURED_SITE_ID = "unconfigured"
 LOCAL_DEVICE_ID = "edge-local"
 """Device id reported before the edge is paired."""
+LOCAL_URL_TTL_S = 60.0
+"""How long a detected LAN URL is reused before it is looked up again (DHCP changes)."""
 
 T = TypeVar("T")
 
@@ -87,18 +99,6 @@ class EngineBuilder(Protocol):
     """Signature of ``rv_edge.analytics.engine.build_analytics_engine``."""
 
     def __call__(self, config: SiteConfig, *, clock: Clock) -> AnalyticsEngine: ...
-
-
-@runtime_checkable
-class SnapshotCapable(Protocol):
-    """Optional ``CameraPipeline`` extension used for setup snapshots and uniform calibration.
-
-    ``snapshot()`` returns the latest frame processed by ``step()`` (privacy masks applied,
-    RAM only) and every person box detected in it, or None before the first frame. Must be safe
-    to call from another thread while ``step()`` runs.
-    """
-
-    def snapshot(self) -> tuple[Frame, Sequence[Box]] | None: ...
 
 
 class ConfigRejected(ValueError):
@@ -224,6 +224,7 @@ class CameraWorker:
         self._thread = threading.Thread(
             target=self._run, name=f"rv-cam-{camera.camera_id}", daemon=True
         )
+        self._thread_started = False
 
     @property
     def camera_id(self) -> str:
@@ -240,12 +241,18 @@ class CameraWorker:
             return self._latest
 
     def start(self) -> None:
+        self._thread_started = True
         self._thread.start()
 
     def request_stop(self) -> None:
         self._stop.set()
 
     def join(self, timeout: float) -> None:
+        if not self._thread_started:  # manual mode: no thread, just release the pipeline
+            pipeline = self.pipeline
+            if pipeline is not None:
+                self._safe_stop(pipeline)
+            return
         self._thread.join(timeout)
         if self._thread.is_alive():
             # step() is blocked (e.g. a hung RTSP read): stopping the pipeline unblocks it.
@@ -293,6 +300,34 @@ class CameraWorker:
                 self._step_loop(pipeline)
             finally:
                 self._safe_stop(pipeline)
+
+    def pump(self) -> TrackFrame | None:
+        """Manual mode: build the pipeline if needed and process one frame on the caller's
+        thread. Errors are logged and yield None (as in the threaded loop)."""
+        if self._stop.is_set():
+            return None
+        pipeline = self.pipeline
+        if pipeline is None:
+            try:
+                pipeline = self._build()
+                pipeline.start()
+            except Exception as exc:
+                log.error("camera %s: cannot start pipeline: %s", self.camera_id, exc)
+                return None
+            with self._lock:
+                self._pipeline = pipeline
+        try:
+            tf = pipeline.step()
+        except Exception:
+            log.exception("camera %s: step() failed", self.camera_id)
+            return None
+        if tf is None:
+            return None
+        with self._lock:
+            self._latest = tf
+        self._frames.put(tf)
+        self.frames_out += 1
+        return tf
 
     def _step_loop(self, pipeline: CameraPipeline) -> None:
         errors = 0
@@ -400,6 +435,11 @@ class EdgeRuntime:
         self._live: LiveState = empty_live_state()
         self._cameras_lock = threading.Lock()
         self._workers: dict[str, CameraWorker] = {}
+        self._threaded = True
+        self._last_tick = 0.0
+        self._next_heartbeat = 0.0
+        self._next_governor = 0.0
+        self._local_url: tuple[float, str | None] | None = None
 
     # identity ----------------------------------------------------------------------------
     @property
@@ -430,23 +470,44 @@ class EdgeRuntime:
     def dropped_frames(self) -> int:
         return self._frames.dropped
 
+    @property
+    def local_url(self) -> str | None:
+        """The LAN base URL for waiter phones (``settings.local_url`` or derived from the LAN
+        IP and ``settings.local_port``; see :mod:`rv_edge.runtime.netinfo`)."""
+        now = time.monotonic()
+        cached = self._local_url
+        if cached is None or now - cached[0] > LOCAL_URL_TTL_S:
+            url = resolve_local_url(
+                self.settings.local_url, self.settings.local_host, self.settings.local_port
+            )
+            cached = (now, url)
+            self._local_url = cached
+        return cached[1]
+
     # lifecycle ---------------------------------------------------------------------------
-    def start(self) -> None:
-        """Start analytics, cameras and cloud sync. Returns immediately."""
+    def start(self, *, threaded: bool = True) -> None:
+        """Start analytics, cameras and cloud sync. Returns immediately.
+
+        ``threaded=False``: start nothing in the background; drive the engine with
+        :meth:`step` and the cloud sync with ``sync.run_once()`` (see module docstring)."""
         if self._started:
             return
         self._started = True
-        self.governor.lower_priority()
-        ResourceGovernor.configure_threads()
-        self._analytics_thread = threading.Thread(
-            target=self._analytics_loop, name="rv-analytics", daemon=True
-        )
-        self._analytics_thread.start()
+        self._threaded = threaded
+        if threaded:
+            self.governor.lower_priority()
+            ResourceGovernor.configure_threads()
+            self._analytics_thread = threading.Thread(
+                target=self._analytics_loop, name="rv-analytics", daemon=True
+            )
+            self._analytics_thread.start()
+        else:
+            self._loop_init()
         config = self.config
         if config is not None:
             self._control.put(_ConfigRequest(config))
         self.reconcile_cameras()
-        if self.sync is not None:
+        if self.sync is not None and threaded:
             self.sync.start()
         log.info(
             "edge runtime started (site %s, device %s, %d cameras)",
@@ -482,6 +543,21 @@ class EdgeRuntime:
             return dict(self._source_specs)
         return self.secrets.camera_specs()
 
+    def camera_specs(self) -> dict[str, SourceSpec]:
+        """How each camera is opened: the stored cameras, or the injected specs (simulated
+        cameras of ``rv-edge simulate``). Contains secrets (RTSP URLs): never log or send."""
+        return self._specs()
+
+    @staticmethod
+    def _runtime_spec(spec: SourceSpec, config: SiteConfig | None) -> SourceSpec:
+        """``spec`` with the runtime-owned options (``track_id_ttl_h`` from the thresholds)."""
+        if config is None:
+            return spec
+        ttl = float(config.thresholds.track_id_ttl_h)
+        if spec.options.get("track_id_ttl_h") == ttl:
+            return spec
+        return dataclasses.replace(spec, options={**spec.options, "track_id_ttl_h": ttl})
+
     def _factory(self) -> CameraPipelineFactory:
         if self._pipeline_factory is None:
             self._pipeline_factory = default_pipeline_factory()
@@ -514,6 +590,7 @@ class EdgeRuntime:
                 spec = specs.get(camera.camera_id)
                 if not camera.enabled or spec is None:
                     continue
+                spec = self._runtime_spec(spec, config)
                 masks = config.privacy_masks_for(camera.camera_id)
                 desired[camera.camera_id] = (camera, spec, masks, (camera, spec, masks, uniform))
         with self._cameras_lock:
@@ -536,7 +613,8 @@ class EdgeRuntime:
                     self._frames,
                     self.governor,
                 )
-                worker.start()
+                if self._threaded:
+                    worker.start()
                 workers[camera_id] = worker
             self._workers = workers
 
@@ -574,6 +652,7 @@ class EdgeRuntime:
         if spec is None:
             raise KeyError(camera_id)
         config = self.config
+        spec = self._runtime_spec(spec, config)
         camera = next(
             (c for c in (config.cameras if config else []) if c.camera_id == camera_id), None
         )
@@ -598,11 +677,10 @@ class EdgeRuntime:
 
     @staticmethod
     def _capture_from(pipeline: CameraPipeline, tf: TrackFrame | None, spec: SourceSpec) -> Capture:
-        if isinstance(pipeline, SnapshotCapable):
-            got = pipeline.snapshot()
-            if got is not None:
-                frame, boxes = got
-                return Capture(frame, list(boxes), spec.kind)
+        got = pipeline.snapshot()
+        if got is not None:
+            frame, boxes = got
+            return Capture(frame, list(boxes), spec.kind)
         boxes = [t.box for t in tf.tracks] if tf is not None else []
         return Capture(None, boxes, spec.kind)
 
@@ -728,6 +806,7 @@ class EdgeRuntime:
             cpu_pct=round(_finite(sample.cpu_pct), 1),
             mem_mb=round(_finite(sample.mem_mb), 1),
             outbox_depth=self.outbox_depth(),
+            local_url=self.local_url,
         )
 
     def live_snapshot(self) -> LiveSnapshot:
@@ -761,41 +840,77 @@ class EdgeRuntime:
             cpu_pct=round(_finite(sample.cpu_pct), 1),
             mem_mb=round(_finite(sample.mem_mb), 1),
             outbox_depth=self.outbox_depth(),
+            local_url=self.local_url,
         )
 
     # analytics thread --------------------------------------------------------------------
-    def _analytics_loop(self) -> None:
+    def step(self) -> int:
+        """Manual mode (``start(threaded=False)``): apply queued acks and config changes, read
+        one frame from every camera, run analytics on them, then tick the timers and emit a
+        heartbeat when due (both on the runtime clock). Returns the number of frames
+        processed. Call it from one thread only."""
+        if not self.running or self._threaded:
+            raise RuntimeError("step() needs a runtime started with threaded=False")
+        self._drain_control()
+        with self._cameras_lock:
+            workers = list(self._workers.values())
+        for worker in workers:
+            worker.pump()
+        processed = 0
+        while (tf := self._frames.get(timeout=0.0)) is not None:
+            self._process_frame(tf)
+            processed += 1
+        self._run_timers()
+        return processed
+
+    def _timer_now(self) -> float:
+        """Heartbeat/governor schedule: wall time in threaded mode, runtime clock in manual."""
+        return time.monotonic() if self._threaded else self.clock.now()
+
+    def _loop_init(self) -> None:
         self.governor.update()
-        last_tick = self.clock.now()
-        next_heartbeat = time.monotonic()
-        next_governor = time.monotonic() + self._governor_interval
+        self._last_tick = self.clock.now()
+        start = self._timer_now()
+        self._next_heartbeat = start
+        self._next_governor = start + self._governor_interval
+
+    def _analytics_loop(self) -> None:
+        self._loop_init()
         while not self._stop.is_set():
             self._drain_control()
             tf = self._frames.get(timeout=0.05)
-            if tf is not None and self._engine is not None:
-                events = self._engine_call(self._engine.on_track_frame, tf)
-                if events:
-                    self.bus.publish_all(events)
-                    self._refresh_live()
-            now = self.clock.now()
-            if now < last_tick:
-                last_tick = now
-            if now - last_tick >= self._tick_interval:
-                last_tick = now
-                if self._engine is not None:
-                    self.bus.publish_all(self._engine_call(self._engine.on_tick, now))
-                    self._refresh_live()
-            mono = time.monotonic()
-            if mono >= next_governor:
-                next_governor = mono + self._governor_interval
-                self.governor.update()
-            if mono >= next_heartbeat:
-                next_heartbeat = mono + self._heartbeat_interval
-                try:
-                    self.bus.publish(self.make_heartbeat())
-                except Exception:
-                    log.exception("heartbeat failed")
+            if tf is not None:
+                self._process_frame(tf)
+            self._run_timers()
         self._fail_pending_control()
+
+    def _process_frame(self, tf: TrackFrame) -> None:
+        if self._engine is None:
+            return
+        events = self._engine_call(self._engine.on_track_frame, tf)
+        if events:
+            self.bus.publish_all(events)
+            self._refresh_live()
+
+    def _run_timers(self) -> None:
+        now = self.clock.now()
+        if now < self._last_tick:
+            self._last_tick = now
+        if now - self._last_tick >= self._tick_interval:
+            self._last_tick = now
+            if self._engine is not None:
+                self.bus.publish_all(self._engine_call(self._engine.on_tick, now))
+                self._refresh_live()
+        mono = self._timer_now()
+        if mono >= self._next_governor:
+            self._next_governor = mono + self._governor_interval
+            self.governor.update()
+        if mono >= self._next_heartbeat:
+            self._next_heartbeat = mono + self._heartbeat_interval
+            try:
+                self.bus.publish(self.make_heartbeat())
+            except Exception:
+                log.exception("heartbeat failed")
 
     def _engine_call(self, fn: Callable[[T], list[EdgeEvent]], arg: T) -> list[EdgeEvent]:
         try:

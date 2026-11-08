@@ -1,0 +1,25 @@
+# Tool settings for the backend end-to-end test (not a package; it uses the 4 installed ones).
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["conftest", "rv_cloud", "rv_edge"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["pywebpush", "pywebpush.*", "py_vapid", "py_vapid.*"]
+ignore_missing_imports = true

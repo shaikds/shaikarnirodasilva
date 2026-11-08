@@ -5,6 +5,8 @@ adds the scheme, URL-encoded credentials, host and port. The analysis uses the *
 (low resolution, low bitrate) by default.
 
 Credentials must never be logged: pass every URL through :func:`redact_url` before logging it.
+:func:`parse_rtsp_url` is the inverse of :func:`rtsp_url` for display: it returns only the
+non-secret parts (brand, host, port, channel, substream), never the user info.
 """
 
 from __future__ import annotations
@@ -87,6 +89,7 @@ BRANDS: dict[str, BrandTemplate] = {
 }
 
 GENERIC = "generic"
+DEFAULT_PORTS = {"rtsp": 554, "rtsps": 322, "http": 80, "https": 443}
 
 _BRAND_HINTS: tuple[tuple[str, str], ...] = (
     ("hikvision", "hikvision"),
@@ -189,3 +192,59 @@ def redact_url(url: str) -> str:
         [(k, REDACTED if k.lower() in _SECRET_QUERY_KEYS else v) for k, v in pairs], safe="*"
     )
     return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+
+
+@dataclass(frozen=True, slots=True)
+class RtspParts:
+    """Non-secret parts of a camera URL. ``brand``/``channel``/``substream`` are None when the
+    path matches no brand template (a custom path)."""
+
+    host: str
+    port: int
+    brand: str | None = None
+    channel: int | None = None
+    substream: bool | None = None
+
+
+def _template_pattern(template: BrandTemplate) -> re.Pattern[str]:
+    tokens = sorted({template.main_token, template.sub_token}, key=len, reverse=True)
+    stream = "|".join(re.escape(t) for t in tokens)
+    pattern = re.escape(template.path)
+    pattern = pattern.replace(re.escape("{ch}"), r"(?P<ch>[1-9]\d*)")
+    pattern = pattern.replace(re.escape("{st}"), f"(?P<st>{stream})")
+    return re.compile(pattern)
+
+
+_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (key, _template_pattern(t))
+    for key, t in sorted(BRANDS.items(), key=lambda item: item[0] == GENERIC)  # generic last
+)
+
+
+def parse_rtsp_url(url: str) -> RtspParts | None:
+    """Host, port and (when the path matches a brand template) brand, channel and substream of
+    a camera URL. None for non-network URLs (file paths). Never returns credentials."""
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return None
+    scheme = parts.scheme.lower()
+    host = parts.hostname
+    if scheme not in DEFAULT_PORTS or not host:
+        return None
+    port = port or DEFAULT_PORTS[scheme]
+    path = parts.path or "/"
+    if parts.query:
+        path += "?" + parts.query
+    for key, pattern in _PATTERNS:
+        match = pattern.fullmatch(path)
+        if match is None:
+            continue
+        template = BRANDS[key]
+        substream: bool | None = None
+        if template.sub_token != template.main_token:
+            substream = match.group("st") == template.sub_token
+        channel = int(match.group("ch")) if "ch" in match.groupdict() else None
+        return RtspParts(host=host, port=port, brand=key, channel=channel, substream=substream)
+    return RtspParts(host=host, port=port)

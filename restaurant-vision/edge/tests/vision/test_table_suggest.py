@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 import random
 from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
+from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -11,6 +13,7 @@ from pydantic import TypeAdapter
 from rv_contracts import Anchor, Detection, Frame, Polygon
 from rv_contracts.geometry import anchor_point, point_in_polygon, polygon_area
 
+from rv_edge.vision import table_suggest
 from rv_edge.vision.detectors import (
     DEFAULT_MODEL_DIR,
     build_detector,
@@ -28,6 +31,7 @@ from rv_edge.vision.table_suggest import (
     COCO_COUCH,
     COCO_DINING_TABLE,
     DEFAULT_PARAMS,
+    SUGGEST_MODEL_NAME,
     MultiClassDetector,
     SuggestParams,
     TableSuggestion,
@@ -39,6 +43,7 @@ from rv_edge.vision.table_suggest import (
     simplify,
     suggest_tables,
     suggest_tables_in_frame,
+    suggestion_model_path,
 )
 
 from .fakes import pixel_frame, synthetic_frame
@@ -505,7 +510,10 @@ def test_real_yolox_tiny_on_a_synthetic_dining_room() -> None:
     try:
         detector = default_table_detector(TINY)
         shared = build_detector("yolox", TINY, threads=inference_threads(), shared=True)
-        assert detector is shared  # reuses the camera pipelines' ONNX session
+        if suggestion_model_path(TINY) == TINY:
+            assert detector is shared  # reuses the camera pipelines' ONNX session
+        else:  # yolox_s is downloaded: a private, better-on-furniture session
+            assert detector is not shared
         frame = pixel_frame(dining_scene())
         raw = detector.detect_classes(frame, [COCO_DINING_TABLE, COCO_CHAIR], score_thr=0.05)
         assert set(raw) == {COCO_DINING_TABLE, COCO_CHAIR}
@@ -519,3 +527,18 @@ def test_real_yolox_tiny_on_a_synthetic_dining_room() -> None:
         assert isinstance(detector, YoloxOnnxDetector)
     finally:
         clear_shared_detectors()
+
+
+def test_suggestions_prefer_yolox_s_when_downloaded(tmp_path: Path) -> None:
+    tiny = tmp_path / "yolox_tiny.onnx"
+    tiny.write_bytes(b"x")
+    alone = tmp_path / "other" / "custom.onnx"
+    alone.parent.mkdir()
+    alone.write_bytes(b"x")
+    with patch.object(table_suggest, "DEFAULT_MODEL_DIR", tmp_path / "nowhere"):
+        assert suggestion_model_path(tiny) == tiny  # no yolox_s: the runtime model
+        (tmp_path / SUGGEST_MODEL_NAME).write_bytes(b"x")
+        assert suggestion_model_path(tiny) == tmp_path / SUGGEST_MODEL_NAME
+        assert suggestion_model_path(alone) == alone
+    with patch.object(table_suggest, "DEFAULT_MODEL_DIR", tmp_path):
+        assert suggestion_model_path(alone) == tmp_path / SUGGEST_MODEL_NAME

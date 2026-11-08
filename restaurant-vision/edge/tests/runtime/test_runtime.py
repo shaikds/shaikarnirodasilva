@@ -252,3 +252,64 @@ def test_drop_oldest_queue() -> None:
         q.put(i)
     assert q.dropped == 2
     assert [q.get(0), q.get(0), q.get(0), q.get(0)] == [2, 3, 4, None]
+
+
+def test_manual_mode_is_deterministic_and_threadless(make_runtime: Build) -> None:
+    clock = ManualClock()
+    runtime, factory, holder = make_runtime(clock=clock, heartbeat_interval_s=30.0)
+    sink = RecordingSink()
+    runtime.bus.subscribe(sink)
+    runtime.start(threaded=False)
+    names = {t.name for t in threading.enumerate()}
+    assert not any(n == "rv-analytics" or n.startswith("rv-cam-") for n in names)
+    assert runtime.step() == 2  # one frame per camera, on this thread
+    engine = holder.engine
+    assert {tf.camera_id for tf in engine.frames} == {CAM_DINING, CAM_ENTRANCE}
+    assert engine.threads == {threading.current_thread().name}
+    assert len(sink.of_type("edge.heartbeat")) == 1  # first heartbeat at start
+    clock.advance(1.0)
+    runtime.step()
+    assert engine.ticks == [clock.now()]
+    clock.advance(28.5)
+    runtime.step()
+    assert len(sink.of_type("edge.heartbeat")) == 1  # heartbeats follow the runtime clock
+    clock.advance(1.0)
+    runtime.step()
+    assert len(sink.of_type("edge.heartbeat")) == 2
+    # acks queued from other threads are applied by the next step
+    runtime.ack_alert(ALERT_ID, via=AckVia.LOCAL, wait=False)
+    runtime.step()
+    assert engine.acks and engine.acks[0][0] == ALERT_ID
+    runtime.stop()
+    assert all(p.stopped for p in factory.built)
+
+
+def test_manual_step_needs_manual_mode(make_runtime: Build) -> None:
+    runtime, _, _ = started(make_runtime)
+    try:
+        runtime.step()
+    except RuntimeError as exc:
+        assert "threaded=False" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected RuntimeError")
+
+
+def test_track_id_ttl_follows_the_thresholds(make_runtime: Build, config: SiteConfig) -> None:
+    runtime, factory, _ = started(make_runtime)
+    wait_until(lambda: len(factory.built) == 2)
+    assert {p.spec.options["track_id_ttl_h"] for p in factory.built} == {24.0}
+    data = config.model_dump()
+    data["thresholds"]["track_id_ttl_h"] = 6
+    runtime.apply_local_config(SiteConfig.model_validate(data))
+    wait_until(lambda: len(factory.built) == 4)  # both pipelines rebuilt
+    assert [p.spec.options["track_id_ttl_h"] for p in factory.built[2:]] == [6.0, 6.0]
+    assert all(p.stopped for p in factory.built[:2])
+
+
+def test_heartbeat_and_device_status_carry_the_local_url(
+    make_runtime: Build, settings: Any
+) -> None:
+    settings.local_url = "http://10.1.2.3:8787/"
+    runtime, _, _ = make_runtime(heartbeat_interval_s=0.05)
+    assert runtime.make_heartbeat().local_url == "http://10.1.2.3:8787"
+    assert runtime.device_status().local_url == "http://10.1.2.3:8787"

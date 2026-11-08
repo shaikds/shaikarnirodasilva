@@ -8,8 +8,9 @@ and incident response. Commands assume the Docker deployment of the cloud
 
 **Cloud**
 
-- `GET /healthz` returns `{"status": "ok", "version": ...}`. The image's Docker healthcheck
-  polls it every 10 s; point the load balancer and uptime monitor at it as well.
+- `GET /healthz` (also `GET /api/v1/healthz`) returns `{"status": "ok", "version": ...}`. The
+  image's Docker healthcheck polls it every 10 s; point the load balancer and uptime monitor at
+  it as well.
 - Logs are JSON on stdout (`RV_LOG_JSON=true`), one access line per request with a request id,
   without client IPs. Alert on bursts of 5xx and on `unhandled error`.
 - One uvicorn worker per container: realtime fan-out and rate limits are per process. To scale
@@ -71,6 +72,23 @@ code and the camera credentials.
 
 Docker demo database: `docker compose -f deploy/docker-compose.yml exec db pg_dump -U rv -Fc rv
 > rv.dump`.
+
+### Data retention
+
+The cloud deletes old data by itself (every `RV_RETENTION_INTERVAL_S`, default 6 h, first run a
+minute after startup; `0` turns it off):
+
+| Setting | Default | Deletes |
+|---|---|---|
+| `RV_RETENTION_RAW_EVENTS_DAYS` | 90 | raw edge events (`events`), processed edge commands, expired pairing codes |
+| `RV_RETENTION_METRICS_DAYS` | 400 | metric snapshots, queue facts, alerts, table sessions (what reports read) |
+
+Latest-state rows (live table state, occupancy, queues, device health) are kept. Run it by hand,
+or from cron when the periodic task is off: `python -m rv_cloud.tools.retention [--dry-run]`
+(also `--raw-events-days`, `--metrics-days`, `--database-url`). Deleting is idempotent, so several
+workers running it is harmless. These defaults are the periods stated in `docs/compliance`;
+change both together. The ROI response-time baseline (first 7 days after install) ages out with
+the metrics horizon.
 
 ## 4. Secret rotation
 

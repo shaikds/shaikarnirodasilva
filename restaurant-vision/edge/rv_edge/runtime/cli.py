@@ -5,7 +5,10 @@
 * ``rv-edge discover``: ONVIF camera discovery on the LAN.
 * ``rv-edge check``: estimate how many cameras this PC can handle.
 * ``rv-edge simulate --scenario PATH [--speed 20] [--cloud URL] [--seed 0]``: run the engine on
-  a simulator scenario (``rv_sim``) with the simulated detector and the LAN API.
+  a simulator scenario (``rv_sim``) with the simulated detector and the LAN API. The scenario
+  is moved to start now (``--rebase-to-now``, the default) so live timers and today's shift
+  report work in demos; ``--no-rebase-to-now`` keeps the scenario's own date and time for
+  reproducible runs.
 
 Every command accepts ``--config`` (YAML settings), ``--data-dir`` and ``--log-level``.
 """
@@ -19,7 +22,8 @@ import logging
 import signal
 import sys
 import threading
-from collections.abc import Callable, Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -36,6 +40,8 @@ from .secrets_store import SecretsStore
 from .settings import EdgeSettings, load_settings
 
 if TYPE_CHECKING:
+    import httpx
+
     from .runtime import EdgeRuntime
 
 log = logging.getLogger("rv_edge")
@@ -76,6 +82,12 @@ def build_parser() -> argparse.ArgumentParser:
     sim.add_argument("--port", type=int, help="LAN API port")
     sim.add_argument("--duration", type=float, help="stop after this many wall-clock seconds")
     sim.add_argument("--no-api", action="store_true", help="do not serve the LAN API")
+    sim.add_argument(
+        "--rebase-to-now",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="start the scenario at the current time (default) instead of its own date/time",
+    )
     return parser
 
 
@@ -133,10 +145,26 @@ def _wait(duration_s: float | None) -> None:
         signal.signal(signal.SIGTERM, previous)
 
 
+def with_listen_address(
+    settings: EdgeSettings, host: str | None, port: int | None
+) -> EdgeSettings:
+    """``settings`` with the LAN API address from ``--host``/``--port`` (port 0, an ephemeral
+    test port, is ignored), so the reported ``local_url`` matches what is served."""
+    update: dict[str, Any] = {}
+    if host:
+        update["local_host"] = host
+    if port:
+        update["local_port"] = port
+    if not update:
+        return settings
+    return EdgeSettings.model_validate({**settings.model_dump(), **update})
+
+
 def cmd_run(args: argparse.Namespace, settings: EdgeSettings) -> int:
     from .runtime import EdgeRuntime
 
     ResourceGovernor.configure_threads()  # before any model is loaded
+    settings = with_listen_address(settings, args.host, args.port)
     runtime = EdgeRuntime(settings)
     runtime.start()
     try:
@@ -172,39 +200,55 @@ def cmd_check(args: argparse.Namespace, settings: EdgeSettings) -> int:
     return 0 if result.get("available") and not result.get("error") else 1
 
 
-def cmd_simulate(args: argparse.Namespace, settings: EdgeSettings) -> int:
-    from .runtime import EdgeRuntime
+class SimulationSetupError(RuntimeError):
+    """``rv-edge simulate`` cannot start (pairing failed, or --cloud without pairing)."""
 
-    try:
-        adapter = importlib.import_module("rv_sim.adapter")
-    except ImportError as exc:
-        print(f"error: the simulator (rv_sim.adapter) is not available: {exc}", file=sys.stderr)
-        return 1
-    sim = adapter.load_simulation(args.scenario, speed=args.speed, seed=args.seed)
-    # Keep simulated state apart from a real deployment unless --data-dir was given.
-    data_dir = args.data_dir or settings.data_dir / "simulate"
-    sim_settings = EdgeSettings.model_validate(
+
+def simulation_settings(
+    settings: EdgeSettings, *, data_dir: Path | None = None, cloud_url: str | None = None
+) -> EdgeSettings:
+    """Settings for a simulated run: simulated detector, and state kept apart from a real
+    deployment (``<data_dir>/simulate``) unless ``data_dir`` is given."""
+    return EdgeSettings.model_validate(
         {
             **settings.model_dump(),
-            "data_dir": data_dir,
+            "data_dir": data_dir or settings.data_dir / "simulate",
             "detector_backend": "simulated",
-            "cloud_url": args.cloud or settings.cloud_url,
+            "cloud_url": cloud_url or settings.cloud_url,
         }
     )
-    secrets = SecretsStore(sim_settings.data_dir)
-    use_cloud = bool(args.cloud)
-    if use_cloud and args.pair_code:
+
+
+def build_simulated_runtime(
+    sim: Any,
+    settings: EdgeSettings,
+    *,
+    cloud_url: str | None = None,
+    pair_code: str | None = None,
+    transport: httpx.BaseTransport | None = None,
+    **runtime_options: Any,
+) -> EdgeRuntime:
+    """The (not yet started) ``EdgeRuntime`` that ``rv-edge simulate`` runs on ``sim`` (an
+    ``rv_sim.adapter.Simulation``), with ``settings`` from :func:`simulation_settings`.
+
+    With ``cloud_url`` the edge pairs first (``pair_code``) or must already be paired; the
+    scenario's config is re-keyed to the paired site and pushed to the cloud. ``transport``
+    and ``runtime_options`` are passed to pairing and to ``EdgeRuntime`` (tests, e2e).
+    Raises :class:`SimulationSetupError`."""
+    from .runtime import EdgeRuntime
+
+    secrets = SecretsStore(settings.data_dir)
+    use_cloud = bool(cloud_url)
+    if cloud_url and pair_code:
         try:
-            pair(args.cloud, args.pair_code, secrets)
+            pair(cloud_url, pair_code, secrets, transport=transport)
         except PairingError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 1
+            raise SimulationSetupError(str(exc)) from exc
     if use_cloud and not secrets.paired:
-        print("error: --cloud needs a paired edge; add --pair-code CODE", file=sys.stderr)
-        return 1
+        raise SimulationSetupError("--cloud needs a paired edge; add --pair-code CODE")
 
     config: SiteConfig = sim.config
-    store = ConfigStore(sim_settings.data_dir)
+    store = ConfigStore(settings.data_dir)
     if use_cloud:
         if secrets.site_id and config.site_id != secrets.site_id:
             # The scenario's site id is arbitrary; events must carry the paired site's id.
@@ -213,18 +257,47 @@ def cmd_simulate(args: argparse.Namespace, settings: EdgeSettings) -> int:
     else:
         store.replace(config)
 
-    specs = {
+    specs: Mapping[str, SourceSpec] = {
         camera_id: SourceSpec(camera_id, "simulated", options={"source": source})
         for camera_id, source in sim.sources.items()
     }
-    runtime = EdgeRuntime(
-        sim_settings,
+    return EdgeRuntime(
+        settings,
         clock=sim.clock,
         secrets=secrets,
         config_store=store,
         source_specs=specs,
         enable_sync=use_cloud,
+        cloud_transport=transport,
+        **runtime_options,
     )
+
+
+def cmd_simulate(args: argparse.Namespace, settings: EdgeSettings) -> int:
+    try:
+        adapter = importlib.import_module("rv_sim.adapter")
+    except ImportError as exc:
+        print(f"error: the simulator (rv_sim.adapter) is not available: {exc}", file=sys.stderr)
+        return 1
+    options: dict[str, Any] = {"speed": args.speed, "seed": args.seed}
+    if args.rebase_to_now:
+        options["start_ts"] = time.time()
+    sim = adapter.load_simulation(args.scenario, **options)
+    sim_settings = simulation_settings(
+        with_listen_address(settings, args.host, args.port),
+        data_dir=args.data_dir,
+        cloud_url=args.cloud,
+    )
+    try:
+        runtime = build_simulated_runtime(
+            sim, sim_settings, cloud_url=args.cloud, pair_code=args.pair_code
+        )
+    except SimulationSetupError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        close = getattr(sim, "close", None)
+        if callable(close):
+            close()
+        return 1
     runtime.start()
     try:
         if args.no_api:

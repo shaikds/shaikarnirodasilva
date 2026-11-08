@@ -14,8 +14,8 @@ DEV_DEPS := ruff mypy pytest pytest-asyncio pytest-cov types-PyYAML types-psutil
 MODEL    ?= tiny
 COMPOSE  := docker compose -f deploy/docker-compose.yml --profile demo
 
-.PHONY: help setup venv python web models test test-python test-web lint lint-python lint-web \
-        schema smoke demo-local up down logs compliance-pdfs
+.PHONY: help setup venv python web models test test-python test-e2e test-web lint lint-python \
+        lint-web schema smoke demo-local up down logs compliance-pdfs
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -40,13 +40,16 @@ web: ## pnpm install for the web workspace
 models: $(PY) ## Download and verify the YOLOX model (MODEL=tiny|s|all, default tiny)
 	$(PY) edge/scripts/fetch_models.py --model $(MODEL)
 
-test: test-python test-web ## All tests
+test: test-python test-e2e test-web ## All tests
 
 test-python: ## pytest for contracts, edge, cloud and simulator
 	cd contracts && ../$(BIN)/pytest -q
 	cd edge && ../$(BIN)/pytest -q --cov=rv_edge.analytics --cov-report=term --cov-fail-under=80
 	cd cloud && ../$(BIN)/pytest -q --cov=rv_cloud --cov-report=term --cov-fail-under=80
 	cd simulator && ../$(BIN)/pytest -q
+
+test-e2e: ## Backend end to end: real cloud app + edge runtime on smoke.yaml (~20 s)
+	cd e2e && ../$(BIN)/pytest -q
 
 test-web: ## vitest for the web workspace
 	cd web && pnpm test
@@ -55,11 +58,13 @@ lint: lint-python lint-web schema ## All linters, type checks and the contracts 
 
 lint-python: ## ruff + mypy (strict where configured)
 	$(BIN)/ruff check $(PACKAGES)
+	cd e2e && ../$(BIN)/ruff check .
 	$(BIN)/ruff check --line-length 100 --select E,F,W,I,B,UP,SIM deploy
 	cd contracts && ../$(BIN)/mypy rv_contracts
 	cd edge && ../$(BIN)/mypy rv_edge && ../$(BIN)/mypy --strict rv_edge/analytics
 	cd cloud && ../$(BIN)/mypy rv_cloud
 	cd simulator && ../$(BIN)/mypy rv_sim
+	cd e2e && ../$(BIN)/mypy .
 
 lint-web: ## tsc + eslint for the web workspace
 	cd web && pnpm typecheck && pnpm lint

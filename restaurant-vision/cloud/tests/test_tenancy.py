@@ -1,6 +1,14 @@
 """Tenancy isolation and role limits (architecture 7.2)."""
 
-from rv_contracts import AlertKind, AlertRaised, AlertSeverity, Role, new_uuid7
+from rv_contracts import (
+    AlertKind,
+    AlertRaised,
+    AlertSeverity,
+    EdgeHeartbeat,
+    Role,
+    make_event,
+    new_uuid7,
+)
 from support import Account, Api, event
 
 
@@ -136,11 +144,22 @@ def test_waiter_limited_to_alerts(api: Api, owner: Account) -> None:
     assert (
         api.client.get(f"/api/v1/sites/{site_id}/alerts?status=all", headers=h).status_code == 403
     )
+    # Devices: a reduced view, enough for the waiter app's offline link (contracts 1.1).
+    beat = make_event(
+        EdgeHeartbeat, site_id, api.clock.now(), device_id="edge-1", version="0.1.0",
+        cameras=[], cpu_pct=12.0, mem_mb=300.0, outbox_depth=3,
+        local_url="http://192.168.1.20:8787",
+    ).model_dump(mode="json")
+    api.post_events(device, beat)
+    (dev,) = api.client.get(f"/api/v1/sites/{site_id}/devices", headers=h).json()
+    assert (dev["online"], dev["local_url"]) == (True, "http://192.168.1.20:8787")
+    assert (dev["version"], dev["cpu_pct"], dev["outbox_depth"], dev["cameras"]) == (
+        None, None, None, []
+    )
     for path in (
         "",
         "/live",
         "/config",
-        "/devices",
         "/metrics/summary",
         "/tables/stats",
         "/reports/shift?date=2026-11-06",

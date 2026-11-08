@@ -202,6 +202,13 @@ def test_summary_timeseries_and_table_stats(api: Api, owner: Account) -> None:
     assert series("queue") == [3.0, None, None, None]
     assert series("walkaways") == [1.0, 1.0, 0.0, 0.0]
     assert series("response_time") == [90.0, 300.0, None, None]
+    # contracts 1.1: p90 per bucket, and queue wait per bucket (by seating time)
+    assert series("response_time_p90") == pytest.approx([114.0, 300.0, None, None])
+    assert series("queue_wait") == [150.0, None, None, None]
+    one_day = api.client.get(
+        f"{base}/metrics/timeseries?metric=queue_wait&bucket=1d&from={t}&to={t + 3600}", headers=h
+    ).json()
+    assert [p["value"] for p in one_day["points"]] == [s["queue_avg_wait_s"]]
     r = api.client.get(f"{base}/metrics/timeseries?metric=bogus", headers=h)
     assert r.status_code == 422
 

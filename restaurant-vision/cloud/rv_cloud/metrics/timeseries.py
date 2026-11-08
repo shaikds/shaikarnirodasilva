@@ -4,8 +4,8 @@ from collections.abc import Callable, Iterable, Sequence
 
 from rv_contracts import AlertKind, TimeseriesPoint
 
-from .records import AlertRecord, SnapshotPoint
-from .stats import mean, median
+from .records import AlertRecord, QueueRecord, SnapshotPoint
+from .stats import mean, median, percentile
 from .timebuckets import bucket_index
 
 
@@ -59,6 +59,19 @@ def count_series(
     return _points(starts, [float(len(g)) for g in groups])
 
 
+def queue_wait_series(
+    starts: Sequence[float], to_ts: float, seated: Iterable[QueueRecord]
+) -> list[TimeseriesPoint]:
+    """Mean ``waited_s`` of ``queue.seated`` per bucket, by seating time (the per-bucket
+    ``MetricsSummary.queue_avg_wait_s``). None for buckets where nobody was seated."""
+    groups = _group(starts, to_ts, ((q.ts, q.waited_s) for q in seated if q.kind == "seated"))
+    return _points(starts, [mean(g) for g in groups])
+
+
+def p90(values: Iterable[float]) -> float | None:
+    return percentile(values, 90.0)
+
+
 def response_series(
     starts: Sequence[float],
     to_ts: float,
@@ -66,7 +79,8 @@ def response_series(
     reducer: Callable[[Iterable[float]], float | None] = median,
     kind: str = AlertKind.WAITER_NEEDED.value,
 ) -> list[TimeseriesPoint]:
-    """Median raised -> resolved seconds of ``kind`` alerts per bucket, by raise time."""
+    """Raised -> resolved seconds of ``kind`` alerts per bucket (median by default, see
+    ``reducer``), by raise time."""
     items = (
         (a.raised_at, a.response_s) for a in alerts if a.kind == kind and a.response_s is not None
     )

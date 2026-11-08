@@ -18,7 +18,7 @@ Non-negotiables (from decisions):
 - **Anonymous.** No face recognition, no re-identification across cameras or days, no appearance embeddings, no audio. Video frames live only in RAM on the edge machine. Nothing but anonymous events and numbers leaves the restaurant.
 - **Table and zone level only.** No metric is attributed to an individual employee. Alert acknowledgements do not record who pressed the button.
 - **Works offline.** Waiter alerts keep working over the restaurant LAN when the internet is down. The edge buffers events and syncs later.
-- **Permissive licenses only.** No AGPL/GPL code or weights (no Ultralytics, no BoxMOT, no YOLOv6). Detector: YOLOX (Apache-2.0) via ONNX Runtime (MIT). Tracker: ByteTrack via `supervision` (MIT).
+- **Permissive licenses only.** No AGPL/GPL code or weights (no Ultralytics, no BoxMOT, no YOLOv6). Detector: YOLOX (Apache-2.0) via ONNX Runtime (MIT). Tracker: our own clean-room ByteTrack (numpy + scipy, BSD), after `supervision` dropped its ByteTrack in 0.31.
 - **Multi-tenant SaaS.** Organization -> sites (branches) -> users with roles.
 - **Hebrew (RTL) and English** in every UI.
 
@@ -116,7 +116,7 @@ class Track:       track_id: str            # random, camera-scoped, rotated at 
                    hints: AppearanceHints
 
 @dataclass(frozen=True, slots=True)
-class Frame:       camera_id: str; ts: float; index: int; width: int; height: int; image: Any  # numpy array, never persisted
+class Frame:       camera_id: str; ts: float; index: int; width: int; height: int; image: Any  # numpy array (never persisted), or a SyntheticImage from rv_sim (boxes, no pixels)
 
 @dataclass(frozen=True, slots=True)
 class TrackFrame:  camera_id: str; ts: float; index: int; tracks: tuple[Track, ...]
@@ -136,22 +136,31 @@ class AnalyticsModule(Protocol):
 
 ### 5.3 Events (`EdgeEvent`, discriminated union on `type`)
 
-Common fields: `event_id` (UUID v7 string, idempotency key), `site_id`, `ts` (epoch seconds, float), `schema_version`.
+Common fields: `event_id` (UUID v7 string, idempotency key), `site_id`, `ts` (epoch seconds, float), `schema_version` (currently `1.1`; readers accept any minor of their major).
 
 | type | payload |
 |---|---|
-| `table.state_changed` | `table_id, from_state, to_state, guest_count, session_id` |
+| `table.state_changed` | `table_id, from_state, to_state, guest_count, session_id, since_ts \| None` |
 | `table.session_closed` | `table_id, session_id, seated_at, left_at, max_guests, first_visit_delay_s \| None, visits, bussing_delay_s \| None` |
-| `alert.raised` | `alert_id, kind: waiter_needed\|checkin_needed\|bussing_needed\|long_queue, table_id \| None, zone_id \| None, severity: info\|warn\|urgent` |
+| `alert.raised` | `alert_id, kind: waiter_needed\|checkin_needed\|bussing_needed\|long_queue, table_id \| None, zone_id \| None, severity: info\|warn\|urgent, condition_since_ts \| None` |
 | `alert.acknowledged` | `alert_id, ack_at, via: cloud\|local` (no user identity, by design) |
 | `alert.resolved` | `alert_id, resolved_at, reason: staff_visit\|state_change\|manual\|expired` |
 | `queue.snapshot` | `zone_id, people, parties_est, longest_wait_s, avg_wait_s` |
 | `queue.seated` | `zone_id, waited_s` |
 | `queue.walkaway` | `zone_id, waited_s, party_size_est` |
 | `occupancy.snapshot` | `guests, tables_occupied, tables_total, staff_on_floor` |
-| `edge.heartbeat` | `device_id, version, cameras: [{camera_id, status: ok\|degraded\|offline, fps, last_frame_age_s}], cpu_pct, mem_mb, outbox_depth` |
+| `edge.heartbeat` | `device_id, version, cameras: [{camera_id, status: ok\|degraded\|offline, fps, last_frame_age_s}], cpu_pct, mem_mb, outbox_depth, local_url \| None` |
 
 Table states: `empty`, `seated` (guests present, no staff visit yet), `attended`, `needs_bussing`. (`waiting_for_check` arrives in phase 2 with POS.)
+
+Contracts 1.1 additions (all optional, backward compatible):
+
+- **Backdated times.** The edge confirms states with a delay (`seat_confirm_s`, `leave_confirm_s`, median lag), so `ts` is the confirmation time. `TableStateChanged.since_ts` is when the state really began (first guest sighting, waiter arrival, last guest sighting) and `AlertRaised.condition_since_ts` / `AlertView.condition_since_ts` when the condition began (seated for `waiter_needed`, last staff attention for `checkin_needed`, guests left for `bussing_needed`). Staff apps show "waiting 3:20" from these, falling back to `ts` / `raised_at`.
+- **`local_url`** in `edge.heartbeat` and `DeviceStatus`: the edge's LAN base URL (derived from the LAN IP and port, or `RV_EDGE_LOCAL_URL`), for the waiter app's offline link `<local_url>/local-alerts`.
+- `occupancy.snapshot.staff_on_floor`: staff tracks seen on the floor summed over cameras (approximate, anonymous; overlapping cameras count twice; staff areas included).
+- **WebSocket messages**: the cloud `WS /ws` and the edge `WS /local/ws` send `EdgeEvent | LiveSnapshotMessage` (`{type: "live.snapshot", snapshot: LiveSnapshot}`); cloud close codes are `WsCloseCode` 4400 / 4401 / 4403.
+- **`AlertPush`**: the Web Push body `{alert_id, site_id, kind, severity, table_label, raised_at, condition_since_ts}`.
+- Time series metrics `queue_wait` and `response_time_p90`.
 
 `rv_contracts` exposes `export_json_schema(path)` producing `web/packages/shared/src/contracts/schema.json`, and TS types are generated from it (`json-schema-to-typescript`).
 
@@ -161,10 +170,12 @@ Table states: `empty`, `seated` (guests present, no staff visit yet), `attended`
 
 1. `FrameSource`: `RtspSource` (OpenCV/FFmpeg, substream, reconnect with backoff, drops to target fps), `FileSource` (mp4 loop, honors fps, used for demos), `SimulatedSource` (from `rv_sim`, frames carry ground-truth detections, no pixels).
 2. Privacy masks: polygons are filled black **before** detection.
-3. `Detector`: `YoloxOnnxDetector` (ONNX Runtime; OpenVINO execution provider when available on Intel; CPU fallback; person class only; letterbox + NMS), `SimulatedDetector` (passes ground truth with configurable noise). Factory chooses from config. Models fetched by `scripts/fetch_models.py` (YOLOX-tiny/-s ONNX from the official Megvii release, SHA-256 pinned) into `edge/models/` (git-ignored).
-4. `ByteTrackTracker` wrapping `supervision.ByteTrack`; IDs mapped to random camera-scoped strings, the mapping table rotates at `track_id_ttl_h`.
+3. `Detector`: `YoloxOnnxDetector` (ONNX Runtime; OpenVINO execution provider when available on Intel; CPU fallback; person class only; letterbox + NMS), `SimulatedDetector` (passes ground truth with configurable noise). Factory chooses from config. Models fetched by `scripts/fetch_models.py` (YOLOX-tiny/-s ONNX from the official Megvii release, SHA-256 pinned) into `edge/models/` (git-ignored). The default model is **`yolox_tiny`** (about 23 ms per frame; 6 cameras at 5 fps on 4 cores); `yolox_s` is more accurate and about 3x slower.
+4. `ByteTrackTracker` on our own clean-room ByteTrack core (`vision/bytetrack.py`: constant-velocity Kalman filter + two-stage IoU matching with `scipy.optimize.linear_sum_assignment`, same defaults as `supervision.ByteTrack` <= 0.30); IDs mapped to random camera-scoped strings, the mapping table rotates at `track_id_ttl_h` (the runtime passes `Thresholds.track_id_ttl_h` in `SourceSpec.options`).
 5. Appearance hints: optional uniform-color score from an HSV histogram of the torso crop vs the site's calibrated uniform. A scalar, computed and discarded in RAM.
 6. Output: `TrackFrame` to the analytics queue.
+
+The `CameraPipeline` seam (`rv_edge/interfaces.py`) is `start / stop / step / health / snapshot`; `snapshot()` returns the latest masked frame and its person boxes (RAM only) for the blurred setup snapshot, table suggestions and uniform calibration.
 
 `ResourceGovernor`: lowers process priority (nice / BelowNormal on Windows), caps inference threads, and adaptively skips frames when CPU > 70%, so a shared office or POS PC stays responsive.
 
@@ -186,11 +197,11 @@ Table states: `empty`, `seated` (guests present, no staff visit yet), `attended`
 
 ### 6.3 Runtime
 
-- `EdgeRuntime` (Facade): loads config, builds sources/detectors/modules via factories, runs camera threads + analytics loop + tick timer, publishes events to sinks.
+- `EdgeRuntime` (Facade): loads config, builds sources/detectors/modules via factories, runs camera threads + analytics loop + tick timer, publishes events to sinks. `start(threaded=False)` runs nothing in the background: `step()` reads one frame per camera and runs analytics, acks, timers and heartbeats on the runtime clock, and the caller runs `sync.run_once()`. The end-to-end test drives the whole edge deterministically this way.
 - `Outbox` (SQLite, WAL): every event persisted before send; `CloudSync` sends batches (<= 500) to `POST /api/v1/edge/events`, exponential backoff, marks delivered; polls `GET /api/v1/edge/commands` every 2 s for acks/config changes; fetches config with ETag.
 - Pairing: `rv-edge pair --code ABC123 --cloud https://...` → `POST /api/v1/edge/pair` → device token saved in the local secrets file (0600 / user-only ACL).
-- Local API (FastAPI on `0.0.0.0:8787`, LAN only): serves `edge-ui` static build, `GET /local/health`, `GET /local/state`, `WS /local/ws` (events), `POST /local/alerts/{id}/ack`, and setup endpoints protected by a local setup PIN: cameras (list, ONVIF discover, add/update with RTSP URL + credentials stored locally), `GET /local/cameras/{id}/snapshot.jpg` (people blurred, generated on demand, never stored), zones and tables (`GET/PUT /local/config` → pushed to cloud), uniform calibration, `GET /local/coverage` (tables without a primary zone).
-- CLI `rv-edge`: `run`, `pair`, `discover`, `check` (system capacity estimate: how many cameras this PC can handle), `simulate --scenario ...`.
+- Local API (FastAPI on `0.0.0.0:8787`, LAN only): serves `edge-ui` static build, `GET /local/health`, `GET /local/state`, `GET /local/setup/status` (incl. `uniform_calibrated`), `WS /local/ws` (events plus a `live.snapshot` on connect and every few seconds), `POST /local/alerts/{id}/ack`, and setup endpoints protected by a local setup PIN (header `X-Setup-Pin`; 429 with `Retry-After` after repeated wrong PINs): `GET /local/setup/pin-check` (204), cameras (list incl. simulated ones, with only non-secret address parts: brand, host, port, channel, substream; ONVIF discover; add/update with RTSP URL + credentials stored locally), `GET /local/cameras/{id}/snapshot.jpg` (people blurred, generated on demand, never stored), **`POST /local/cameras/{id}/suggest-tables`** (automatic table detection: COCO dining table + chairs from YOLOX on the current frame, preferring `yolox_s` when downloaded; returns polygons and seat estimates only), zones and tables (`GET/PUT /local/config` → pushed to cloud), uniform calibration, `GET /local/coverage` (tables without a primary zone).
+- CLI `rv-edge`: `run`, `pair`, `discover`, `check` (system capacity estimate: how many cameras this PC can handle), `simulate --scenario ...` (moves the scenario to start now with `--rebase-to-now`, the default, so live timers and today's shift report work in demos; `--no-rebase-to-now` for reproducible runs).
 - Packaging: Linux systemd unit + Dockerfile (mini PC), Windows service (pywin32 service wrapper + PowerShell installer), PyInstaller spec for a single installer later.
 
 ## 7. Cloud (`rv_cloud`)
@@ -199,7 +210,9 @@ FastAPI, SQLAlchemy 2.0 + Alembic, Postgres (SQLite for tests), PyJWT, argon2-cf
 
 ### 7.1 Data model
 
-`Organization(id, name, plan)`, `Site(id, org_id, name, timezone, locale, currency, avg_check_per_guest, config_json, config_version)`, `User(id, org_id, email, password_hash, name, locale)`, `Membership(user_id, org_id, role: owner|manager|waiter, site_id | None)`, `Device(id, site_id, token_hash, last_seen_at, version)`, `PairingCode(code, site_id, expires_at)`, `Event(event_id PK, site_id, type, ts, payload_json)` (raw, idempotent), `TableSession(...)`, `Alert(alert_id, site_id, kind, table_id, raised_at, acked_at, resolved_at, resolve_reason)`, `QueueEvent(...)`, `MetricSnapshot(site_id, ts, kind, payload)`, `PushSubscription(id, site_id, endpoint, keys_json)`, `Command(id, site_id, kind, payload, created_at)`.
+`Organization(id, name, plan)`, `Site(id, org_id, name, timezone, locale, currency, avg_check_per_guest, config_json, config_version)`, `User(id, org_id, email, password_hash, name, locale)`, `Membership(user_id, org_id, role: owner|manager|waiter, site_id | None)`, `Device(id, site_id, token_hash, last_seen_at, version)`, `PairingCode(code, site_id, expires_at)`, `Event(event_id PK, site_id, type, ts, payload_json)` (raw, idempotent), `TableSession(...)`, `Alert(alert_id, site_id, kind, table_id, raised_at, condition_since_ts, acked_at, resolved_at, resolve_reason)`, `QueueEvent(...)`, `MetricSnapshot(site_id, ts, kind, payload)`, `PushSubscription(id, site_id, endpoint, keys_json)`, `Command(id, site_id, kind, payload, created_at)`.
+
+Live projections: `TableStateCurrent(state, since_ts (backdated), changed_at (ordering))`, `DeviceHealth(..., local_url)`, latest occupancy and queue rows.
 
 Every repository method takes the caller's tenancy scope; cross-tenant access is impossible by construction and covered by tests.
 
@@ -207,7 +220,7 @@ Every repository method takes the caller's tenancy scope; cross-tenant access is
 
 - `owner`: all sites in the org, settings, users, devices, reports, branch comparison.
 - `manager`: one site: live view, alerts, reports, thresholds.
-- `waiter`: one site: open alerts and ack only.
+- `waiter`: one site: open alerts and ack only (plus the site's edge `local_url` and online flag, for the offline link).
 
 ### 7.3 REST API (`/api/v1`, JWT bearer for users, device token for edges)
 
@@ -215,7 +228,7 @@ Auth and tenancy
 - `POST /auth/signup` (creates org + owner) · `POST /auth/login` · `POST /auth/refresh` · `GET /me`
 - `GET /orgs/{org_id}` · `GET|POST /orgs/{org_id}/sites` · `GET|PATCH /sites/{site_id}` (name, timezone, locale, currency, avg_check_per_guest, thresholds, modules)
 - `GET|POST /orgs/{org_id}/users` · `PATCH|DELETE /orgs/{org_id}/users/{user_id}`
-- `POST /sites/{site_id}/devices/pairing-code` · `GET /sites/{site_id}/devices`
+- `POST /sites/{site_id}/devices/pairing-code` · `GET /sites/{site_id}/devices` · `DELETE /sites/{site_id}/devices/{device_id}` (owner: unpair)
 
 Edge
 - `POST /edge/pair {code}` → `{device_id, site_id, token}`
@@ -226,19 +239,23 @@ Edge
 Live and alerts
 - `GET /sites/{site_id}/config` · `GET /sites/{site_id}/live` (tables, occupancy, queue, open alerts, device health)
 - `GET /sites/{site_id}/alerts?status=open|all&from&to` · `POST /alerts/{alert_id}/ack`
-- `WS /ws?token=&site_id=` (live events for dashboards and the waiter app)
+- `WS /ws?token=&site_id=` (live events for dashboards and the waiter app; owners and managers first get a `live.snapshot`; waiters get `alert.*` only; close codes 4400/4401/4403)
 
 Metrics and reports
 - `GET /sites/{site_id}/metrics/summary?from&to` → KPIs: guests served, sessions, avg dwell, turnover per table, waiter response p50/p90, bussing delay p50, queue avg/max wait, walkaways, estimated lost revenue
-- `GET /sites/{site_id}/metrics/timeseries?metric=occupancy|queue|walkaways|response_time&bucket=15m&from&to`
+- `GET /sites/{site_id}/metrics/timeseries?metric=occupancy|queue|walkaways|response_time|response_time_p90|queue_wait&bucket=5m|15m|1h|1d&from&to`
 - `GET /sites/{site_id}/tables/stats?from&to`
 - `GET /sites/{site_id}/reports/shift?date=YYYY-MM-DD` → shift report + ROI block
 - `GET /orgs/{org_id}/reports/compare?from&to` (owners)
 
 Push
-- `GET /push/vapid-public-key` · `POST /push/subscriptions` · `DELETE /push/subscriptions/{id}`
+- `GET /push/vapid-public-key` · `POST /push/subscriptions` · `DELETE /push/subscriptions/{id}`; each push body is an `AlertPush`.
 
-Health: `GET /healthz`.
+Health: `GET /healthz` (also `/api/v1/healthz`).
+
+### 7.3.1 Data retention
+
+Configurable, applied by a periodic task in the app (`RV_RETENTION_INTERVAL_S`, default 6 h) or `python -m rv_cloud.tools.retention`: raw edge events (and processed commands) after `RV_RETENTION_RAW_EVENTS_DAYS` (default 90), derived metrics (snapshots, queue facts, alerts, table sessions) after `RV_RETENTION_METRICS_DAYS` (default 400). Latest-state rows are kept. The compliance pack states these defaults.
 
 ### 7.4 ROI model (all labeled as estimates in the UI)
 
@@ -263,7 +280,7 @@ Floor plan geometry: the dashboard shows a schematic floor plan (tables position
 
 - Scenario YAML: cameras, tables (with polygons), queue zone, entrance line, staff zone, arrival rate profile per hour, party sizes, waiter response distribution, dwell distribution, walk-away behavior, detector noise (jitter, missed detections for seated guests, false positives).
 - Produces per-camera `Frame`s with ground-truth detections attached (no pixels needed) for `SimulatedSource` + `SimulatedDetector`, plus a ground-truth event log.
-- `SimClock` with acceleration (e.g. 20x) for live demos.
+- `SimClock` with acceleration (e.g. 20x) for live demos; `load_simulation(..., start_ts=)` moves a run to another start time (used by `rv-edge simulate --rebase-to-now`) without changing the service.
 - `rv-sim eval`: runs the edge analytics on a scenario and scores emitted events against ground truth (state transitions, alert timing, walkaway precision/recall, occupancy MAE). This is how analytics accuracy is tracked before a real pilot.
 
 ## 10. Privacy by design (enforced in code and tests)
@@ -279,7 +296,7 @@ Floor plan geometry: the dashboard shows a schematic floor plan (tables position
 
 - Python: `ruff check`, `mypy` (strict on contracts and analytics), `pytest` with coverage >= 80% on `rv_edge.analytics` and `rv_cloud`.
 - Web: `tsc --noEmit`, `eslint`, `vitest`.
-- End-to-end: docker-compose (postgres + cloud + web + edge with a simulator scenario) and a Python e2e test that runs the edge against the cloud app and asserts alerts, acks and metrics.
+- End-to-end: docker-compose (postgres + cloud + web + edge with a simulator scenario) and `e2e/test_backend_e2e.py` (`make test-e2e`, in CI): the real cloud app (SQLite, migrated) and the real edge runtime in manual mode on `smoke.yaml`, one manual clock, an in-process transport with a simulated outage and a lost response. It asserts pairing, idempotent ingest, store-and-forward, the live view, `waiter_needed` with `condition_since_ts`, cloud ack → command → edge → `alert.acknowledged`, push, metrics/time series/shift report consistency and the device's `local_url`. About 20 s.
 - CI: `.github/workflows/restaurant-vision.yml`, path-filtered to `restaurant-vision/**`.
 
 ## 11.1 Build plan (sub-agents)

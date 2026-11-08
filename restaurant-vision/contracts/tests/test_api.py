@@ -39,6 +39,7 @@ from rv_contracts import (
     TableState,
     TableStats,
     Thresholds,
+    TimeseriesMetric,
     TimeseriesPoint,
     api,
 )
@@ -226,3 +227,54 @@ def test_no_identity_fields_outside_account_models() -> None:
             continue
         for field in obj.model_fields:
             assert not any(word in field for word in IDENTITY_WORDS), f"{name}.{field}"
+
+
+# --------------------------------------------------------------------------- 1.1 additions
+
+
+def test_alert_view_condition_since_is_optional() -> None:
+    assert _alert().condition_since_ts is None
+    view = _alert(condition_since_ts=TS - 200)
+    assert view.model_dump(mode="json")["condition_since_ts"] == TS - 200
+
+
+def test_device_status_local_url() -> None:
+    base = {
+        "device_id": "d1", "version": "0.1.0", "last_seen_at": TS, "online": True,
+        "cameras": [], "cpu_pct": 1.0, "mem_mb": 2.0, "outbox_depth": 0,
+    }
+    assert DeviceStatus.model_validate(base).local_url is None
+    status = DeviceStatus.model_validate({**base, "local_url": "http://10.0.0.5:8787"})
+    assert status.local_url == "http://10.0.0.5:8787"
+
+
+def test_live_snapshot_message_round_trip() -> None:
+    snapshot = LiveSnapshot(site_id="s1", ts=TS, tables=[], occupancy=None, queues=[],
+                            open_alerts=[_alert()], devices=[])
+    message = api.LiveSnapshotMessage(snapshot=snapshot)
+    data = message.model_dump(mode="json")
+    assert data["type"] == api.LIVE_SNAPSHOT_MESSAGE_TYPE == "live.snapshot"
+    assert api.LiveSnapshotMessage.model_validate_json(message.model_dump_json()) == message
+    with pytest.raises(ValidationError):
+        api.LiveSnapshotMessage.model_validate({**data, "type": "table.state_changed"})
+
+
+def test_ws_close_codes() -> None:
+    assert [int(c) for c in api.WsCloseCode] == [4400, 4401, 4403]
+
+
+def test_alert_push_is_anonymous() -> None:
+    push = api.AlertPush(alert_id="a1", site_id="s1", kind=AlertKind.WAITER_NEEDED,
+                         severity=AlertSeverity.URGENT, table_label="3", raised_at=TS,
+                         condition_since_ts=TS - 200)
+    assert set(push.model_dump()) == {
+        "alert_id", "site_id", "kind", "severity", "table_label", "raised_at",
+        "condition_since_ts",
+    }
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        api.AlertPush.model_validate({**push.model_dump(), "user_id": "u1"})
+
+
+def test_new_timeseries_metrics() -> None:
+    assert TimeseriesMetric("queue_wait") is TimeseriesMetric.QUEUE_WAIT
+    assert TimeseriesMetric("response_time_p90") is TimeseriesMetric.RESPONSE_TIME_P90

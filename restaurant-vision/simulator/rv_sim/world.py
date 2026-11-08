@@ -16,6 +16,12 @@ their seats -> dwell -> walk out (across the entrance line outward) and vanish. 
 whose wait exceeds its patience walks back to the door without crossing the line. Waiters idle
 in the staff area and walk the aisle to tables.
 
+Time base: ``start_ts`` is the scenario's ``run.date`` + ``run.start`` in the site's time zone,
+unless overridden (``rv-edge simulate --rebase-to-now`` passes the current time so live timers
+and today's shift report work in demos). The override only shifts timestamps: the arrival plan
+(``hourly_rates`` by local hour) is computed on the scenario's own clock, so a rebased run is
+the same service at another time.
+
 Randomness: independent ``random.Random`` streams per purpose (arrivals, parties, staff,
 dynamics), so the same seed always gives the same world. Detector noise for a frame comes from
 a stream keyed by ``(seed, camera, tick)``, so observations do not depend on who reads which
@@ -304,14 +310,19 @@ class World:
     """The simulated restaurant (see module docstring). Thread-safe for concurrent readers:
     :meth:`advance_to_tick` and :meth:`observe` hold :attr:`lock`."""
 
-    def __init__(self, scenario: Scenario, *, seed: int = 0) -> None:
+    def __init__(
+        self, scenario: Scenario, *, seed: int = 0, start_ts: float | None = None
+    ) -> None:
         self.scenario = scenario
         self.config = scenario.site_config
         self.geometry = scenario.geometry
         self.seed = scenario.seed + seed
         self.fps = scenario.run.fps
         self.dt = 1.0 / self.fps
-        self.start_ts = scenario.start_epoch()
+        self.scenario_start_ts = scenario.start_epoch()
+        """The scenario's own start (``run.date`` + ``run.start``); plans arrivals."""
+        self.start_ts = self.scenario_start_ts if start_ts is None else float(start_ts)
+        """Time of tick 0: the scenario start, or the ``start_ts`` override."""
         self.end_tick = max(1, round(scenario.run.duration * self.fps))
         self.end_ts = self.start_ts + self.end_tick * self.dt
         self.lock = threading.RLock()
@@ -453,7 +464,7 @@ class World:
         out: list[float] = []
         t = 0.0
         while t < end:
-            local = dt.datetime.fromtimestamp(round(self.start_ts + t, 3), tz)
+            local = dt.datetime.fromtimestamp(round(self.scenario_start_ts + t, 3), tz)
             into_hour = local.minute * 60 + local.second + local.microsecond / 1e6
             boundary = t + 3600.0 - into_hour
             rate = rates.get(local.hour, 0.0)

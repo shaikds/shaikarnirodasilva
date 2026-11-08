@@ -31,7 +31,19 @@ Semantics where architecture 5.3/6.2 leave room (the edge analytics implements t
 * ``edge.heartbeat`` every :data:`HEARTBEAT_INTERVAL_S`; the cloud shows a device offline when
   no heartbeat arrived for :data:`DEVICE_OFFLINE_AFTER_S`. ``last_frame_age_s`` is None when a
   camera has not delivered a frame since the edge started (architecture lists it as required;
-  a number cannot express "never").
+  a number cannot express "never"). ``local_url`` is the edge's LAN address (waiter app's
+  offline link); it is not a secret and carries no credentials.
+* Backdated times (1.1). The edge confirms a state only after a delay (e.g. guests must be
+  present ``seat_confirm_s``), so ``ts`` is the *confirmation* time. ``since_ts`` /
+  ``condition_since_ts`` carry the moment the state or condition really began, taken from the
+  evidence (first guest sighting, waiter arrival, last guest sighting). Always ``<= ts``; None
+  from 1.0 producers, in which case readers fall back to ``ts``. Use them for timers ("waiting
+  3:20" since seating), never for ordering.
+
+Delivery: ``POST /edge/events`` (batches) and the WebSockets. Both the cloud ``WS /ws`` and the
+edge ``WS /local/ws`` send one JSON object per message: an :data:`EdgeEvent` or a
+:class:`~rv_contracts.api.LiveSnapshotMessage` (``type == "live.snapshot"``, full state), so
+clients dispatch on ``type``.
 """
 
 from collections.abc import Mapping
@@ -161,11 +173,17 @@ class TableStateChanged(EdgeEventBase):
     """Smoothed number of guests at the table at transition time."""
     session_id: Id
     """The seating this transition belongs to (see module docstring)."""
+    since_ts: EpochSeconds | None = None
+    """When ``to_state`` really began (backdated to the evidence, ``<= ts``): first guest
+    sighting for ``seated``, waiter arrival for ``attended``, last guest sighting for
+    ``needs_bussing``. None if unknown (1.0 producers): use ``ts``. Since 1.1."""
 
     @model_validator(mode="after")
     def _check_states(self) -> Self:
         if self.from_state is self.to_state:
             raise ValueError("from_state and to_state must differ")
+        if self.since_ts is not None and self.since_ts > self.ts:
+            raise ValueError("since_ts must not be after ts")
         return self
 
 
@@ -202,6 +220,11 @@ class AlertRaised(EdgeEventBase):
     table_id: Id | None = None
     zone_id: Id | None = None
     severity: AlertSeverity
+    condition_since_ts: EpochSeconds | None = None
+    """When the underlying condition began (``<= ts``): ``waiter_needed`` = guests seated,
+    ``checkin_needed`` = last staff attention, ``bussing_needed`` = guests left,
+    ``long_queue`` = the threshold was crossed. Staff apps show "waiting 3:20" from here, not
+    from ``ts``. None if unknown (1.0 producers): use ``ts``. Since 1.1."""
 
     @model_validator(mode="after")
     def _check_target(self) -> Self:
@@ -209,6 +232,8 @@ class AlertRaised(EdgeEventBase):
             raise ValueError(f"{self.kind.value} alerts need a table_id")
         if self.kind is AlertKind.LONG_QUEUE and self.zone_id is None:
             raise ValueError("long_queue alerts need a zone_id")
+        if self.condition_since_ts is not None and self.condition_since_ts > self.ts:
+            raise ValueError("condition_since_ts must not be after ts")
         return self
 
 
@@ -272,6 +297,10 @@ class OccupancySnapshot(EdgeEventBase):
     """Tables in ``seated`` or ``attended``."""
     tables_total: Count
     staff_on_floor: Count
+    """Staff tracks currently seen on the floor, summed over cameras (role ``staff``: uniform
+    colour or first seen in a ``staff_area``). Anonymous and approximate: a person seen by two
+    overlapping cameras counts twice, and staff inside ``staff_area`` zones (kitchen pass,
+    service station) are included. Never attributed to a person."""
 
     @model_validator(mode="after")
     def _check_tables(self) -> Self:
@@ -305,6 +334,9 @@ class EdgeHeartbeat(EdgeEventBase):
     """Process resident memory in MiB."""
     outbox_depth: Count
     """Events persisted but not yet delivered to the cloud."""
+    local_url: str | None = Field(default=None, max_length=256, pattern=r"^https?://\S+$")
+    """The edge's LAN base URL (e.g. ``http://192.168.1.20:8787``), for the waiter app's
+    offline link (``<local_url>/local-alerts``). None if unknown. Since 1.1."""
 
 
 EdgeEvent = Annotated[

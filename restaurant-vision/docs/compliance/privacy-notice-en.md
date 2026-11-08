@@ -47,8 +47,9 @@ any information that describes a person.
 processing agreement. Nobody sells this data.
 
 **How long we keep it.** Video: not kept at all (it exists only for a fraction of a second in
-the computer's memory). Anonymous events and reports: [RETENTION, e.g. 24 months], then deleted
-or kept only as aggregated statistics.
+the computer's memory). Anonymous events: 90 days; reports and statistics derived from them:
+400 days (about 13 months) [adjust if your agreement sets other periods]; then deleted
+automatically.
 
 **Security cameras.** Our security camera system ([CCTV RETENTION, e.g. "keeps recordings for
 up to 30 days"]) is separate and is described in [LINK / SECTION]. Restaurant Vision does not

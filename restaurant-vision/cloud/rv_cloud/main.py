@@ -4,6 +4,8 @@
 for :func:`create_app` (tests, tools) has no side effects.
 """
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -14,6 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
@@ -29,10 +32,42 @@ from .logsetup import AccessLogMiddleware, configure_logging
 from .push import Notifier, NullNotifier, WebPushNotifier
 from .realtime import EventBroker, InMemoryBroker
 from .security import PasswordHasher, RateLimiter, TokenService
+from .services.retention import apply_retention
 from .state import AppState
 
 API_PREFIX = "/api/v1"
+RETENTION_FIRST_RUN_S = 60.0
+"""Delay of the first periodic retention run after startup (at most the interval)."""
 log = logging.getLogger(__name__)
+
+
+def run_retention(state: AppState) -> int:
+    """Apply the retention policy once with the app's settings and clock. Rows deleted."""
+    settings = state.settings
+    with state.session_factory() as session:
+        result = apply_retention(
+            session,
+            now=state.clock.now(),
+            raw_events_days=settings.retention_raw_events_days,
+            metrics_days=settings.retention_metrics_days,
+        )
+        session.commit()
+    if result.total:
+        log.info("data retention applied", extra={"deleted": result.deleted})
+    return result.total
+
+
+async def _retention_loop(state: AppState) -> None:
+    """Lightweight periodic retention (see ``Settings.retention_interval_s``)."""
+    interval = state.settings.retention_interval_s
+    delay = min(RETENTION_FIRST_RUN_S, interval)
+    while True:
+        await asyncio.sleep(delay)
+        delay = interval
+        try:
+            await run_in_threadpool(run_retention, state)
+        except Exception:  # keep the loop alive; the next run retries
+            log.exception("data retention run failed")
 
 
 class SPAStaticFiles(StaticFiles):
@@ -135,8 +170,19 @@ def create_app(
         if settings.auto_migrate:
             upgrade_head(engine)
         log.info("rv_cloud started", extra={"version": __version__, "env": settings.environment})
-        yield
-        engine.dispose()
+        retention = (
+            asyncio.create_task(_retention_loop(state))
+            if settings.retention_interval_s > 0
+            else None
+        )
+        try:
+            yield
+        finally:
+            if retention is not None:
+                retention.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await retention
+            engine.dispose()
 
     app = FastAPI(
         title="Restaurant Vision Cloud",

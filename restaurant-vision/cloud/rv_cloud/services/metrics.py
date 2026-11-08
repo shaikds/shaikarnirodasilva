@@ -44,7 +44,12 @@ from ..repositories import (
     SnapshotRepository,
     TableRepository,
 )
-from ..repositories.queues import QUEUE_WALKAWAY, SNAPSHOT_OCCUPANCY, SNAPSHOT_QUEUE
+from ..repositories.queues import (
+    QUEUE_SEATED,
+    QUEUE_WALKAWAY,
+    SNAPSHOT_OCCUPANCY,
+    SNAPSHOT_QUEUE,
+)
 from ..tenancy import SiteScope
 from . import views
 from .auth import CurrentUser
@@ -161,6 +166,13 @@ class MetricsService:
         elif metric is TimeseriesMetric.WALKAWAYS:
             walkaways = QueueRepository(self._session, scope).events(start, end, QUEUE_WALKAWAY)
             points = ts_fn.count_series(starts, end, (w.ts for w in walkaways))
+        elif metric is TimeseriesMetric.QUEUE_WAIT:
+            seated = [q for q in self._queue(scope, start, end) if q.kind == QUEUE_SEATED]
+            points = ts_fn.queue_wait_series(starts, end, seated)
+        elif metric is TimeseriesMetric.RESPONSE_TIME_P90:
+            points = ts_fn.response_series(
+                starts, end, self._alerts(scope, start, end), reducer=ts_fn.p90
+            )
         else:
             points = ts_fn.response_series(starts, end, self._alerts(scope, start, end))
         return Timeseries(

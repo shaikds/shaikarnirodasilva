@@ -170,3 +170,50 @@ def test_heartbeat_last_frame_age_may_be_unknown() -> None:
     event = parse_event(data)
     assert event.type is EventType.EDGE_HEARTBEAT
     assert parse_event(event.model_dump(mode="json")) == event
+
+
+# --------------------------------------------------------------------------- 1.1 additions
+
+
+def test_1_0_events_without_new_fields_still_parse() -> None:
+    """Backward compatibility: a 1.0 producer sends none of the 1.1 fields."""
+    changed = parse_event(_base(
+        "table.state_changed", schema_version="1.0", table_id="t1", from_state="empty",
+        to_state="seated", guest_count=2, session_id="sess-1",
+    ))
+    assert isinstance(changed, TableStateChanged) and changed.since_ts is None
+    raised = parse_event(_base(
+        "alert.raised", schema_version="1.0", alert_id="a1", kind="waiter_needed",
+        table_id="t1", severity="urgent",
+    ))
+    assert isinstance(raised, AlertRaised) and raised.condition_since_ts is None
+    beat = parse_event(_base(
+        "edge.heartbeat", schema_version="1.0", device_id="d1", version="0.1.0", cameras=[],
+        cpu_pct=1, mem_mb=1, outbox_depth=0,
+    ))
+    assert beat.model_dump()["local_url"] is None
+
+
+def test_backdated_times_must_not_be_after_ts() -> None:
+    ok = make_event(TableStateChanged, "s1", 100.0, table_id="t1", from_state=TableState.EMPTY,
+                    to_state=TableState.SEATED, guest_count=2, session_id="sess-1",
+                    since_ts=68.0)
+    assert ok.since_ts == 68.0
+    with pytest.raises(ValidationError, match="since_ts must not be after ts"):
+        make_event(TableStateChanged, "s1", 100.0, table_id="t1", from_state=TableState.EMPTY,
+                   to_state=TableState.SEATED, guest_count=2, session_id="sess-1",
+                   since_ts=101.0)
+    raised = make_event(AlertRaised, "s1", 300.0, alert_id="a1", kind=AlertKind.WAITER_NEEDED,
+                        table_id="t1", severity=AlertSeverity.URGENT, condition_since_ts=120.0)
+    assert raised.condition_since_ts == 120.0
+    with pytest.raises(ValidationError, match="condition_since_ts must not be after ts"):
+        make_event(AlertRaised, "s1", 300.0, alert_id="a1", kind=AlertKind.WAITER_NEEDED,
+                   table_id="t1", severity=AlertSeverity.URGENT, condition_since_ts=301.0)
+
+
+@pytest.mark.parametrize("url", ["192.168.1.2:8787", "ftp://x", "http://a b", "x" * 300])
+def test_heartbeat_local_url_must_be_http(url: str) -> None:
+    data = _base("edge.heartbeat", device_id="d1", version="0.1.0", cameras=[], cpu_pct=1,
+                 mem_mb=1, outbox_depth=0, local_url=url)
+    with pytest.raises(ValidationError):
+        parse_event(data)

@@ -155,6 +155,7 @@ def alert_view(alert: Alert, labels: Mapping[str, str]) -> AlertView:
         ack_via=AckVia(alert.ack_via) if alert.ack_via else None,
         resolved_at=alert.resolved_at,
         resolve_reason=ResolveReason(alert.resolve_reason) if alert.resolve_reason else None,
+        condition_since_ts=alert.condition_since_ts,
     )
 
 
@@ -172,4 +173,5 @@ def device_status(device: Device, health: DeviceHealth | None, now: float) -> De
         cpu_pct=health.cpu_pct if health is not None else None,
         mem_mb=health.mem_mb if health is not None else None,
         outbox_depth=health.outbox_depth if health is not None else None,
+        local_url=health.local_url if health is not None else None,
     )

@@ -33,6 +33,8 @@ EXPECTED = {
     "LiveSnapshot", "CoverageReport", "Estimate", "MetricsSummary", "TimeseriesMetric", "Bucket",
     "TimeseriesPoint", "Timeseries", "TableStats", "RoiBlock", "ShiftReport", "BranchComparison",
     "VapidPublicKey", "PushKeys", "PushSubscriptionIn", "PushSubscriptionOut", "HealthStatus",
+    # 1.1
+    "LiveSnapshotMessage", "AlertPush", "WsCloseCode",
 }
 
 

@@ -87,7 +87,8 @@ reports in the dashboard. Waiters see open table alerts on their phones. [VENDOR
 processes the anonymous data on the restaurant's behalf and has no access to video.
 
 **8. Retention.** No video or images are kept by this system. Anonymous table and zone events
-and reports are kept for [RETENTION, e.g. 24 months].
+are kept for 90 days, and reports derived from them for 400 days (about 13 months) [adjust if
+your agreement sets other periods]; then they are deleted automatically.
 
 **9. The existing security cameras** remain governed by the restaurant's camera policy
 [REFERENCE]. This policy does not widen what the cameras record or who may watch recordings.

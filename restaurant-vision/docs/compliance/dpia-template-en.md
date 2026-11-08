@@ -53,7 +53,7 @@ reuses their video for a new, operational purpose and does not record.
 |---|---|---|---|
 | Live frames | Yes, while in memory (identifiable images) | Edge RAM, milliseconds | None |
 | Person boxes, random track IDs, uniform score, role | Pseudonymous at most; not linkable once frames are gone | Edge RAM, minutes; IDs rotated within 24 h | None |
-| Table, queue and occupancy events; alerts and acknowledgements (no user identity) | No (anonymous, table and zone level) | Edge outbox 7 days after delivery; cloud [RETENTION] | Restaurant managers and waiters; vendor as processor |
+| Table, queue and occupancy events; alerts and acknowledgements (no user identity) | No (anonymous, table and zone level) | Edge outbox 7 days after delivery; cloud: raw events 90 days, derived metrics and reports 400 days (defaults; `RV_RETENTION_RAW_EVENTS_DAYS`, `RV_RETENTION_METRICS_DAYS`) | Restaurant managers and waiters; vendor as processor |
 | Floor config (table labels, zone polygons, privacy masks) | No | Edge and cloud, until changed | Same |
 | Dashboard user accounts (name, email, password hash, role) | Yes | Cloud, while the account exists | Vendor as processor |
 | Waiters' browser push subscriptions (push endpoint and keys) | Yes (device-level) | Cloud, until unsubscribed or expired | Vendor; browser push services (encrypted payload: alert kind and table label only) |
@@ -118,7 +118,7 @@ are in place.
 - [ ] Edge PC: setup PIN set, OS updates on, port 8787 open to the LAN only: [ ]
 - [ ] Dedicated read-only camera account used for RTSP: [ ]
 - [ ] DPA signed with the vendor, country rider [IL / US / AU]: [ ]
-- [ ] Cloud retention period agreed: [ ]
+- [ ] Cloud retention period agreed (defaults: raw events 90 days, metrics and reports 400 days): [ ]
 
 ## 9. Decision and sign-off
 

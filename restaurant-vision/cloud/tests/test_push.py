@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from py_vapid import Vapid
 from rv_contracts import (
     AlertKind,
+    AlertPush,
     AlertRaised,
     AlertResolved,
     AlertSeverity,
@@ -39,7 +40,9 @@ def subscribe(api: Api, user: Account, site_id: str, endpoint: str) -> dict[str,
     return dict(r.json())
 
 
-def raised(site: str, ts: float, alert_id: str, table: str = "t6") -> dict[str, object]:
+def raised(
+    site: str, ts: float, alert_id: str, table: str = "t6", since: float | None = None
+) -> dict[str, object]:
     return event(
         AlertRaised,
         site,
@@ -48,6 +51,7 @@ def raised(site: str, ts: float, alert_id: str, table: str = "t6") -> dict[str, 
         kind=AlertKind.WAITER_NEEDED,
         table_id=table,
         severity=AlertSeverity.WARN,
+        condition_since_ts=since,
     )
 
 
@@ -60,7 +64,7 @@ def test_alert_raised_notifies_site_subscriptions(api: Api, owner: Account) -> N
     api.notifier.gone_endpoints.add("https://push.example.com/gone")
     t = api.clock.now()
     alert_id = new_uuid7()
-    api.post_events(device, raised(site, t, alert_id))
+    api.post_events(device, raised(site, t, alert_id, since=t - 200))
     sent = api.notifier.sent
     assert {target.endpoint for target, _ in sent} == {
         "https://push.example.com/w1",
@@ -71,9 +75,12 @@ def test_alert_raised_notifies_site_subscriptions(api: Api, owner: Account) -> N
         "alert_id": alert_id,
         "site_id": site,
         "kind": "waiter_needed",
+        "severity": "warn",
         "table_label": "6",
         "raised_at": t,
+        "condition_since_ts": t - 200,
     }
+    assert AlertPush.model_validate(payload).alert_id == alert_id  # the contract shape
     target = next(tg for tg, _ in sent if tg.endpoint.endswith("w1"))
     assert (target.p256dh, target.auth) == (KEYS["p256dh"], KEYS["auth"])
     # The gone subscription was deleted; the next alert reaches only the live one.

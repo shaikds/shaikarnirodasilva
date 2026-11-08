@@ -11,7 +11,7 @@ Modules:
 * :mod:`~rv_contracts.config`: ``SiteConfig`` and its parts (5.1).
 * :mod:`~rv_contracts.vision`: hot-path dataclasses and protocols (5.2).
 * :mod:`~rv_contracts.events`: ``EdgeEvent`` union (5.3).
-* :mod:`~rv_contracts.api`: REST payloads (7.3).
+* :mod:`~rv_contracts.api`: REST payloads (7.3), WebSocket messages and the Web Push body.
 * :mod:`~rv_contracts.ids`: UUIDv7.
 * :mod:`~rv_contracts.schema_export`: JSON Schema for TS types.
 * :mod:`~rv_contracts.fixtures`: sample config and events for tests (import it explicitly).
@@ -36,8 +36,10 @@ from ._base import (
     Seconds,
 )
 from .api import (
+    LIVE_SNAPSHOT_MESSAGE_TYPE,
     PAIRING_CODE_PATTERN,
     AlertAckCommand,
+    AlertPush,
     AlertStatus,
     AlertView,
     BranchComparison,
@@ -57,6 +59,7 @@ from .api import (
     FloorPlanItem,
     HealthStatus,
     LiveSnapshot,
+    LiveSnapshotMessage,
     LoginRequest,
     Me,
     MembershipInfo,
@@ -94,6 +97,7 @@ from .api import (
     UserInfo,
     UserUpdate,
     VapidPublicKey,
+    WsCloseCode,
 )
 from .config import (
     CameraConfig,
@@ -271,8 +275,10 @@ __all__ = [
     "make_event",
     "parse_event",
     # api
+    "LIVE_SNAPSHOT_MESSAGE_TYPE",
     "PAIRING_CODE_PATTERN",
     "AlertAckCommand",
+    "AlertPush",
     "AlertStatus",
     "AlertView",
     "BranchComparison",
@@ -292,6 +298,7 @@ __all__ = [
     "FloorPlanItem",
     "HealthStatus",
     "LiveSnapshot",
+    "LiveSnapshotMessage",
     "LoginRequest",
     "Me",
     "MembershipInfo",
@@ -329,6 +336,7 @@ __all__ = [
     "UserInfo",
     "UserUpdate",
     "VapidPublicKey",
+    "WsCloseCode",
     # schema export
     "build_json_schema",
     "export_json_schema",

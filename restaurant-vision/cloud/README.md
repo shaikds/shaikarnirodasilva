@@ -11,7 +11,7 @@ models; see `contracts/rv_contracts/api.py` for the endpoint-to-model map.
 # from restaurant-vision/ (shared venv)
 .venv/bin/python -m rv_cloud.tools.seed_demo          # migrate + demo tenant + pairing codes
 .venv/bin/uvicorn rv_cloud.main:app --reload --port 8000
-# API docs: http://localhost:8000/api/v1/docs   health: /healthz
+# API docs: http://localhost:8000/api/v1/docs   health: /healthz (also /api/v1/healthz)
 ```
 
 The seed tool is idempotent. It creates the org "Demo Restaurant Group" with
@@ -43,6 +43,9 @@ cloud/rv_cloud cloud/tests` · types: `cd cloud && mypy rv_cloud` (strict).
 | `RV_LOGIN_MAX_ATTEMPTS` / `RV_LOGIN_WINDOW_S` | 5 / 300 | failed logins per (IP, email) |
 | `RV_PAIR_MAX_ATTEMPTS` / `RV_PAIR_WINDOW_S` | 10 / 60 | failed pairings per IP |
 | `RV_AUTO_MIGRATE`, `RV_LOG_LEVEL`, `RV_LOG_JSON`, `RV_SIGNUP_PLAN` | `true`, `INFO`, `true`, `pro` | |
+| `RV_RETENTION_RAW_EVENTS_DAYS` | 90 | raw edge events, processed edge commands (and expired pairing codes) are deleted after this |
+| `RV_RETENTION_METRICS_DAYS` | 400 | metric snapshots, queue facts, alerts and table sessions are deleted after this |
+| `RV_RETENTION_INTERVAL_S` | 21600 | how often the app applies retention (first run 1 min after startup); `0` = off, use `python -m rv_cloud.tools.retention` from cron |
 
 Behind a reverse proxy, run uvicorn with `--proxy-headers` so rate limits see client IPs.
 
@@ -58,7 +61,7 @@ rv_cloud/
   realtime/     EventBroker protocol + InMemoryBroker (Redis sketch in broker.py docstring)
   push/         Notifier protocol + WebPushNotifier (pywebpush) + NullNotifier
   integrations/ PosAdapter protocol + NullPosAdapter (phase 2)
-  tools/        seed_demo, gen_vapid
+  tools/        seed_demo, gen_vapid, retention (data retention CLI, also run periodically)
 ```
 
 ## Integration notes
@@ -69,13 +72,17 @@ rv_cloud/
 revoked membership takes effect immediately. Unknown or cross-tenant ids answer 404. A
 known site without the needed role answers 403. Roles: an owner covers all sites; a manager
 has one site (live, alerts, reports, thresholds, floor plan); a waiter has one site
-(`GET /sites/{id}/alerts?status=open`, `POST /alerts/{id}/ack`, push, WS).
+(`GET /sites/{id}/alerts?status=open`, `POST /alerts/{id}/ack`, push, WS, and
+`GET /sites/{id}/devices` reduced to `device_id`, `online`, `last_seen_at` and `local_url` for
+the offline link).
 
-**WebSocket.** `WS /api/v1/ws?token=<access JWT>&site_id=<id>`. Each message is one
-`EdgeEvent` JSON object. A cloud ack also produces an `alert.acknowledged` with `via: "cloud"`.
-Waiters receive only `alert.*` events. Close codes are 4400 (missing params), 4401 (bad or
-expired token: refresh and reconnect) and 4403 (no access). The token is checked only at
-connect. After a reconnect, re-sync from `GET /sites/{id}/live`.
+**WebSocket.** `WS /api/v1/ws?token=<access JWT>&site_id=<id>`. Each message is one JSON
+object: an `EdgeEvent` or a `LiveSnapshotMessage` (`{"type": "live.snapshot", "snapshot":
+LiveSnapshot}`); dispatch on `type`. Owners and managers get one `live.snapshot` right after
+connecting (so a reconnect re-syncs by itself), then events. A cloud ack also produces an
+`alert.acknowledged` with `via: "cloud"`. Waiters receive only `alert.*` events. Close codes
+(`WsCloseCode`) are 4400 (missing params), 4401 (bad or expired token: refresh and reconnect)
+and 4403 (no access). The token is checked only at connect.
 
 **Edge.** The flow is:
 
@@ -96,14 +103,21 @@ connect. After a reconnect, re-sync from `GET /sites/{id}/live`.
 
 Heartbeats: `last_seen_at` is the cloud receive time of the latest `edge.heartbeat` from that
 device token, and the device is online within `DEVICE_OFFLINE_AFTER_S` (90 s). The cloud
-stores health under the authenticated device. The heartbeat's `device_id` should equal the
-paired `device_id`.
+stores health under the authenticated device, including the edge's LAN address
+(`DeviceStatus.local_url`, for the waiter app's offline link). The heartbeat's `device_id`
+equals the paired `device_id`.
+
+Backdated times (contracts 1.1): `TableStateChanged.since_ts` and
+`AlertRaised.condition_since_ts` carry when a state or condition really began (the edge
+confirms with a delay). The live view's `TableLive.since_ts`, the session's `seated_at` and
+`AlertView.condition_since_ts` use them (falling back to `ts` for 1.0 edges); transitions are
+still ordered by `ts`.
 
 **Push.** The browser gets `GET /api/v1/push/vapid-public-key`, subscribes, then calls
 `POST /api/v1/push/subscriptions {site_id, endpoint, keys}`. A newly raised alert that is
-still unresolved at the end of its ingest batch sends this payload:
-`{alert_id, site_id, kind, table_label, raised_at}`, with no PII. Subscriptions that answer
-404 or 410 are deleted.
+still unresolved at the end of its ingest batch sends an `AlertPush` payload:
+`{alert_id, site_id, kind, severity, table_label, raised_at, condition_since_ts}`, with no
+PII. Subscriptions that answer 404 or 410 are deleted.
 
 ## Design notes and limits
 
@@ -121,3 +135,7 @@ still unresolved at the end of its ingest batch sends this payload:
   use branch comparison (403).
 - `DELETE /sites/{id}/devices/{device_id}` (owner) unpairs a device. This route is an
   addition beyond 7.3.
+- Time series metrics: `occupancy`, `queue`, `walkaways`, `response_time` (p50),
+  `response_time_p90` and `queue_wait` (mean `queue.seated` wait per bucket, by seating time).
+- Data retention: see the settings above and `rv_cloud/services/retention.py`. Latest-state
+  rows are kept; the ROI response-time baseline ages out with `RV_RETENTION_METRICS_DAYS`.

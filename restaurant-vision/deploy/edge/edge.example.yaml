@@ -21,6 +21,10 @@ cloud_url:
 local_host: 0.0.0.0
 local_port: 8787
 
+# LAN address reported to the cloud for the waiter app's offline link. Default: derived from
+# this PC's LAN IP and local_port. Set it behind NAT/Docker port mappings or for a DNS name.
+# local_url: http://192.168.1.20:8787
+
 # Person detector: auto (YOLOX for real cameras, simulated for simulator scenarios),
 # yolox, or simulated.
 detector_backend: auto

@@ -125,6 +125,8 @@ class DeviceHealth(Base):
     cpu_pct: Mapped[float]
     mem_mb: Mapped[float]
     outbox_depth: Mapped[int]
+    local_url: Mapped[str | None] = mapped_column(String(256))
+    """The edge's LAN base URL (``EdgeHeartbeat.local_url``)."""
 
 
 class PairingCode(Base):
@@ -167,6 +169,10 @@ class TableStateCurrent(Base):
     guest_count: Mapped[int]
     session_id: Mapped[str | None] = mapped_column(ID)
     since_ts: Mapped[float]
+    """When the state really began (``TableStateChanged.since_ts``, else the event ``ts``)."""
+    changed_at: Mapped[float | None]
+    """``ts`` of the transition (confirmation time): orders late events. None on rows written
+    before 0002 (``since_ts`` was the event ``ts`` then)."""
 
 
 class TableSession(Base):
@@ -212,6 +218,8 @@ class Alert(Base):
     ack_via: Mapped[str | None] = mapped_column(ENUM)
     resolved_at: Mapped[float | None]
     resolve_reason: Mapped[str | None] = mapped_column(ENUM)
+    condition_since_ts: Mapped[float | None]
+    """When the alert's condition began (``AlertRaised.condition_since_ts``)."""
 
 
 class QueueEvent(Base):

@@ -50,6 +50,7 @@ SETUP_ENDPOINTS = [
     ("GET", "/local/coverage", None),
     ("POST", "/local/uniform/calibrate", {"camera_id": CAM_DINING, "box": [0, 0, 1, 1]}),
     ("POST", "/local/pair", {"code": "ABC123", "cloud_url": "https://c"}),
+    ("GET", "/local/setup/pin-check", None),
 ]
 
 
@@ -154,7 +155,16 @@ def test_pin_lockout(make_api: Callable[..., Api]) -> None:
     api = make_api(guard=PinGuard(max_failures=3, lockout_s=60))
     for _ in range(3):
         assert api.client.get("/local/cameras", headers={"X-Setup-Pin": "1111"}).status_code == 401
-    assert api.client.get("/local/cameras", headers=AUTH).status_code == 429
+    locked = api.client.get("/local/cameras", headers=AUTH)
+    assert locked.status_code == 429
+    assert 1 <= int(locked.headers["Retry-After"]) <= 60
+
+
+def test_pin_check(api: Api) -> None:
+    ok = api.client.get("/local/setup/pin-check", headers=AUTH)
+    assert ok.status_code == 204 and ok.content == b""
+    wrong = api.client.get("/local/setup/pin-check", headers={"X-Setup-Pin": "9999"})
+    assert wrong.status_code == 401
 
 
 def test_setup_pin_can_be_set_once(make_api: Callable[..., Api]) -> None:
@@ -183,6 +193,12 @@ def test_camera_credentials_are_write_only(make_api: Callable[..., Api]) -> None
     for text in (created.text, listed.text):
         assert "s3cret-pw" not in text and "admin" not in text
     assert listed.json()[0]["url"] == "rtsp://***:***@192.168.1.20:554/Streaming/Channels/102"
+    # Non-secret address parts for the wizard's edit form (parsed from the brand template).
+    first = listed.json()[0]
+    assert {k: first[k] for k in ("brand", "host", "port", "channel", "substream")} == {
+        "brand": "hikvision", "host": "192.168.1.20", "port": 554, "channel": 1,
+        "substream": True,
+    }
     assert api.client.post("/local/cameras", json=body, headers=AUTH).status_code == 409
 
     # Change only the password: the stored URL is kept.
@@ -379,3 +395,36 @@ def test_serves_edge_ui_with_spa_fallback(make_api: Callable[..., Api], tmp_path
 
 def test_no_ui_dir_means_api_only(api: Api) -> None:
     assert api.client.get("/").status_code == 404
+
+
+def test_camera_address_from_options_and_custom_paths(make_api: Callable[..., Api]) -> None:
+    api = make_api(use_secrets=True)
+    explicit = {
+        "camera_id": "cam-bar", "url": "rtsp://10.0.0.7:8554/custom/path",
+        "options": {"brand": "Dahua", "channel": 3, "substream": False},
+    }
+    custom = {"camera_id": "cam-x", "url": "rtsp://cam.local/live"}
+    for body in (explicit, custom):
+        assert api.client.post("/local/cameras", json=body, headers=AUTH).status_code == 201
+    listed = {c["camera_id"]: c for c in api.client.get("/local/cameras", headers=AUTH).json()}
+    bar, x = listed["cam-bar"], listed["cam-x"]
+    assert (bar["brand"], bar["host"], bar["port"], bar["channel"], bar["substream"]) == (
+        "dahua", "10.0.0.7", 8554, 3, False
+    )
+    assert (x["brand"], x["host"], x["port"], x["channel"], x["substream"]) == (
+        None, "cam.local", 554, None, None
+    )
+
+
+def test_simulated_cameras_are_listed(api: Api, config: SiteConfig) -> None:
+    listed = api.client.get("/local/cameras", headers=AUTH).json()
+    assert {c["camera_id"] for c in listed} == {c.camera_id for c in config.cameras}
+    for camera in listed:
+        assert camera["kind"] == "simulated" and camera["in_config"] is True
+        assert camera["url"] == f"simulated://{camera['camera_id']}"
+        assert camera["has_credentials"] is False and camera["host"] is None
+    status = api.client.get("/local/setup/status").json()
+    assert status["camera_count"] == len(config.cameras)
+    assert status["uniform_calibrated"] is False
+    api.runtime.secrets.set_uniform_hsv((220.0, 0.8, 0.6))
+    assert api.client.get("/local/setup/status").json()["uniform_calibrated"] is True

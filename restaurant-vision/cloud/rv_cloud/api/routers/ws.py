@@ -1,33 +1,36 @@
 """``WS /ws?token=<access JWT>&site_id=<site>``: live events of one site.
 
-Each server message is one ``EdgeEvent`` JSON object (as ingested, plus a cloud-generated
-``alert.acknowledged`` when someone presses "on it" in the cloud). Waiters receive ``alert.*``
-events only. Client messages are ignored. Authentication happens once at connect; failures
-accept and immediately close with 4400 (missing parameters), 4401 (bad/expired token) or
-4403 (no access to the site), so browsers can read the code.
+Each server message is one JSON object: an ``EdgeEvent`` (as ingested, plus a cloud-generated
+``alert.acknowledged`` when someone presses "on it" in the cloud) or, right after connecting,
+one ``LiveSnapshotMessage`` (``{"type": "live.snapshot", "snapshot": LiveSnapshot}``) for
+owners and managers, so a (re)connecting dashboard starts from the full state. Waiters receive
+``alert.*`` events only. Client messages are ignored. Authentication happens once at connect;
+failures accept and immediately close with a ``WsCloseCode``: 4400 (missing parameters), 4401
+(bad/expired token) or 4403 (no access to the site), so browsers can read the code.
 """
 
 import asyncio
 import contextlib
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from rv_contracts import Role
+from rv_contracts import LiveSnapshotMessage, Role, WsCloseCode
 from starlette.concurrency import run_in_threadpool
 
 from ...errors import Forbidden, NotFound, Unauthorized
 from ...realtime import Subscription
 from ...repositories import SiteRepository
-from ...services import AuthService
+from ...services import AuthService, LiveService
 from ...state import AppState
+from ...tenancy import SiteScope
 
 router = APIRouter(tags=["realtime"])
 
-CLOSE_BAD_REQUEST = 4400
-CLOSE_UNAUTHORIZED = 4401
-CLOSE_FORBIDDEN = 4403
+CLOSE_BAD_REQUEST = int(WsCloseCode.BAD_REQUEST)
+CLOSE_UNAUTHORIZED = int(WsCloseCode.UNAUTHORIZED)
+CLOSE_FORBIDDEN = int(WsCloseCode.FORBIDDEN)
 
 
-def _authorize(state: AppState, token: str, site_id: str) -> Role:
+def _authorize(state: AppState, token: str, site_id: str) -> tuple[Role, SiteScope]:
     with state.session_factory() as session:
         user = AuthService(
             session,
@@ -36,8 +39,14 @@ def _authorize(state: AppState, token: str, site_id: str) -> Role:
             hasher=state.hasher,
             tokens=state.tokens,
         ).authenticate(token)
-        _scope, role, _site = SiteRepository(session, user.scope).authorize(site_id)
-        return role
+        scope, role, _site = SiteRepository(session, user.scope).authorize(site_id)
+        return role, scope
+
+
+def _snapshot_message(state: AppState, scope: SiteScope) -> str:
+    with state.session_factory() as session:
+        snapshot = LiveService(session, state.clock).snapshot(scope)
+    return LiveSnapshotMessage(snapshot=snapshot).model_dump_json()
 
 
 async def _reject(websocket: WebSocket, code: int) -> None:
@@ -82,7 +91,7 @@ async def live_socket(websocket: WebSocket) -> None:
         await _reject(websocket, CLOSE_BAD_REQUEST)
         return
     try:
-        role = await run_in_threadpool(_authorize, state, token, site_id)
+        role, scope = await run_in_threadpool(_authorize, state, token, site_id)
     except Unauthorized:
         await _reject(websocket, CLOSE_UNAUTHORIZED)
         return
@@ -92,4 +101,10 @@ async def live_socket(websocket: WebSocket) -> None:
     # Subscribe before accepting, so nothing published after the handshake is missed.
     async with state.broker.subscribe(site_id) as subscription:
         await websocket.accept()
-        await _pump(websocket, subscription, alerts_only=role is Role.WAITER)
+        alerts_only = role is Role.WAITER
+        if not alerts_only:
+            try:
+                await websocket.send_text(await run_in_threadpool(_snapshot_message, state, scope))
+            except (WebSocketDisconnect, RuntimeError):
+                return
+        await _pump(websocket, subscription, alerts_only=alerts_only)

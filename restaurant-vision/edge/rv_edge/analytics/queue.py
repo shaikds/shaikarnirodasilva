@@ -501,8 +501,9 @@ class QueueModule:
             qz.alert_id = None  # resolved elsewhere (alerts switched off)
         if qz.alert_id is None:
             if people >= th.long_queue_people or longest >= th.long_queue_wait_s:
+                # Checked on every frame/tick, so the threshold was crossed just now.
                 record, events = self._alerts.raise_alert(
-                    AlertKind.LONG_QUEUE, now, zone_id=qz.zone.zone_id
+                    AlertKind.LONG_QUEUE, now, zone_id=qz.zone.zone_id, condition_since=now
                 )
                 if record is not None:
                     qz.alert_id = record.alert_id

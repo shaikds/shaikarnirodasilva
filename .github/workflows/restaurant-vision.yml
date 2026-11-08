@@ -63,6 +63,7 @@ jobs:
       - name: Ruff
         run: |
           ruff check contracts edge cloud simulator
+          (cd e2e && ruff check .)
           ruff check --line-length 100 --select E,F,W,I,B,UP,SIM deploy
 
       - name: Mypy
@@ -71,6 +72,7 @@ jobs:
           (cd edge && mypy rv_edge && mypy --strict rv_edge/analytics)
           (cd cloud && mypy rv_cloud)
           (cd simulator && mypy rv_sim)
+          (cd e2e && mypy .)
 
       - name: Pytest contracts
         working-directory: restaurant-vision/contracts
@@ -86,6 +88,11 @@ jobs:
 
       - name: Pytest simulator
         working-directory: restaurant-vision/simulator
+        run: pytest -q
+
+      - name: Backend end to end (cloud app + edge runtime on smoke.yaml)
+        working-directory: restaurant-vision/e2e
+        timeout-minutes: 5
         run: pytest -q
 
       - name: Contracts JSON Schema is up to date

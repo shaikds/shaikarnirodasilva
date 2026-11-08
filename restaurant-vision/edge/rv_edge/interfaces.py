@@ -10,6 +10,7 @@ edge-internal types that never leave the restaurant.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
@@ -74,6 +75,9 @@ class SourceSpec:
     url: str | None = None
     loop: bool = True
     options: dict[str, Any] = field(default_factory=dict)
+    """Edge-local knobs read by the vision factory, e.g. ``track_id_ttl_h`` (set by the runtime
+    from ``Thresholds.track_id_ttl_h``), ``simulated_detector``, ``realtime`` and ``source``
+    (see ``rv_edge.vision.factory``)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +116,13 @@ class CameraPipeline(Protocol):
         ...
 
     def health(self) -> CameraHealthInfo: ...
+
+    def snapshot(self) -> tuple[Frame, Sequence[Box]] | None:
+        """The latest frame processed by ``step`` (privacy masks applied, RAM only) and every
+        person box detected in it, or None before the first frame. Used for the blurred setup
+        snapshot, table suggestions and uniform calibration; must be safe to call from another
+        thread while ``step`` runs. Simulated frames carry a ``SyntheticImage``, not pixels."""
+        ...
 
 
 class CameraPipelineFactory(Protocol):

@@ -26,6 +26,10 @@ in pixels so padding is the same horizontally and vertically):
 7. Suggestions mostly (``mask_overlap_max``) inside a privacy mask are dropped.
 8. Reading order (rows top to bottom, each row left to right) with ids ``s1..sn``.
 
+Model: :func:`default_table_detector` prefers ``yolox_s.onnx`` (clearly better on furniture)
+when it is downloaded, even if the camera pipelines run the default ``yolox_tiny``; it is loaded
+for the request and released afterwards. Without it, the pipelines' shared session is used.
+
 Privacy: the frame is only read in RAM by :func:`suggest_tables_in_frame`; only polygons,
 boxes and counts come out.
 """
@@ -43,9 +47,12 @@ import numpy as np
 from rv_contracts import Detection, Frame
 
 from ..interfaces import Box
-from .detectors.factory import build_detector
+from .detectors.factory import DEFAULT_MODEL_DIR, build_detector, default_model_path
 from .detectors.yolox_onnx import YoloxOnnxDetector
 from .factory import inference_threads
+
+SUGGEST_MODEL_NAME = "yolox_s.onnx"
+"""Preferred model for table suggestions (``fetch_models.py --model s``)."""
 
 COCO_CHAIR = 56
 COCO_COUCH = 57
@@ -645,12 +652,31 @@ def suggest_tables_in_frame(
     )
 
 
+def suggestion_model_path(model_path: Path | str | None = None) -> Path:
+    """The model for table suggestions: :data:`SUGGEST_MODEL_NAME` next to the runtime model
+    or in the default model directory when it exists, else the runtime model itself
+    (``model_path``, or the default model when None)."""
+    runtime = Path(model_path) if model_path is not None else default_model_path()
+    preferred = (runtime.with_name(SUGGEST_MODEL_NAME), DEFAULT_MODEL_DIR / SUGGEST_MODEL_NAME)
+    for candidate in preferred:
+        if candidate.is_file():
+            return candidate
+    return runtime
+
+
 def default_table_detector(model_path: Path | str | None = None) -> YoloxOnnxDetector:
-    """The YOLOX detector for suggestions: the same shared ONNX session the camera pipelines
-    use (same model and thread cap), created on first use. Raises ``ModelNotFoundError``
-    (a ``FileNotFoundError``) when the model file is missing."""
+    """The YOLOX detector for suggestions (see :func:`suggestion_model_path`). The runtime's
+    own model reuses the pipelines' shared ONNX session; a different (larger) model gets a
+    private session that is released with the detector. Raises ``ModelNotFoundError`` (a
+    ``FileNotFoundError``) when no model file exists."""
+    path = suggestion_model_path(model_path)
+    runtime = Path(model_path) if model_path is not None else default_model_path()
     detector = build_detector(
-        "yolox", model_path, source_kind="rtsp", threads=inference_threads(), shared=True
+        "yolox",
+        path,
+        source_kind="rtsp",
+        threads=inference_threads(),
+        shared=path.resolve() == runtime.resolve(),
     )
     if not isinstance(detector, YoloxOnnxDetector):  # pragma: no cover - factory contract
         raise TypeError("expected a YOLOX detector")

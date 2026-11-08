@@ -19,7 +19,7 @@ from analytics_dsl import (
     with_thresholds,
     with_zones,
 )
-from rv_contracts import QueueSnapshot, SiteConfig
+from rv_contracts import AlertRaised, QueueSnapshot, SiteConfig
 
 from rv_edge.analytics import QueueParams
 
@@ -155,6 +155,8 @@ def test_long_queue_by_people_with_hysteresis() -> None:
         (141.5, "seated", "z-queue", 131.5),
         (161.5, "seated", "z-queue", 151.5),
     ]
+    (raised,) = [e for e in sc.events if isinstance(e, AlertRaised)]
+    assert raised.condition_since_ts == raised.ts  # the threshold was crossed just now
 
 
 def test_long_queue_by_wait_with_hysteresis() -> None:

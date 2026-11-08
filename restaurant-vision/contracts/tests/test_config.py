@@ -52,7 +52,7 @@ def _zone(**fields: Any) -> dict[str, Any]:
 
 def test_minimal_config_and_defaults() -> None:
     config = SiteConfig.model_validate(_config())
-    assert config.schema_version == SCHEMA_VERSION == "1.0"
+    assert config.schema_version == SCHEMA_VERSION == "1.1"
     assert config.locale == "he"
     assert config.config_version == 0
     assert config.modules == Modules(occupancy=True, queue=True, tables=True, alerts=True)

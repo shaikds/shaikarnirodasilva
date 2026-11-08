@@ -395,3 +395,72 @@ def test_live_snapshot(api: Api, owner: Account) -> None:
     with api.app.state.rv.session_factory() as db:
         stored = db.get(Site, site)
         assert stored is not None and stored.first_event_ts == t
+
+
+def test_backdated_since_and_condition_times(api: Api, owner: Account) -> None:
+    """Contracts 1.1: ``since_ts`` / ``condition_since_ts`` drive the live timers and the
+    session start; ordering still follows the transition ``ts``."""
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    s1, a1 = new_uuid7(), new_uuid7()
+    seated = event(
+        TableStateChanged, site, t + 32, table_id="t3", from_state=E, to_state=S,
+        guest_count=3, session_id=s1, since_ts=t,
+    )
+    raised = event(
+        AlertRaised, site, t + 180, alert_id=a1, kind=AlertKind.WAITER_NEEDED, table_id="t3",
+        severity=AlertSeverity.URGENT, condition_since_ts=t,
+    )
+    api.post_events(device, seated, raised)
+    # A transition confirmed later but backdated before the stored one still wins (ordering
+    # is by ts); an older transition never does, whatever its since_ts.
+    attended = event(
+        TableStateChanged, site, t + 260, table_id="t3", from_state=S, to_state=A,
+        guest_count=3, session_id=s1, since_ts=t + 250,
+    )
+    stale = event(
+        TableStateChanged, site, t + 100, table_id="t3", from_state=E, to_state=S,
+        guest_count=1, session_id=new_uuid7(), since_ts=t + 99,
+    )
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
+    t3 = next(row for row in live["tables"] if row["table_id"] == "t3")
+    assert (t3["state"], t3["since_ts"]) == ("seated", t)
+    (alert,) = live["open_alerts"]
+    assert (alert["raised_at"], alert["condition_since_ts"]) == (t + 180, t)
+    listed = api.client.get(f"/api/v1/sites/{site}/alerts?status=open", headers=owner.headers)
+    assert listed.json()[0]["condition_since_ts"] == t
+    api.post_events(device, attended, stale)
+    with api.app.state.rv.session_factory() as db:
+        current = db.get(TableStateCurrent, (site, "t3"))
+        assert current is not None
+        assert (current.state, current.since_ts) == ("attended", t + 250)
+        assert current.changed_at == t + 260
+        session = db.get(TableSession, (site, s1))
+        assert session is not None and session.seated_at == t  # backdated session start
+        row = db.get(Alert, (site, a1))
+        assert row is not None and row.condition_since_ts == t
+
+
+def test_1_0_events_fall_back_to_ts(api: Api, owner: Account) -> None:
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    api.post_events(device, state_change(site, t, "t2", E, S, new_uuid7()))
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
+    assert next(r for r in live["tables"] if r["table_id"] == "t2")["since_ts"] == t
+
+
+def test_device_local_url_from_heartbeat(api: Api, owner: Account) -> None:
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    beat = heartbeat(site, t)
+    beat["local_url"] = "http://192.168.1.20:8787"
+    api.post_events(device, beat)
+    d = api.client.get(f"/api/v1/sites/{site}/devices", headers=owner.headers).json()[0]
+    assert d["local_url"] == "http://192.168.1.20:8787"
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
+    assert live["devices"][0]["local_url"] == "http://192.168.1.20:8787"
+    # a newer heartbeat without it (1.0 edge) clears it; an older one changes nothing
+    newer = heartbeat(site, t + 30)
+    api.post_events(device, newer)
+    d = api.client.get(f"/api/v1/sites/{site}/devices", headers=owner.headers).json()[0]
+    assert d["local_url"] is None

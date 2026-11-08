@@ -377,3 +377,54 @@ def test_quick_clearing_counts_as_bussing_despite_the_median_lag() -> None:
     sc.run(400)
     assert [s[4] for s in sc.summary() if s[1] == "state"] == [
         "seated", "attended", "needs_bussing"]
+
+
+def test_events_carry_backdated_since_and_condition_times() -> None:
+    """``since_ts`` / ``condition_since_ts`` (contracts 1.1) carry the evidence times that
+    the state machine uses internally, while ``ts`` stays the confirmation time."""
+    from rv_contracts import AlertKind, AlertRaised
+
+    sc = lifecycle()
+    events = sc.run(800)
+    since = [
+        (rel(c.ts), c.to_state.value, None if c.since_ts is None else rel(c.since_ts))
+        for c in of_type(events, TableStateChanged)
+    ]
+    assert since == [
+        (30.0, "seated", 10.0),  # first guest sighting
+        (255.0, "attended", 250.0),  # waiter arrival
+        (348.0, "needs_bussing", 299.75),  # last guest sighting
+        (710.0, "empty", 710.0),
+    ]
+    raised = {a.kind: a for a in of_type(events, AlertRaised)}
+    waiter = raised[AlertKind.WAITER_NEEDED]
+    assert (rel(waiter.ts), rel_or_none(waiter.condition_since_ts)) == (190.0, 10.0)
+    bussing = raised[AlertKind.BUSSING_NEEDED]
+    assert (rel(bussing.ts), rel_or_none(bussing.condition_since_ts)) == (599.75, 299.75)
+    # the live view of the table and of its open alert agree with the events
+    sc2 = lifecycle()
+    sc2.run(200)
+    live = sc2.eng.live()
+    table = next(t for t in live.tables if t.table_id == "t3")
+    assert table.since_ts is not None and rel(table.since_ts) == 10.0
+    (alert,) = live.open_alerts
+    assert alert.condition_since_ts is not None and rel(alert.condition_since_ts) == 10.0
+
+
+def test_checkin_condition_starts_at_last_staff_attention() -> None:
+    from rv_contracts import AlertRaised
+
+    sc = Scenario(crisp_config())
+    sc.add(person(**GUEST_T3, from_t=10, to_t=2100))
+    sc.add(staff("t3", 100, 110))  # attended at 105; staff last seen 109.75
+    (alert,) = of_type(sc.run(1009.75), AlertRaised)
+    assert alert.kind.value == "checkin_needed"
+    assert rel_or_none(alert.condition_since_ts) == 109.75
+
+
+def rel(ts: float) -> float:
+    return round(ts - T0, 6)
+
+
+def rel_or_none(ts: float | None) -> float | None:
+    return None if ts is None else rel(ts)
