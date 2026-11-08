@@ -64,6 +64,8 @@ export function stepBlocker(step: StepId, f: WizardFacts): BlockReason | null {
       return f.tableErrors > 0 ? 'tableErrors' : null;
     case 'zones':
       if (f.tableCount === 0) return 'tableRequired';
+      // Tables can be edited here too (auto-detected ones).
+      if (f.tableErrors > 0) return 'tableErrors';
       if (f.zoneCount === 0) return 'zoneRequired';
       return f.zoneErrors > 0 ? 'zoneErrors' : null;
     case 'review':

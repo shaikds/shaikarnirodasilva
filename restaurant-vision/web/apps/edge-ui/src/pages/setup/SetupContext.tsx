@@ -4,9 +4,7 @@
 import { currentLanguage, type SiteConfig } from '@rv/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -14,16 +12,18 @@ import {
   type ReactNode,
 } from 'react';
 import { useLocalApi, usePinSession } from '../../api/context';
-import type { CameraOut, SetupStatus } from '../../api/types';
 import { emptyConfig, forSite, sameConfig } from '../../lib/config';
 import { isStatus } from '../../lib/errors';
 import { errorsOf, validateConfig, type Issue } from '../../lib/validation';
 import type { WizardFacts } from '../../lib/wizard';
-
-export const SETUP_STATUS_KEY = ['local', 'setup-status'] as const;
-export const CONFIG_KEY = ['local', 'config'] as const;
-export const CAMERAS_KEY = ['local', 'cameras'] as const;
-export const COVERAGE_KEY = ['local', 'coverage'] as const;
+import {
+  CAMERAS_KEY,
+  CONFIG_KEY,
+  COVERAGE_KEY,
+  SETUP_STATUS_KEY,
+  SetupContext,
+  type SetupContextValue,
+} from './setupState';
 
 const PAIR_SKIP_KEY = 'rv-edge-pair-skipped';
 
@@ -43,37 +43,6 @@ function writeSkip(value: boolean) {
     // ignore
   }
 }
-
-export interface SetupContextValue {
-  status: SetupStatus | undefined;
-  statusLoading: boolean;
-  refetchStatus: () => void;
-  pinOk: boolean;
-  /** Draft config (null until loaded or while locked). */
-  config: SiteConfig | null;
-  /** What the edge has (null: no config saved yet). */
-  serverConfig: SiteConfig | null;
-  configLoading: boolean;
-  configError: unknown;
-  setConfig: (update: (config: SiteConfig) => SiteConfig) => void;
-  /** Throws away unsaved edits. */
-  resetDraft: () => void;
-  dirty: boolean;
-  /** Saves the draft (or `next`) with `PUT /local/config`. Resolves true on success. */
-  save: (next?: SiteConfig) => Promise<boolean>;
-  saving: boolean;
-  saveError: unknown;
-  clearSaveError: () => void;
-  streams: CameraOut[];
-  streamsLoading: boolean;
-  refetchStreams: () => Promise<unknown>;
-  pairSkipped: boolean;
-  setPairSkipped: (value: boolean) => void;
-  issues: Issue[];
-  facts: WizardFacts;
-}
-
-const SetupContext = createContext<SetupContextValue | null>(null);
 
 export function SetupProvider({ children }: { children: ReactNode }) {
   const api = useLocalApi();
@@ -222,10 +191,4 @@ export function SetupProvider({ children }: { children: ReactNode }) {
     facts,
   };
   return <SetupContext.Provider value={value}>{children}</SetupContext.Provider>;
-}
-
-export function useSetup(): SetupContextValue {
-  const ctx = useContext(SetupContext);
-  if (!ctx) throw new Error('useSetup must be used inside <SetupProvider>');
-  return ctx;
 }

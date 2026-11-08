@@ -25,7 +25,7 @@ import { LiveStep } from './LiveStep';
 import { PairStep } from './PairStep';
 import { PinStep } from './PinStep';
 import { ReviewStep } from './ReviewStep';
-import { useSetup } from './SetupContext';
+import { useSetup } from './setupState';
 import { TablesStep } from './TablesStep';
 import { UniformStep } from './UniformStep';
 import { ZonesStep } from './ZonesStep';
@@ -73,11 +73,18 @@ export function SetupStepRoute() {
   const { step } = useParams();
   const ctx = useSetup();
   const ready = useReady();
+  // Gating applies when a step is entered. Once inside, a half-typed edit that briefly makes an
+  // earlier step invalid (e.g. clearing a seats field) must not throw the installer out; only
+  // losing the PIN does.
+  const entered = useRef<StepId | null>(null);
   if (!isStepId(step)) return <Navigate to="/setup" replace />;
   if (!ready) return <LoadingBlock />;
-  if (!canEnter(step, ctx.facts)) {
+  const stillInside = entered.current === step && (ctx.facts.pinOk || step === 'pin');
+  if (!stillInside && !canEnter(step, ctx.facts)) {
+    entered.current = null;
     return <Navigate to={`/setup/${resolveStep(step, ctx.facts)}`} replace />;
   }
+  entered.current = step;
   return <WizardFrame step={step} />;
 }
 

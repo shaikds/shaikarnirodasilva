@@ -7,7 +7,7 @@ import { useState, type FormEvent } from 'react';
 import { useLocalApi } from '../../api/context';
 import { ServerErrors } from '../../components/ServerErrors';
 import type { StepProps } from './SetupLayout';
-import { CONFIG_KEY, SETUP_STATUS_KEY, useSetup } from './SetupContext';
+import { CONFIG_KEY, SETUP_STATUS_KEY, useSetup } from './setupState';
 
 const CODE_MAX = 16;
 

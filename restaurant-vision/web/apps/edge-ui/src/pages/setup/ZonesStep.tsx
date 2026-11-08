@@ -48,8 +48,9 @@ import {
   ZONE_STYLE,
 } from '../../lib/zones';
 import type { StepProps } from './SetupLayout';
-import { useSetup } from './SetupContext';
-import { AutoDetectBar, SuggestionsPanel, useTableSuggestions } from './TableSuggestions';
+import { useSetup } from './setupState';
+import { AutoDetectBar, SuggestionsPanel } from './TableSuggestions';
+import { useTableSuggestions } from './useTableSuggestions';
 
 const MIN_POLYGON_POINTS = 3;
 
@@ -280,7 +281,7 @@ export function ZonesStep(_: StepProps) {
             {zones.length === 0 ? (
               <p className="p-4 text-sm text-muted">{t('zones.noneOnCamera')}</p>
             ) : (
-              <ul className="divide-y divide-border">
+              <ul className="divide-y divide-border" aria-label={t('zones.listTitle', { name: camera.name })}>
                 {zones.map((z) => {
                   const errs = zoneErrors(z.zone_id);
                   const active = z.zone_id === selectedZoneId;

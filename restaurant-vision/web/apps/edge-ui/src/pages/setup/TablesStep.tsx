@@ -7,7 +7,7 @@ import { LABEL_MAX, SEATS_MAX, SEATS_MIN } from '../../lib/validation';
 import { nextId } from '../../lib/zones';
 import { IssueText } from '../../components/IssueList';
 import type { StepProps } from './SetupLayout';
-import { useSetup } from './SetupContext';
+import { useSetup } from './setupState';
 
 export function TablesStep(_: StepProps) {
   const { t } = useTranslation();

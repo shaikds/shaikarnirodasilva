@@ -18,7 +18,7 @@ import { BellRing, Camera, Cloud, CloudOff, Cpu, Users, Utensils, Wrench } from 
 import { Link } from 'react-router-dom';
 import { useLocalApi } from '../api/context';
 import { useEdgeNow, useLocalLive } from '../live/useLocalLive';
-import { SETUP_STATUS_KEY } from './setup/SetupContext';
+import { SETUP_STATUS_KEY } from './setup/setupState';
 
 const CAMERA_TONE = { ok: 'success', degraded: 'warning', offline: 'danger' } as const;
 

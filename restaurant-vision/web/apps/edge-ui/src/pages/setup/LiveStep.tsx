@@ -21,7 +21,7 @@ import { ZoneCanvas, type ZoneLook } from '../../components/ZoneCanvas';
 import { useEdgeNow, useLocalLive } from '../../live/useLocalLive';
 import { useSnapshot } from '../../live/useSnapshot';
 import type { StepProps } from './SetupLayout';
-import { useSetup } from './SetupContext';
+import { useSetup } from './setupState';
 
 const AUTO_REFRESH_MS = 3000;
 

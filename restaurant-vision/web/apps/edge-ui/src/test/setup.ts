@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
+import { clearPin } from '../api/pin';
 
 // jsdom lacks these browser APIs.
 class ResizeObserverStub {
@@ -20,6 +21,7 @@ Element.prototype.releasePointerCapture ??= function releasePointerCapture() {};
 
 afterEach(() => {
   cleanup();
+  clearPin();
   for (const s of [window.localStorage, window.sessionStorage]) {
     try {
       s.clear();

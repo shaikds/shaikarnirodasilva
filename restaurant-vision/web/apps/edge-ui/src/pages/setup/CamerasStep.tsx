@@ -28,7 +28,7 @@ import { isStatus } from '../../lib/errors';
 import { guessBrand, redactUrl } from '../../lib/rtsp';
 import { CameraForm, type CameraFormResult, type CameraFormValues } from './CameraForm';
 import type { StepProps } from './SetupLayout';
-import { useSetup } from './SetupContext';
+import { useSetup } from './setupState';
 
 type Editing =
   | { type: 'add'; preset?: Partial<CameraFormValues> }

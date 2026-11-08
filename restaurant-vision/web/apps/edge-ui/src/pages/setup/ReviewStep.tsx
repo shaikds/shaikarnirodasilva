@@ -8,7 +8,7 @@ import { IssueList } from '../../components/IssueList';
 import { errorsOf, type Issue } from '../../lib/validation';
 import { ZONE_KINDS } from '../../lib/zones';
 import type { StepProps } from './SetupLayout';
-import { useSetup } from './SetupContext';
+import { useSetup } from './setupState';
 
 const FIX_STEP: Record<Issue['entity'], string> = {
   site: 'review',

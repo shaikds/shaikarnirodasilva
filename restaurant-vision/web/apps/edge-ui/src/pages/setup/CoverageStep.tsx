@@ -9,7 +9,7 @@ import { useLocalApi } from '../../api/context';
 import { ServerErrors } from '../../components/ServerErrors';
 import { setPrimary } from '../../lib/zones';
 import type { StepProps } from './SetupLayout';
-import { COVERAGE_KEY, useSetup } from './SetupContext';
+import { COVERAGE_KEY, useSetup } from './setupState';
 
 export type GapReason =
   | { kind: 'notPrimary'; zoneId: string; cameraId: string }

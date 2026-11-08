@@ -6,10 +6,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { usePinSession, useLocalApi } from '../../api/context';
-import { PIN_MAX_LEN, PIN_MIN_LEN } from '../../api/types';
+import { PIN_MAX_LEN, PIN_MIN_LEN, type SetupStatus } from '../../api/types';
 import { errorKind, isStatus } from '../../lib/errors';
 import type { StepProps } from './SetupLayout';
-import { SETUP_STATUS_KEY, useSetup } from './SetupContext';
+import { SETUP_STATUS_KEY, useSetup } from './setupState';
 
 /** rv_edge PinGuard: 5 wrong PINs lock the client out for 30 s. */
 export const LOCKOUT_S = 30;
@@ -94,6 +94,10 @@ export function PinStep({ onDone }: StepProps) {
         }
       } else {
         await api.verifyPin(pin);
+      }
+      if (creating) {
+        // The cached status still says "no PIN": update it now so the next step opens.
+        qc.setQueryData<SetupStatus>(SETUP_STATUS_KEY, (old) => (old ? { ...old, pin_set: true } : old));
       }
       session.unlock(pin);
       setPin('');

@@ -9,18 +9,13 @@ import type { CalibrateOut } from '../../api/types';
 import { ServerErrors } from '../../components/ServerErrors';
 import { SnapshotFrame } from '../../components/SnapshotFrame';
 import { useSnapshot } from '../../live/useSnapshot';
+import { hsvToCss } from '../../lib/color';
 import { boxFromCorners, isUsableBox, toNormalized, type Pt } from '../../lib/geometry';
 import type { StepProps } from './SetupLayout';
-import { useSetup } from './SetupContext';
+import { useSetup } from './setupState';
 
 type Box = [number, number, number, number];
 
-/** OpenCV-style HSV from the edge (hue degrees, s and v 0..1) to a CSS color. */
-export function hsvToCss([h, s, v]: readonly [number, number, number]): string {
-  const l = v * (1 - s / 2);
-  const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return `hsl(${Math.round(h)} ${Math.round(sl * 100)}% ${Math.round(l * 100)}%)`;
-}
 
 export function UniformStep(_: StepProps) {
   const { t } = useTranslation();
