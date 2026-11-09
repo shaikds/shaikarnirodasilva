@@ -108,6 +108,8 @@ class Device(Base):
     last_seen_at: Mapped[float | None]
     """Cloud receive time of the latest ``edge.heartbeat`` from this device."""
     version: Mapped[str | None] = mapped_column(String(64))
+    started_at: Mapped[float | None]
+    """Latest ``EdgeHeartbeat.started_at`` (edge runtime boot time) seen from this device."""
 
 
 class DeviceHealth(Base):

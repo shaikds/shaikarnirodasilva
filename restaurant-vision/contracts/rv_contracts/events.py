@@ -337,6 +337,10 @@ class EdgeHeartbeat(EdgeEventBase):
     local_url: str | None = Field(default=None, max_length=256, pattern=r"^https?://\S+$")
     """The edge's LAN base URL (e.g. ``http://192.168.1.20:8787``), for the waiter app's
     offline link (``<local_url>/local-alerts``). None if unknown. Since 1.1."""
+    started_at: EpochSeconds | None = None
+    """When the edge runtime started (its clock). A newer value than the cloud has seen means
+    the edge restarted and lost its in-memory alerts and table states: the cloud expires the
+    site's alerts raised before it and resets table states changed before it. Since 1.2."""
 
 
 EdgeEvent = Annotated[

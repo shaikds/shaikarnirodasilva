@@ -56,6 +56,9 @@ services:
       RV_ENVIRONMENT: ${RV_ENVIRONMENT:-dev}
       RV_LOG_JSON: ${RV_LOG_JSON:-false}
       RV_LOG_LEVEL: ${RV_LOG_LEVEL:-INFO}
+      # Max edge event ts ahead of the server clock (s). demo-up.sh sets 0 (off): the
+      # simulated edge runs at --speed N, ahead of the wall clock.
+      RV_MAX_EVENT_FUTURE_S: ${RV_MAX_EVENT_FUTURE_S:-300}
     ports:
       - "${RV_CLOUD_PORT:-8000}:8000"
     restart: unless-stopped

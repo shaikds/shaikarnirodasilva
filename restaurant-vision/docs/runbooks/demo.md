@@ -37,7 +37,7 @@ cd web && pnpm install && pnpm dev:mock
 ```bash
 cd restaurant-vision
 make setup          # once: .venv with the 4 packages, pnpm install, YOLOX-tiny model
-make demo-local     # or: deploy/scripts/demo-local.sh [--no-web] [--speed 40] [--fresh] [--verbose]
+make demo-local     # or: deploy/scripts/demo-local.sh [--no-web] [--speed 40] [--keep-db] [--verbose]
 ```
 
 The script seeds the demo tenant into a SQLite file in `${TMPDIR:-/tmp}/rv-demo`, starts the
@@ -52,7 +52,8 @@ cloud on :8000, pairs a simulated edge with Tel Aviv (fresh pairing every run), 
 ```
 
 Logs from all three are prefixed `[cloud]`, `[edge]`, `[web]`; Ctrl-C stops everything. Run it
-again to replay the dinner; `--fresh` also resets the database.
+again to replay the dinner. Every run starts from a fresh database; `--keep-db` keeps the
+previous one (see "Sped-up time" below before doing that).
 
 ## C. Docker demo
 
@@ -82,9 +83,24 @@ Then it prints:
 ```
 
 Options: `--speed N`, `--scenario simulator/scenarios/peak_friday.yaml`, `--site Sydney`,
-`--no-build`. Ports: `RV_CLOUD_PORT`, `RV_EDGE_PORT`. Behind a registry mirror (or when Docker
+`--no-build`, `--keep-db` (by default every run resets the Postgres volume). Ports: `RV_CLOUD_PORT`, `RV_EDGE_PORT`. Behind a registry mirror (or when Docker
 Hub rate-limits): `export RV_PYTHON_IMAGE=mirror.gcr.io/library/python:3.12-slim
 RV_NODE_IMAGE=mirror.gcr.io/library/node:22-slim RV_POSTGRES_IMAGE=mirror.gcr.io/library/postgres:16`.
+
+### Sped-up time and the future-timestamp check
+
+`rv-edge simulate --speed 20` stamps events in simulated time, which runs 20x ahead of the wall
+clock (the 2 h dinner ends about 1 h 54 min "in the future"). In production the cloud rejects
+events more than `RV_MAX_EVENT_FUTURE_S` (default 300 s) ahead of its clock with 422, so a
+device with a wrong clock cannot freeze the live view; the edge dead-letters such events. Both
+demo scripts therefore run the cloud with `RV_MAX_EVENT_FUTURE_S=0` (check off): set it
+yourself if you run `rv-edge simulate --speed N` against another cloud, and never in
+production.
+
+The live view keeps the newest snapshot by edge timestamp, so a previous sped-up run leaves
+"latest" rows up to about 2 h ahead of the wall clock that a new run would not replace until it
+catches up (a frozen floor). That is why both scripts start from a fresh database by default;
+with `--keep-db`, wait about 2 h or reset the database before replaying.
 
 ## Demo script (5 minutes)
 

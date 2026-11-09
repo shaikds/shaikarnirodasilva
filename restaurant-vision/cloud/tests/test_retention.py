@@ -10,6 +10,7 @@ from rv_contracts import (
     AlertRaised,
     AlertSeverity,
     OccupancySnapshot,
+    QueueSeated,
     QueueWalkaway,
     TableSessionClosed,
     new_uuid7,
@@ -65,8 +66,9 @@ def count(api: Api, model: type) -> int:
 def test_policy_deletes_only_past_the_horizons(api: Api, owner: Account) -> None:
     site, device = api.site_with_config(owner)
     t = api.clock.now()
-    api.post_events(device, *old_facts(site, t - 500 * DAY))  # past both horizons
-    api.post_events(device, *old_facts(site, t - 100 * DAY))  # raw gone, metrics kept
+    # Received back then (retention of raw events counts from the receive time).
+    api.post_events_at(t - 500 * DAY, device, *old_facts(site, t - 500 * DAY))  # past both
+    api.post_events_at(t - 100 * DAY, device, *old_facts(site, t - 100 * DAY))  # raw gone
     api.post_events(device, occupancy(site, t, guests=7))  # recent
     r = api.client.post(f"/api/v1/sites/{site}/devices/pairing-code", headers=owner.headers)
     assert r.status_code == 201
@@ -111,7 +113,8 @@ def test_policy_deletes_only_past_the_horizons(api: Api, owner: Account) -> None
 def test_run_retention_uses_settings_and_clock(api: Api, owner: Account) -> None:
     site, device = api.site_with_config(owner)
     t = api.clock.now()
-    api.post_events(device, occupancy(site, t - 91 * DAY), occupancy(site, t))
+    api.post_events_at(t - 91 * DAY, device, occupancy(site, t - 91 * DAY))
+    api.post_events(device, occupancy(site, t))
     assert run_retention(api.app.state.rv) == 1  # defaults: 90 / 400 days
     assert count(api, Event) == 1
 
@@ -141,7 +144,7 @@ def test_app_applies_retention_periodically(tmp_path: Path) -> None:
     with TestClient(app) as client:
         api = Api(client=client, clock=clock, notifier=FakeNotifier(), app=app)
         site, device = api.site_with_config(api.signup())
-        api.post_events(device, occupancy(site, clock.now() - 200 * DAY))
+        api.post_events_at(clock.now() - 200 * DAY, device, occupancy(site, clock.now() - 200 * DAY))
         deadline = time.monotonic() + 5.0
         while count(api, Event) and time.monotonic() < deadline:
             time.sleep(0.02)
@@ -151,3 +154,63 @@ def test_app_applies_retention_periodically(tmp_path: Path) -> None:
     off = create_app(make_settings(retention_interval_s=0), clock=clock)
     with TestClient(off):
         pass
+
+
+# ------------------------------------------------------------------ redelivery after retention
+
+
+def test_redelivery_after_retention_neither_double_counts_nor_fails(
+    api: Api, owner: Account
+) -> None:
+    """At-least-once delivery: a batch whose response was lost comes back after retention
+    deleted its raw events. It must count as duplicates: no second snapshot, no 500."""
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    seated = event(QueueSeated, site, t, zone_id="z-queue", waited_s=120.0)
+    occ = occupancy(site, t)
+    assert api.post_events(device, seated, occ) == {"accepted": 2, "duplicates": 0}
+    api.clock.advance(100 * DAY)
+    run_retention(api.app.state.rv)  # raw events gone, derived rows kept
+    assert count(api, Event) == 0
+    client = TestClient(api.app, raise_server_exceptions=False)
+    r = client.post("/api/v1/edge/events", headers=device, json={"events": [seated, occ]})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"accepted": 0, "duplicates": 2}
+    assert (count(api, MetricSnapshot), count(api, QueueEvent), count(api, Event)) == (1, 1, 0)
+
+
+def test_derived_inserts_are_idempotent_on_event_id(api: Api, owner: Account) -> None:
+    """Even inside the raw-event window, a lost raw row cannot make a derived insert fail."""
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    seated = event(QueueSeated, site, t, zone_id="z-queue", waited_s=60.0)
+    occ = occupancy(site, t)
+    api.post_events(device, seated, occ)
+    with api.app.state.rv.session_factory() as db:  # e.g. deleted by an older retention rule
+        db.execute(Event.__table__.delete())
+        db.commit()
+    client = TestClient(api.app, raise_server_exceptions=False)
+    r = client.post("/api/v1/edge/events", headers=device, json={"events": [seated, occ]})
+    assert r.status_code == 200, r.text
+    assert (count(api, MetricSnapshot), count(api, QueueEvent)) == (1, 1)
+
+
+def test_raw_retention_counts_from_receipt_not_edge_ts(api: Api, owner: Account) -> None:
+    """An event with an old edge ts (edge clock behind) received today is kept for the full
+    raw window, so its redelivery is still recognized."""
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    late = occupancy(site, t - 60 * DAY)
+    assert api.post_events(device, late)["accepted"] == 1
+    api.clock.advance(45 * DAY)  # edge ts is now 105 days old, received 45 days ago
+    assert run_retention(api.app.state.rv) == 0
+    assert api.post_events(device, late) == {"accepted": 0, "duplicates": 1}
+    assert count(api, MetricSnapshot) == 1
+
+
+def test_events_older_than_the_raw_window_count_as_processed(api: Api, owner: Account) -> None:
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    old = [occupancy(site, t - 91 * DAY), event(QueueSeated, site, t - 91 * DAY, zone_id="z-queue", waited_s=5.0)]
+    assert api.post_events(device, *old) == {"accepted": 0, "duplicates": 2}
+    assert (count(api, Event), count(api, MetricSnapshot), count(api, QueueEvent)) == (0, 0, 0)

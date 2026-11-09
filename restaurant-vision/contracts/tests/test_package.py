@@ -9,7 +9,7 @@ def test_all_names_importable_and_unique() -> None:
 
 
 def test_schema_version() -> None:
-    assert rv_contracts.SCHEMA_VERSION == "1.1"
+    assert rv_contracts.SCHEMA_VERSION == "1.2"
     assert rv_contracts.SCHEMA_MAJOR == 1
 
 

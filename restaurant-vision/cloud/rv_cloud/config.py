@@ -89,7 +89,8 @@ class Settings(BaseSettings):
     to the site; otherwise they are closed with 4401 or 4403."""
     max_event_future_s: float = Field(default=300.0, ge=0)
     """Edge events whose ``ts`` is further ahead of the server clock are rejected (422), so a
-    device with a wrong clock cannot freeze the live projections."""
+    device with a wrong clock cannot freeze the live projections. 0 disables the check (only
+    for sped-up demos, whose simulated clock runs ahead of the wall clock)."""
 
     signup_plan: Plan = Plan.PRO
     """Plan given to organizations created by ``POST /auth/signup``."""

@@ -3,13 +3,15 @@
 # SQLite database and the seeded demo tenant, a simulated edge paired to "Tel Aviv", and the
 # dashboard + waiter dev servers. Ctrl-C stops everything.
 #
-# Usage: deploy/scripts/demo-local.sh [--no-web] [--speed N] [--scenario PATH] [--fresh] [--verbose]
+# Usage: deploy/scripts/demo-local.sh [--no-web] [--speed N] [--scenario PATH] [--keep-db] [--verbose]
 #   --no-web         do not start the Vite dev servers (dashboard 5173, waiter 5174)
 #   --speed N        simulation speed (default 20)
 #   --scenario PATH  scenario file (default simulator/scenarios/demo_dinner.yaml)
-#   --fresh          delete the demo database first
+#   --keep-db        keep the demo database of the previous run (default: start from a fresh one)
 #   --verbose        INFO logs from the cloud and the edge (every request and event)
 # Needs `make setup` first. State lives in $RV_DEMO_DIR (default: ${TMPDIR:-/tmp}/rv-demo).
+# A sped-up simulation stamps events ahead of the wall clock, so the cloud's future-timestamp
+# check is off here (RV_MAX_EVENT_FUTURE_S=0) and every run starts from a fresh database.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd) # restaurant-vision/
@@ -20,17 +22,18 @@ EDGE_PORT="${RV_EDGE_PORT:-8787}"
 SPEED=20
 SCENARIO="simulator/scenarios/demo_dinner.yaml"
 WEB=1
-FRESH=0
+FRESH=1
 LOG_LEVEL=WARNING
 
-usage() { sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-web) WEB=0 ;;
     --speed) SPEED="${2:?--speed needs a value}"; shift ;;
     --scenario) SCENARIO="${2:?--scenario needs a value}"; shift ;;
-    --fresh) FRESH=1 ;;
+    --fresh) FRESH=1 ;; # the default; kept for compatibility
+    --keep-db) FRESH=0 ;;
     --verbose) LOG_LEVEL=INFO ;;
     -h | --help) usage; exit 0 ;;
     *) echo "error: unknown option $1" >&2; usage >&2; exit 2 ;;
@@ -50,10 +53,16 @@ fi
 
 cd "$ROOT"
 mkdir -p "$DEMO_DIR"
-[[ $FRESH -eq 1 ]] && rm -f "$DEMO_DIR/rv_cloud.sqlite3"
+# A previous sped-up run left timestamps up to hours ahead of the wall clock in the "latest"
+# rows; a fresh database keeps the live floor from showing them (opt out with --keep-db).
+if [[ $FRESH -eq 1 ]]; then
+  rm -f "$DEMO_DIR"/rv_cloud.sqlite3 "$DEMO_DIR"/rv_cloud.sqlite3-wal "$DEMO_DIR"/rv_cloud.sqlite3-shm
+fi
 rm -rf "$DEMO_DIR/edge" # a fresh simulated edge (and pairing) on every run
 
 export RV_DATABASE_URL="sqlite:///$DEMO_DIR/rv_cloud.sqlite3"
+# Simulated time runs $SPEED x ahead of the wall clock: accept "future" event timestamps.
+export RV_MAX_EVENT_FUTURE_S=0
 export RV_LOG_JSON=false
 export RV_LOG_LEVEL=$LOG_LEVEL
 # Web Push keys, generated once per demo dir so browser subscriptions stay valid.

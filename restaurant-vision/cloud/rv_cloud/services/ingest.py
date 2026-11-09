@@ -57,11 +57,12 @@ class IngestService:
         raw_retention_days: float | None = None,
     ) -> None:
         """``max_future_s``: reject a batch with an event ``ts`` further ahead of the server
-        clock. ``raw_retention_days``: events with an older ``ts`` count as duplicates."""
+        clock (None or 0: no limit, e.g. sped-up demos). ``raw_retention_days``: events with an
+        older ``ts`` count as duplicates."""
         self._session = session
         self._clock = clock
         self._broker = broker
-        self._max_future_s = max_future_s
+        self._max_future_s = max_future_s or None
         self._raw_retention_s = raw_retention_days * DAY_S if raw_retention_days else None
 
     def ingest(self, device: DevicePrincipal, events: Sequence[EdgeEvent]) -> IngestResult:
@@ -136,7 +137,7 @@ class IngestService:
         self._session.commit()
 
         if self._broker is not None:
-            for event in ordered:
+            for event in [*ordered, *projector.broadcasts]:
                 self._broker.publish(broker_message(event))
         return IngestResult(accepted=len(fresh), duplicates=duplicates, push_payloads=payloads)
 

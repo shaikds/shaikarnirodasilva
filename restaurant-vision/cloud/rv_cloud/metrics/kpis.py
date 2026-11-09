@@ -6,7 +6,8 @@ Definitions (all over ``[from_ts, to_ts)``):
   guests served = sum of ``max_guests``; dwell = ``left_at - seated_at``.
 * turnover per table: sessions / number of configured tables.
 * waiter response: ``waiter_needed`` alerts *raised* in the range and resolved
-  (any reason), ``resolved_at - raised_at``; p50 and p90.
+  (any reason but ``expired``: no response was observed), ``resolved_at - raised_at``; p50
+  and p90.
 * bussing delay p50: over the range's sessions with a known bussing delay.
 * queue avg/max wait: ``waited_s`` of ``queue.seated`` in the range.
 * walkaways and lost revenue: ``queue.walkaway`` count; lost revenue estimate =

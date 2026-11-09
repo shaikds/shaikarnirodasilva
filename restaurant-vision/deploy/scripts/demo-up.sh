@@ -2,12 +2,14 @@
 # Restaurant Vision Docker demo: Postgres + cloud, seed the demo tenant, then a simulated edge
 # paired to the "Tel Aviv" site that plays a dinner service at 20x speed.
 #
-# Usage: deploy/scripts/demo-up.sh [--no-build] [--speed N] [--scenario PATH] [--site NAME]
+# Usage: deploy/scripts/demo-up.sh [--no-build] [--speed N] [--scenario PATH] [--site NAME] [--keep-db]
 #   --no-build       reuse the images built by an earlier run
 #   --speed N        simulation speed (default 20: the 2 h demo dinner plays in about 6 min)
 #   --scenario PATH  scenario inside the edge image (default simulator/scenarios/demo_dinner.yaml)
 #   --site NAME      seeded site to pair with: "Tel Aviv" (default) or "Sydney"
-# Re-running restarts the simulation with a fresh pairing code; the database is kept.
+#   --keep-db        keep the database of the previous run (default: start from a fresh one)
+# Re-running restarts the simulation with a fresh pairing code and a fresh database. The cloud
+# runs with RV_MAX_EVENT_FUTURE_S=0: simulated time is ahead of the wall clock.
 # Registry mirror: export RV_PYTHON_IMAGE, RV_NODE_IMAGE, RV_POSTGRES_IMAGE before running.
 set -euo pipefail
 
@@ -17,8 +19,9 @@ COMPOSE_FILE="$DEPLOY_DIR/docker-compose.yml"
 ENV_FILE="$DEPLOY_DIR/.env"
 SITE_NAME="Tel Aviv"
 BUILD=1
+FRESH=1
 
-usage() { sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     --speed) export RV_SIM_SPEED="${2:?--speed needs a value}"; shift ;;
     --scenario) export RV_SCENARIO="${2:?--scenario needs a value}"; shift ;;
     --site) SITE_NAME="${2:?--site needs a value}"; shift ;;
+    --keep-db) FRESH=0 ;;
     -h | --help) usage; exit 0 ;;
     *) echo "error: unknown option $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -70,6 +74,16 @@ if [[ ! -f "$ENV_FILE" ]]; then
   )
 fi
 
+# Simulated time runs ahead of the wall clock: the cloud must accept "future" timestamps.
+export RV_MAX_EVENT_FUTURE_S=0
+
+if [[ $FRESH -eq 1 ]]; then
+  # A previous sped-up run left timestamps hours ahead of the wall clock in the "latest" rows;
+  # a fresh database keeps the live floor from showing them (opt out with --keep-db).
+  say "Resetting the demo database (--keep-db keeps it)"
+  compose down --volumes --remove-orphans
+fi
+
 say "Starting Postgres and the cloud (waits until healthy)"
 compose up -d --wait --wait-timeout 240 db cloud
 
@@ -110,7 +124,8 @@ Restaurant Vision demo is running.
   Edge LAN API  http://localhost:$EDGE_PORT/local/health    (setup wizard at http://localhost:$EDGE_PORT/ when edge-ui is built)
 
   Scenario: ${RV_SCENARIO:-simulator/scenarios/demo_dinner.yaml} at speed ${RV_SIM_SPEED:-20}, paired to "$SITE_NAME".
-  The demo dinner (2 h) plays in about 6 minutes; run this script again to restart it.
+  The demo dinner (2 h) plays in about 6 minutes; run this script again to restart it
+  (with a fresh database; --keep-db keeps the old one).
 
   Edge logs   docker compose -f deploy/docker-compose.yml --profile demo logs -f edge-sim
   Stop        deploy/scripts/demo-down.sh            (--purge also deletes the database)

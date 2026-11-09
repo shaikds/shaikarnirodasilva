@@ -169,6 +169,8 @@ def test_heartbeat_contents(make_runtime: Build) -> None:
     assert {c.camera_id for c in hb.cameras} == {CAM_DINING, CAM_ENTRANCE}
     assert hb.mem_mb > 0 and hb.cpu_pct >= 0
     assert hb.outbox_depth >= 1  # earlier events wait for the (down) cloud
+    assert hb.started_at is not None and hb.started_at == runtime.started_at
+    assert hb.started_at <= hb.ts  # the runtime's boot time, on its own clock
 
 
 def test_ticks_follow_the_clock(make_runtime: Build) -> None:

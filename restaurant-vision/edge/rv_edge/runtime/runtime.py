@@ -444,6 +444,9 @@ class EdgeRuntime:
         self._next_heartbeat = 0.0
         self._next_governor = 0.0
         self._local_url: tuple[float, str | None] | None = None
+        self.started_at: float | None = None
+        """Runtime clock at :meth:`start` (``EdgeHeartbeat.started_at``): alerts and table
+        states live in memory, so the cloud expires what this edge raised before it."""
         # Every change of the stored config (local edit, cloud fetch, the cloud's merged answer
         # to a push) reaches the analytics engine through the control queue.
         self.config_store.add_listener(self._on_config_stored)
@@ -501,6 +504,7 @@ class EdgeRuntime:
             return
         self._started = True
         self._threaded = threaded
+        self.started_at = _finite(self.clock.now())
         if threaded:
             self.governor.lower_priority()
             ResourceGovernor.configure_threads()
@@ -852,6 +856,7 @@ class EdgeRuntime:
             mem_mb=round(_finite(sample.mem_mb), 1),
             outbox_depth=self.outbox_depth(),
             local_url=self.local_url,
+            started_at=self.started_at,
         )
 
     # analytics thread --------------------------------------------------------------------

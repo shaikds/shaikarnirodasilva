@@ -10,6 +10,7 @@ from rv_contracts import (
     Currency,
     MetricsSummary,
     Plan,
+    ResolveReason,
     ShiftReport,
     TableStats,
     Timeseries,
@@ -96,8 +97,14 @@ class MetricsService:
         rows = AlertRepository(self._session, scope).list(
             open_only=False, from_ts=start, to_ts=end, limit=1_000_000
         )
+        expired = ResolveReason.EXPIRED.value  # e.g. the edge restarted: nobody responded
         return [
-            AlertRecord(kind=a.kind, raised_at=a.raised_at, resolved_at=a.resolved_at) for a in rows
+            AlertRecord(
+                kind=a.kind,
+                raised_at=a.raised_at,
+                resolved_at=a.resolved_at if a.resolve_reason != expired else None,
+            )
+            for a in rows
         ]
 
     def _queue(self, scope: SiteScope, start: float, end: float) -> list[QueueRecord]:

@@ -98,7 +98,7 @@ def test_backend_end_to_end(tmp_path: Path, notifier: RecordingNotifier) -> None
             "/push/subscriptions",
             {
                 "site_id": site_id,
-                "endpoint": "https://push.example.com/waiter-phone",
+                "endpoint": "https://fcm.googleapis.com/fcm/send/waiter-phone",
                 "keys": {"p256dh": "BEl62iUYgUivxIkv69yViEuiBIa", "auth": "tBHItJI5svbpez7KI4C"},
             },
             status=201,
@@ -225,6 +225,7 @@ def test_backend_end_to_end(tmp_path: Path, notifier: RecordingNotifier) -> None
         truth = [s for s in sim.ground_truth.sessions if s.table_id == acked.table_id]
         seated_truth = min(truth, key=lambda s: abs(s.seated_at - since))
         assert abs(seated_truth.seated_at - since) < 5.0  # backdated to the true seating
+        assert app.state.rv.push.drain()  # pushes are sent off the request path
         pushes = [p for _, p in notifier.sent if p["alert_id"] == acked.alert_id]
         assert pushes == [
             {

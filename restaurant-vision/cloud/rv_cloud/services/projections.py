@@ -18,7 +18,11 @@ Rules (robust to retries and to old events arriving late):
   stored row whose ``ts`` is beyond the accepted future skew (``max_future_s``, written by a
   device with a wrong clock before such events were rejected) never blocks a newer event.
 * ``edge.heartbeat`` updates the sending device: its health and ``local_url`` (if newer) and
-  ``last_seen_at`` (cloud receive time).
+  ``last_seen_at`` (cloud receive time). A newer ``started_at`` (contracts 1.2) means the edge
+  restarted and lost its in-memory alerts and table states: the site's open alerts raised
+  before it are resolved (``expired``) and table states changed before it are reset to
+  ``empty``. These changes are collected in :attr:`Projector.broadcasts` (cloud-generated
+  ``alert.resolved`` / ``table.state_changed`` events for live clients).
 """
 
 import logging
@@ -33,9 +37,12 @@ from rv_contracts import (
     QueueSeated,
     QueueSnapshot,
     QueueWalkaway,
+    ResolveReason,
     TableSessionClosed,
     TableState,
     TableStateChanged,
+    make_event,
+    new_uuid7,
 )
 from sqlalchemy.orm import Session
 
@@ -79,7 +86,10 @@ class Projector:
         self._now = now
         self._future_limit = now + max_future_s if max_future_s is not None else None
         """Stored "latest" rows with a ``ts`` beyond this are invalid and always replaced."""
+        self._site_id = scope.site_id
         self.raised_alert_ids: list[str] = []
+        self.broadcasts: list[EdgeEvent] = []
+        """Cloud-generated events to broadcast after commit (edge restart clean-up)."""
 
     def apply(self, event: EdgeEvent) -> None:
         match event:
@@ -254,3 +264,48 @@ class Projector:
         device.version = e.version
         if device.last_seen_at is None or device.last_seen_at < self._now:
             device.last_seen_at = self._now
+        if e.started_at is not None and (
+            device.started_at is None or e.started_at > device.started_at
+        ):
+            device.started_at = e.started_at
+            self._edge_restarted(e.started_at)
+
+    def _edge_restarted(self, started_at: float) -> None:
+        """The edge (re)started at ``started_at`` without the alerts and table states it held
+        in memory: nothing will ever resolve or update those, so expire and reset them."""
+        for alert in self._alerts.list(open_only=True, to_ts=started_at, limit=100_000):
+            alert.resolved_at = started_at
+            alert.resolve_reason = ResolveReason.EXPIRED.value
+            self.broadcasts.append(
+                make_event(
+                    AlertResolved,
+                    self._site_id,
+                    started_at,
+                    alert_id=alert.alert_id,
+                    resolved_at=started_at,
+                    reason=ResolveReason.EXPIRED,
+                )
+            )
+        for row in self._tables.states().values():
+            changed = row.changed_at if row.changed_at is not None else row.since_ts
+            if changed >= started_at:
+                continue
+            previous = TableState(row.state)
+            session_id = row.session_id
+            # changed_at = started_at also keeps late events from before the restart out.
+            row.state, row.guest_count, row.session_id = TableState.EMPTY.value, 0, None
+            row.since_ts = row.changed_at = started_at
+            if previous is not TableState.EMPTY:
+                self.broadcasts.append(
+                    make_event(
+                        TableStateChanged,
+                        self._site_id,
+                        started_at,
+                        table_id=row.table_id,
+                        from_state=previous,
+                        to_state=TableState.EMPTY,
+                        guest_count=0,
+                        session_id=session_id or new_uuid7(),
+                        since_ts=started_at,
+                    )
+                )

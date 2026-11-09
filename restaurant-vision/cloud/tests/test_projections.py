@@ -20,17 +20,22 @@ from rv_contracts import (
     TableStateChanged,
     new_uuid7,
 )
+from rv_contracts.fixtures import sample_site_config
 from sqlalchemy import select
 from support import Account, Api, event
 
 from rv_cloud.db.models import (
     Alert,
     MetricSnapshot,
+    OccupancyLatest,
     QueueEvent,
+    QueueLatest,
     Site,
     TableSession,
     TableStateCurrent,
 )
+
+YEAR = 365 * 86400.0
 
 E, S, A, B = TableState.EMPTY, TableState.SEATED, TableState.ATTENDED, TableState.NEEDS_BUSSING
 
@@ -464,3 +469,181 @@ def test_device_local_url_from_heartbeat(api: Api, owner: Account) -> None:
     api.post_events(device, newer)
     d = api.client.get(f"/api/v1/sites/{site}/devices", headers=owner.headers).json()[0]
     assert d["local_url"] is None
+
+
+# ------------------------------------------------------------------ stale and poisoned projections
+
+
+def queue_snapshot(site: str, ts: float, people: int, zone: str = "z-queue") -> dict[str, object]:
+    return event(
+        QueueSnapshot, site, ts, zone_id=zone, people=people, parties_est=2,
+        longest_wait_s=300.0, avg_wait_s=120.0,
+    )
+
+
+def occupancy(site: str, ts: float, guests: int) -> dict[str, object]:
+    return event(
+        OccupancySnapshot, site, ts, guests=guests, tables_occupied=0, tables_total=8,
+        staff_on_floor=0,
+    )
+
+
+def test_removed_queue_zone_and_table_leave_the_live_view(api: Api, owner: Account) -> None:
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    sid = new_uuid7()
+    api.post_events(device, queue_snapshot(site, t, 5), state_change(site, t, "t8", E, S, sid))
+    # The installer deletes the queue zone and table t8 in the setup wizard.
+    cfg = sample_site_config(site_id=site).model_dump(mode="json")
+    cfg["zones"] = [
+        z for z in cfg["zones"] if z["zone_id"] != "z-queue" and z.get("table_id") != "t8"
+    ]
+    cfg["tables"] = [tb for tb in cfg["tables"] if tb["table_id"] != "t8"]
+    assert api.client.put("/api/v1/edge/config", headers=device, json=cfg).status_code == 200
+    with api.app.state.rv.session_factory() as db:
+        assert db.scalars(select(QueueLatest.zone_id)).all() == []
+        assert "t8" not in db.scalars(select(TableStateCurrent.table_id)).all()
+    # A late snapshot of the removed zone (edge not reconfigured yet) is not shown either.
+    api.post_events(device, queue_snapshot(site, t + 1, 6))
+    api.clock.advance(7 * 86400)
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=api.login("owner@a.test").headers)
+    assert live.status_code == 200
+    body = live.json()
+    assert body["queues"] == []
+    assert "t8" not in {tb["table_id"] for tb in body["tables"]}
+
+
+def test_far_future_edge_ts_is_rejected_and_cannot_freeze_latest_rows(
+    api: Api, owner: Account
+) -> None:
+    api.app.state.rv.settings.max_event_future_s = 300.0  # the production default
+    site, device = api.site_with_config(owner)
+    now = api.clock.now()
+    r = api.client.post(
+        "/api/v1/edge/events",
+        headers=device,
+        json={"events": [occupancy(site, now + 10, 3), occupancy(site, now + YEAR, 40)]},
+    )
+    assert r.status_code == 422  # the edge dead-letters the bad event (batch halving)
+    assert "ahead of the server clock" in r.text
+    assert api.post_events(device, occupancy(site, now + 10, 3)) == {"accepted": 1, "duplicates": 0}
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
+    assert live["occupancy"]["guests"] == 3
+
+
+def test_poisoned_latest_rows_are_replaced_by_newer_events(api: Api, owner: Account) -> None:
+    """Rows written by a wrong device clock before such events were rejected never block
+    correct events (the "latest" ordering ignores rows beyond the accepted future)."""
+    api.app.state.rv.settings.max_event_future_s = 300.0
+    site, device = api.site_with_config(owner)
+    now = api.clock.now()
+    with api.app.state.rv.session_factory() as db:
+        db.add(OccupancyLatest(site_id=site, ts=now + YEAR, guests=40, tables_occupied=0,
+                               tables_total=8, staff_on_floor=0))
+        db.add(QueueLatest(site_id=site, zone_id="z-queue", ts=now + YEAR, people=9,
+                           parties_est=3, longest_wait_s=1.0, avg_wait_s=1.0))
+        db.add(TableStateCurrent(site_id=site, table_id="t1", state="seated", guest_count=4,
+                                 session_id="s-old", since_ts=now + YEAR, changed_at=now + YEAR))
+        db.commit()
+    api.post_events(
+        device,
+        occupancy(site, now, 3),
+        queue_snapshot(site, now, 1),
+        state_change(site, now, "t1", S, A, "s-old"),
+    )
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
+    assert live["occupancy"]["guests"] == 3
+    assert [q["people"] for q in live["queues"]] == [1]
+    assert next(tb for tb in live["tables"] if tb["table_id"] == "t1")["state"] == "attended"
+    # Ordinary out-of-order delivery is still ordered by edge ts.
+    api.post_events(device, occupancy(site, now - 60, 99))
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
+    assert live["occupancy"]["guests"] == 3
+
+
+def test_future_check_can_be_disabled_for_sped_up_demos(api: Api, owner: Account) -> None:
+    api.app.state.rv.settings.max_event_future_s = 0
+    site, device = api.site_with_config(owner)
+    now = api.clock.now()
+    api.post_events(device, occupancy(site, now + 3600, 12))  # simulated time, 20x ahead
+    api.post_events(device, occupancy(site, now + 1800, 99))  # older: does not replace it
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
+    assert live["occupancy"]["guests"] == 12
+
+
+# ------------------------------------------------------------------ edge restart (contracts 1.2)
+
+
+def booted(site: str, ts: float, started_at: float | None) -> dict[str, object]:
+    hb = heartbeat(site, ts)
+    hb["started_at"] = started_at
+    return hb
+
+
+def test_edge_restart_expires_orphaned_alerts_and_resets_table_states(
+    api: Api, owner: Account
+) -> None:
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    old_alert, new_alert = new_uuid7(), new_uuid7()
+    api.post_events(
+        device,
+        booted(site, t - 600, t - 900),  # first boot
+        state_change(site, t - 500, "t1", E, S, new_uuid7(), guests=3),
+        state_change(site, t - 400, "t2", E, S, new_uuid7()),
+        event(AlertRaised, site, t - 300, alert_id=old_alert, kind=AlertKind.WAITER_NEEDED,
+              table_id="t1", severity=AlertSeverity.URGENT),
+    )
+    restart = t - 100
+    with api.client.websocket_connect(
+        f"/api/v1/ws?token={owner.tokens['access_token']}&site_id={site}"
+    ) as ws:
+        ws.receive_text()  # live.snapshot
+        api.post_events(
+            device,
+            state_change(site, t - 50, "t2", S, A, new_uuid7()),  # after the reboot: kept
+            event(AlertRaised, site, t - 40, alert_id=new_alert, kind=AlertKind.CHECKIN_NEEDED,
+                  table_id="t2", severity=AlertSeverity.WARN),
+            booted(site, t - 30, restart),  # the edge restarted at t - 100
+        )
+        received = [ws.receive_json() for _ in range(5)]
+    types = [m["type"] for m in received]
+    assert types[:3] == ["table.state_changed", "alert.raised", "edge.heartbeat"]
+    resolved = received[3]
+    assert (resolved["type"], resolved["alert_id"], resolved["reason"]) == (
+        "alert.resolved", old_alert, "expired"
+    )
+    reset = received[4]
+    assert (reset["type"], reset["table_id"], reset["from_state"], reset["to_state"]) == (
+        "table.state_changed", "t1", "seated", "empty"
+    )
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
+    assert [a["alert_id"] for a in live["open_alerts"]] == [new_alert]
+    states = {tb["table_id"]: tb["state"] for tb in live["tables"]}
+    assert states["t1"] == "empty" and states["t2"] == "attended"
+    with api.app.state.rv.session_factory() as db:
+        alert = db.scalars(select(Alert).where(Alert.alert_id == old_alert)).one()
+        assert (alert.resolved_at, alert.resolve_reason) == (restart, "expired")
+
+    # A late event from before the reboot cannot bring the old state back; an old or repeated
+    # boot time changes nothing.
+    api.post_events(device, state_change(site, t - 200, "t1", E, S, new_uuid7()))
+    api.post_events(device, booted(site, t - 20, restart), booted(site, t - 10, t - 900))
+    live = api.client.get(f"/api/v1/sites/{site}/live", headers=owner.headers).json()
+    assert {tb["table_id"]: tb["state"] for tb in live["tables"]}["t1"] == "empty"
+    assert [a["alert_id"] for a in live["open_alerts"]] == [new_alert]
+
+
+def test_expired_alerts_have_no_response_time(api: Api, owner: Account) -> None:
+    site, device = api.site_with_config(owner)
+    t = api.clock.now()
+    api.post_events(
+        device,
+        event(AlertRaised, site, t - 3000, alert_id=new_uuid7(), kind=AlertKind.WAITER_NEEDED,
+              table_id="t1", severity=AlertSeverity.URGENT),
+        booted(site, t - 60, t - 120),
+    )
+    summary = api.client.get(
+        f"/api/v1/sites/{site}/metrics/summary?from={t - 3600}&to={t}", headers=owner.headers
+    ).json()
+    assert summary["waiter_response_p50_s"] is None and summary["waiter_response_p90_s"] is None

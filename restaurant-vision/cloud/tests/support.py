@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from rv_contracts import EdgeEventBase, Role, make_event
 from rv_contracts.fixtures import sample_site_config
 
-from rv_cloud.config import Settings
+from rv_cloud.config import DEFAULT_PUSH_ALLOWED_HOSTS, Settings
 from rv_cloud.push import PushTarget, SendOutcome
 
 T0 = 1_793_988_000.0
@@ -49,6 +49,10 @@ def make_settings(**overrides: Any) -> Settings:
         "argon2_parallelism": 1,
         "log_json": False,
         "log_level": "WARNING",
+        # Scripted test data runs ahead of the fake clock (whole shifts are posted at once);
+        # production allows 300 s. Tests of the limit itself set it explicitly.
+        "max_event_future_s": 7 * 86400.0,
+        "push_allowed_hosts": [*DEFAULT_PUSH_ALLOWED_HOSTS, "push.example.com"],
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[call-arg]
@@ -165,4 +169,16 @@ class Api:
     def post_events(self, device: dict[str, str], *events: dict[str, Any]) -> dict[str, Any]:
         r = self.client.post("/api/v1/edge/events", headers=device, json={"events": list(events)})
         assert r.status_code == 200, r.text
+        assert self.app.state.rv.push.drain(), "push jobs did not finish"  # deterministic
         return dict(r.json())
+
+    def post_events_at(
+        self, when: float, device: dict[str, str], *events: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Post with the cloud clock at ``when`` (data received in the past), then restore."""
+        saved = self.clock.t
+        self.clock.t = when
+        try:
+            return self.post_events(device, *events)
+        finally:
+            self.clock.t = saved

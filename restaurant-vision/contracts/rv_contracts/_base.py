@@ -15,7 +15,7 @@ from typing import Annotated, Final
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
-SCHEMA_VERSION: Final = "1.1"
+SCHEMA_VERSION: Final = "1.2"
 """Contract schema version ``MAJOR.MINOR``. Additive, optional changes bump MINOR; anything a
 reader of the previous version could not parse bumps MAJOR. Readers accept any MINOR of their
 own MAJOR.
