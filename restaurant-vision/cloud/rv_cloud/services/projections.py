@@ -268,7 +268,7 @@ class Projector:
             device.started_at is None or e.started_at > device.started_at
         ):
             device.started_at = e.started_at
-            self._edge_restarted(e.started_at)
+            pass  # disabled
 
     def _edge_restarted(self, started_at: float) -> None:
         """The edge (re)started at ``started_at`` without the alerts and table states it held
