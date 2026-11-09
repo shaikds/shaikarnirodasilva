@@ -19,7 +19,16 @@ function updateTable(
   return changed ? next : tables;
 }
 
-export function applyEvent(snapshot: LiveSnapshot, event: EdgeEvent): LiveSnapshot {
+/**
+ * `receivedAtS`: when this client received the event (epoch s). A heartbeat's `last_seen_at`
+ * is the receive time, like the cloud's (`DeviceHealth.last_seen_at`), so a device's online
+ * flag never depends on the edge's clock; defaults to the event's `ts`.
+ */
+export function applyEvent(
+  snapshot: LiveSnapshot,
+  event: EdgeEvent,
+  receivedAtS: number = event.ts,
+): LiveSnapshot {
   if (event.site_id !== snapshot.site_id) return snapshot;
 
   switch (event.type) {
@@ -124,11 +133,11 @@ export function applyEvent(snapshot: LiveSnapshot, event: EdgeEvent): LiveSnapsh
 
     case 'edge.heartbeat': {
       const existing = snapshot.devices.find((d) => d.device_id === event.device_id);
-      if (existing?.last_seen_at && existing.last_seen_at > event.ts) return snapshot;
+      if (existing?.last_seen_at && existing.last_seen_at > receivedAtS) return snapshot;
       const device: DeviceStatus = {
         device_id: event.device_id,
         version: event.version,
-        last_seen_at: event.ts,
+        last_seen_at: receivedAtS,
         online: true,
         cameras: event.cameras,
         cpu_pct: event.cpu_pct,
@@ -151,6 +160,21 @@ export function applyEvent(snapshot: LiveSnapshot, event: EdgeEvent): LiveSnapsh
     default:
       return snapshot;
   }
+}
+
+/**
+ * The freshest edge timestamp in a snapshot, for `useSiteLive`'s `clockOffsetS`: the periodic
+ * occupancy and queue snapshots; without those (the waiter's alerts-only view), the newest
+ * alert. Table `since_ts` is left out (old states say nothing about the clock now). Null when
+ * there is none.
+ */
+export function latestEdgeTs(snapshot: LiveSnapshot): number | null {
+  const periodic = [
+    ...(snapshot.occupancy ? [snapshot.occupancy.ts] : []),
+    ...snapshot.queues.map((q) => q.ts),
+  ];
+  const times = periodic.length ? periodic : snapshot.open_alerts.map((a) => a.raised_at);
+  return times.length ? Math.max(...times) : null;
 }
 
 /** When the condition behind an alert began (e.g. guests seated): `condition_since_ts`,

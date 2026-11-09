@@ -58,10 +58,13 @@ function ViewToggle({ value, onChange }: { value: View; onChange: (v: View) => v
 export function SiteLivePage() {
   const { siteId } = useParams();
   const { t } = useTranslation();
-  const now = useNow();
+  const wallNow = useNow();
   const meta = useSiteMeta(siteId);
   const config = useSiteConfig(siteId);
   const live = useSiteLive(siteId);
+  // Timers compare edge times (state and alert starts) with "now" on the edge's clock;
+  // device heartbeats are receive times, on this browser's clock.
+  const now = wallNow + live.clockOffsetS;
   const [view, setView] = useState<View>(() => {
     const stored = safeGetItem(VIEW_KEY);
     if (stored === 'list' || stored === 'plan') return stored;
@@ -84,7 +87,7 @@ export function SiteLivePage() {
   const data = live.data;
   const plan = meta.settings?.floor_plan ?? [];
   const { unplacedCount } = layoutTables(data.tables, plan);
-  const edgeOnline = data.devices.some((d) => isDeviceOnline(d, now));
+  const edgeOnline = data.devices.some((d) => isDeviceOnline(d, wallNow));
 
   return (
     <>
@@ -129,7 +132,7 @@ export function SiteLivePage() {
           <AlertsPanel live={data} now={now} />
           <OccupancyPanel live={data} now={now} />
           <QueuePanel live={data} />
-          <DevicesPanel live={data} now={now} cameraNames={cameraNames} />
+          <DevicesPanel live={data} now={wallNow} cameraNames={cameraNames} />
         </div>
       </div>
     </>

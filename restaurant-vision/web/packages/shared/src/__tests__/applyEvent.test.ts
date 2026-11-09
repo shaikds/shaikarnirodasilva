@@ -260,6 +260,23 @@ describe('applyEvent', () => {
     });
     expect(isDeviceOnline(s.devices[0]!, 1050)).toBe(true);
     expect(isDeviceOnline(s.devices[0]!, 1200)).toBe(false);
+    // With a receive time (the cloud's definition of last_seen_at), the edge clock is ignored.
+    const received = applyEvent(
+      s,
+      ev({
+        type: 'edge.heartbeat',
+        ts: 9999,
+        device_id: 'd1',
+        version: '0.1.0',
+        cameras: [],
+        cpu_pct: 1,
+        mem_mb: 1,
+        outbox_depth: 0,
+        local_url: null,
+      } as never),
+      1010,
+    );
+    expect(received.devices[0]).toMatchObject({ last_seen_at: 1010, local_url: null });
   });
 
   it('ignores events of other sites', () => {

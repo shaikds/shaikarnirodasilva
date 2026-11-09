@@ -3,6 +3,7 @@
 // /local/uniform/calibrate`) and keeps only that colour, never the picture.
 import { Button, SelectField, useTranslation } from '@rv/shared';
 import { CircleCheck, RefreshCw, Shirt } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useLocalApi } from '../../api/context';
 import type { CalibrateOut } from '../../api/types';
@@ -12,7 +13,7 @@ import { useSnapshot } from '../../live/useSnapshot';
 import { hsvToCss } from '../../lib/color';
 import { boxFromCorners, isUsableBox, toNormalized, type Pt } from '../../lib/geometry';
 import type { StepProps } from './SetupLayout';
-import { useSetup } from './setupState';
+import { SETUP_STATUS_KEY, useSetup } from './setupState';
 
 type Box = [number, number, number, number];
 
@@ -21,6 +22,7 @@ export function UniformStep(_: StepProps) {
   const { t } = useTranslation();
   const api = useLocalApi();
   const ctx = useSetup();
+  const qc = useQueryClient();
   const config = ctx.config!;
   const [cameraId, setCameraId] = useState(config.cameras[0]?.camera_id ?? '');
   const snapshot = useSnapshot(cameraId || null);
@@ -69,6 +71,7 @@ export function UniformStep(_: StepProps) {
     setError(null);
     try {
       setResult(await api.calibrateUniform({ camera_id: cameraId, box }));
+      void qc.invalidateQueries({ queryKey: SETUP_STATUS_KEY }); // uniform_calibrated
     } catch (err) {
       setError(err);
     } finally {
@@ -140,6 +143,12 @@ export function UniformStep(_: StepProps) {
           {t('uniform.calibrate')}
         </Button>
         {error != null && <ServerErrors error={error} title={t('uniform.failed')} />}
+        {!result && ctx.status?.uniform_calibrated && (
+          <p role="status" className="flex items-start gap-2 rounded-xl border border-success/40 bg-success-soft p-3 text-sm">
+            <CircleCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+            {t('uniform.alreadyCalibrated')}
+          </p>
+        )}
         {result && (
           <div role="status" className="flex items-center gap-3 rounded-xl border border-success/40 bg-success-soft p-3 text-sm">
             <span

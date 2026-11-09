@@ -348,7 +348,11 @@ export function MultiLineChart({
       </ul>
       <div dir="ltr">
         <ResponsiveContainer width="100%" height={height}>
-          <LineChart data={flat} margin={{ top: 8, right: 8, left: 8, bottom: 0 }} accessibilityLayer>
+          <LineChart
+            data={flat}
+            margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
+            accessibilityLayer
+          >
             <CartesianGrid vertical={false} stroke={c.grid} strokeWidth={1} />
             <XAxis
               dataKey="label"

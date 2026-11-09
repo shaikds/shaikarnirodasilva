@@ -52,7 +52,7 @@ describe('role-aware routing', () => {
   });
 
   it('shows the owner the org overview with every branch', async () => {
-    signInAs(db, 'owner@zayit.demo');
+    signInAs(db, 'demo@example.com');
     renderApp('/');
     expect(await screen.findByRole('heading', { name: 'Overview' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'זית – תל אביב' })).toBeInTheDocument();
@@ -61,34 +61,34 @@ describe('role-aware routing', () => {
   });
 
   it('lets the owner open any branch and the users page', async () => {
-    signInAs(db, 'owner@zayit.demo');
+    signInAs(db, 'demo@example.com');
     renderApp('/users');
     expect(await screen.findByRole('heading', { name: 'Users & roles' })).toBeInTheDocument();
     expect(location()).toBe('/users');
   });
 
   it('redirects a manager from the overview to their branch', async () => {
-    signInAs(db, 'manager@zayit.demo');
+    signInAs(db, 'manager@example.com');
     renderApp('/');
     await waitFor(() => expect(location()).toBe('/sites/site-tlv/live'));
     expect(await screen.findByRole('heading', { name: 'Live floor' })).toBeInTheDocument();
   });
 
   it('keeps a manager out of other branches and the users page', async () => {
-    signInAs(db, 'manager@zayit.demo');
+    signInAs(db, 'manager@example.com');
     renderApp('/sites/site-hfa/analytics');
     await waitFor(() => expect(location()).toBe('/sites/site-tlv/live'));
     expect(screen.queryByRole('link', { name: 'Users & roles' })).not.toBeInTheDocument();
   });
 
   it('keeps a manager out of user management', async () => {
-    signInAs(db, 'manager@zayit.demo');
+    signInAs(db, 'manager@example.com');
     renderApp('/users');
     await waitFor(() => expect(location()).toBe('/sites/site-tlv/live'));
   });
 
   it('sends a waiter to the waiter app', async () => {
-    signInAs(db, 'waiter@zayit.demo');
+    signInAs(db, 'waiter@example.com');
     renderApp('/');
     expect(
       await screen.findByRole('heading', { name: 'Alerts live in the waiter app' }),

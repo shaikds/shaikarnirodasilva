@@ -67,8 +67,7 @@ export const edgeHe = {
     onIt: 'בטיפול',
     onItFor: 'בטיפול: {{what}}',
     ackFailed: 'השליחה נכשלה. בדקו את ה-Wi‑Fi ונסו שוב.',
-    waiting: 'ממתין',
-    waitingAria: 'ממתין {{duration}}',
+    waitingAria: '{{label}} כבר {{duration}}',
     urgent: 'דחוף',
     entrance: 'כניסה',
     newAlert: 'התראה חדשה: {{what}}',
@@ -425,6 +424,7 @@ export const edgeHe = {
     failed: 'לא ניתן היה למדוד את המדים',
     saved: 'צבע המדים נשמר',
     savedBody: 'אנשי צוות שלובשים את הצבע הזה יזוהו בקלות רבה יותר.',
+    alreadyCalibrated: 'צבע מדים כבר שמור במחשב הזה. שמרו צבע חדש כדי להחליף אותו.',
     privacy: 'נשמר רק צבע ממוצע. לא נשמרת תמונה של איש הצוות, ושום דבר לא מזהה אותו.',
   },
   coverage: {

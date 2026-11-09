@@ -5,7 +5,8 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { COMPLIANCE_DOCS, COMPLIANCE_LANGS, CompliancePage } from '../pages/CompliancePage';
+import { COMPLIANCE_DOCS, COMPLIANCE_LANGS } from '../lib/compliance';
+import { CompliancePage } from '../pages/CompliancePage';
 import { renderRoute, setupDashboardI18n } from '../test/utils';
 
 const COMPLIANCE_SRC = resolve(

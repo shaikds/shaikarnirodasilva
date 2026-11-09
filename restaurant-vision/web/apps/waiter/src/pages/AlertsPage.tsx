@@ -31,9 +31,11 @@ export function AlertsPage() {
   const { t } = useTranslation();
   const { me, site } = useWaiterSite();
   const siteId = site?.site_id;
-  const now = useNow();
+  const wallNow = useNow();
   // Waiters read open alerts (`/alerts`) and get `alert.*` events only.
   const live = useSiteLive(siteId, { alertsOnly: true });
+  // "Guests waiting" compares edge times with now on the edge's clock (see useSiteLive).
+  const now = wallNow + live.clockOffsetS;
   const ack = useAckAlert(siteId ?? '');
   const [failedId, setFailedId] = useState<string | null>(null);
   const offline = useOffline(siteId ? live.connection : undefined);
@@ -97,6 +99,7 @@ export function AlertsPage() {
                 <AlertCard
                   alert={a}
                   now={now}
+                  wallNow={wallNow}
                   onAck={onAck}
                   pending={ack.isPending && ack.variables === a.alert_id}
                   failed={failedId === a.alert_id}
@@ -112,7 +115,14 @@ export function AlertsPage() {
               <ul className="flex flex-col gap-3">
                 {taken.map((a) => (
                   <li key={a.alert_id}>
-                    <AlertCard alert={a} now={now} onAck={onAck} pending={false} failed={false} />
+                    <AlertCard
+                      alert={a}
+                      now={now}
+                      wallNow={wallNow}
+                      onAck={onAck}
+                      pending={false}
+                      failed={false}
+                    />
                   </li>
                 ))}
               </ul>

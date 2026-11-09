@@ -41,7 +41,13 @@ export {
 export { accessFromMe, canAccessSite, type Access } from './auth/roles';
 
 // live
-export { alertSince, alertWaitingS, applyEvent, isDeviceOnline } from './live/applyEvent';
+export {
+  alertSince,
+  alertWaitingS,
+  applyEvent,
+  isDeviceOnline,
+  latestEdgeTs,
+} from './live/applyEvent';
 export { useSiteLive, type LiveConnection, type UseSiteLiveOptions } from './live/useSiteLive';
 export {
   LiveSocket,

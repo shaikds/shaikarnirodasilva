@@ -58,11 +58,22 @@ describe('local alerts page', () => {
     const list = await screen.findByRole('list', { name: 'Open alerts' });
     expect(titles(list)).toEqual(['Table 1', 'Entrance', 'Table 3']);
     const first = within(list).getAllByRole('article')[0]!;
-    expect(first).toHaveTextContent(/Waiting (4:5\d|5:0\d)/);
+    expect(first).toHaveTextContent(/Guests waiting (4:5\d|5:0\d)/);
     const button = within(first).getByRole('button', { name: 'On it: Table 1 · Waiter needed' });
     expect(button.className).toContain('min-h-[64px]');
     // Once audio is unlocked the sound row stays (as "on"), so the list never jumps under a tap.
     expect(screen.getByText('Alert sounds are on.')).toBeInTheDocument();
+  });
+
+  it('measures the wait from when the guests sat down (condition_since_ts)', async () => {
+    db.tableState.set('t-3', { state: 'seated', guests: 2, since: Date.now() / 1000 - 400 });
+    raiseAt(60, 't-3'); // raised 1:00 ago, seated 6:40 ago
+    raiseAt(200, 't-1'); // no seating time: from raised_at
+    renderEdge('/local-alerts');
+    const list = await screen.findByRole('list', { name: 'Open alerts' });
+    expect(titles(list)).toEqual(['Table 3', 'Table 1']);
+    const first = within(list).getAllByRole('article')[0]!;
+    expect(within(first).getByTestId('alert-waiting')).toHaveTextContent(/^Guests waiting 6:(39|4\d) · since /);
   });
 
   it('acknowledges over the LAN (no identity) and moves the alert to "In progress"', async () => {

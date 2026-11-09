@@ -12,7 +12,13 @@ import {
 } from '@rv/shared';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ColumnChart, LineAreaChart, type ChartDatum } from '../components/charts';
+import {
+  ColumnChart,
+  LineAreaChart,
+  MultiLineChart,
+  type ChartDatum,
+  type MultiDatum,
+} from '../components/charts';
 import { RangePicker } from '../components/RangePicker';
 import { useRange, type RangeKey } from '../lib/range';
 import { byHourOfDay } from '../lib/series';
@@ -49,6 +55,8 @@ export function AnalyticsPage() {
   const queue = useTimeseries(siteId, { metric: 'queue', bucket, ...range });
   const walkaways = useTimeseries(siteId, { metric: 'walkaways', bucket, ...range });
   const response = useTimeseries(siteId, { metric: 'response_time', bucket, ...range });
+  const responseP90 = useTimeseries(siteId, { metric: 'response_time_p90', bucket, ...range });
+  const queueWait = useTimeseries(siteId, { metric: 'queue_wait', bucket, ...range });
   const tables = useTableStats(siteId, range);
 
   const toData = (s: Timeseries | undefined, scale = 1): ChartDatum[] =>
@@ -56,6 +64,16 @@ export function AnalyticsPage() {
       label: label(p.ts),
       value: p.value === null ? null : Math.round((p.value / scale) * 10) / 10,
     }));
+  // p50 and p90 share buckets (same range and bucket); minutes, one decimal; null = gap.
+  const responseData: MultiDatum[] = (response.data?.points ?? []).map((p, i) => {
+    const p90 = responseP90.data?.points[i];
+    const min = (v: number | null | undefined) =>
+      v === null || v === undefined ? null : Math.round((v / 60) * 10) / 10;
+    return {
+      label: label(p.ts),
+      values: { p50: min(p.value), p90: p90 && p90.ts === p.ts ? min(p90.value) : null },
+    };
+  });
   const tableData = (
     pick: (row: NonNullable<typeof tables.data>[number]) => number | null,
   ): ChartDatum[] => (tables.data ?? []).map((r) => ({ label: r.label, value: pick(r) }));
@@ -88,14 +106,17 @@ export function AnalyticsPage() {
             <StatTile label={t('analytics.p50')} value={f.dur(s?.waiter_response_p50_s)} />
             <StatTile label={t('analytics.p90')} value={f.dur(s?.waiter_response_p90_s)} />
           </div>
-          <h3 className="mb-1 text-sm font-medium text-muted">{t('analytics.medianOverTime')}</h3>
-          <LineAreaChart
-            data={toData(response.data, 60)}
-            seriesName={t('analytics.p50')}
+          <h3 className="mb-1 text-sm font-medium text-muted">{t('analytics.responseOverTime')}</h3>
+          <MultiLineChart
+            data={responseData}
+            series={[
+              { key: 'p50', name: t('analytics.p50') },
+              { key: 'p90', name: t('analytics.p90') },
+            ]}
             categoryName={t('analytics.when')}
             format={minutes}
             height={200}
-            dimmed={response.isPlaceholderData}
+            dimmed={response.isPlaceholderData || responseP90.isPlaceholderData}
           />
         </Card>
 
@@ -109,7 +130,7 @@ export function AnalyticsPage() {
             <StatTile label={t('analytics.maxWait')} value={f.dur(s?.queue_max_wait_s)} />
             <StatTile label={t('analytics.walkawaysTotal')} value={f.num(s?.walkaways)} />
           </div>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div>
               <h3 className="mb-1 text-sm font-medium text-muted">{t('analytics.queuePeople')}</h3>
               <LineAreaChart
@@ -119,6 +140,17 @@ export function AnalyticsPage() {
                 format={count}
                 height={200}
                 dimmed={queue.isPlaceholderData}
+              />
+            </div>
+            <div>
+              <h3 className="mb-1 text-sm font-medium text-muted">{t('analytics.queueWait')}</h3>
+              <LineAreaChart
+                data={toData(queueWait.data, 60)}
+                seriesName={t('analytics.queueWaitSeries')}
+                categoryName={t('analytics.when')}
+                format={minutes}
+                height={200}
+                dimmed={queueWait.isPlaceholderData}
               />
             </div>
             <div>

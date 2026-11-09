@@ -26,6 +26,7 @@ function LiveProbe({ siteId, alertsOnly }: { siteId: string; alertsOnly?: boolea
     <div>
       <p data-testid="status">{live.connection.status}</p>
       <p data-testid="tables">{live.data.tables.length}</p>
+      <p data-testid="offset">{Math.round(live.clockOffsetS)}</p>
       <ul>
         {live.data.open_alerts.map((a) => (
           <li key={a.alert_id} data-testid={`alert-${a.alert_id}`}>
@@ -48,9 +49,7 @@ describe('useSiteLive with the mock backend', () => {
     act(() => {
       alertId = db.raiseAlert('site-tlv', 'waiter_needed', 'tlv-t3').alert_id;
     });
-    expect(await screen.findByTestId(`alert-${alertId}`)).toHaveTextContent(
-      'waiter_needed:open',
-    );
+    expect(await screen.findByTestId(`alert-${alertId}`)).toHaveTextContent('waiter_needed:open');
 
     act(() => db.tick());
     expect(screen.getByTestId('tables')).toHaveTextContent('14');
@@ -103,6 +102,26 @@ describe('useSiteLive with the mock backend', () => {
       ),
     );
     expect(screen.getByTestId('tables')).toHaveTextContent('0');
+  });
+
+  it('tracks how far the edge clock runs ahead (sped-up simulator), never below zero', async () => {
+    renderWithProviders(<LiveProbe siteId="site-tlv" />);
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('open'));
+    expect(screen.getByTestId('offset')).toHaveTextContent('0');
+    act(() => {
+      db.emit('site-tlv', {
+        type: 'occupancy.snapshot',
+        event_id: '01900000-0000-7000-8000-00000000abcd',
+        site_id: 'site-tlv',
+        ts: Date.now() / 1000 + 600, // 10 simulated minutes ahead
+        schema_version: '1.1',
+        guests: 3,
+        tables_occupied: 1,
+        tables_total: 14,
+        staff_on_floor: 2,
+      });
+    });
+    await waitFor(() => expect(screen.getByTestId('offset')).toHaveTextContent('600'));
   });
 
   it('closes the socket for a site the user cannot access', async () => {

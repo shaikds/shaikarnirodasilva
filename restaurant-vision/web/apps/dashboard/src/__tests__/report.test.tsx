@@ -99,7 +99,7 @@ describe('ROI estimates', () => {
   });
 
   it('the shift report page loads from the API with all estimates badged', async () => {
-    signInAs(db, 'owner@zayit.demo');
+    signInAs(db, 'demo@example.com');
     renderRoute(<ReportPage />, '/sites/site-tlv/report', '/sites/:siteId/report');
     const roi = await screen.findByTestId('roi');
     expect(within(roi).getAllByText('Estimate')).toHaveLength(4);

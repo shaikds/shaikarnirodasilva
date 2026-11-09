@@ -62,8 +62,7 @@ export const edgeEn = {
     onIt: 'On it',
     onItFor: 'On it: {{what}}',
     ackFailed: 'Could not send. Check the Wi‑Fi and try again.',
-    waiting: 'Waiting',
-    waitingAria: 'waiting {{duration}}',
+    waitingAria: '{{label}} for {{duration}}',
     urgent: 'Urgent',
     entrance: 'Entrance',
     newAlert: 'New alert: {{what}}',
@@ -409,6 +408,7 @@ export const edgeEn = {
     failed: 'Could not measure the uniform',
     saved: 'Uniform colour saved',
     savedBody: 'Staff wearing this colour are recognised more easily.',
+    alreadyCalibrated: 'A uniform colour is already saved on this edge. Save a new one to replace it.',
     privacy: 'Only an average colour is kept. No picture of the staff member is stored, and nothing identifies them.',
   },
   coverage: {

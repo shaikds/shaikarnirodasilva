@@ -70,7 +70,7 @@ export function useLocalLive(options: UseLocalLiveOptions = {}): LocalLive {
         if (reconnected) void qc.invalidateQueries({ queryKey: LOCAL_STATE_KEY });
       },
       onSnapshot: (snapshot) => {
-        const merged = pending.splice(0).reduce(applyEvent, snapshot);
+        const merged = pending.splice(0).reduce((s, e) => applyEvent(s, e), snapshot);
         qc.setQueryData<LiveSnapshot>(LOCAL_STATE_KEY, merged);
       },
       onEvent: (event) => {

@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApi, useApiClient } from '../api/provider';
 import { queryKeys } from '../api/queryKeys';
 import type { AlertView, EdgeEvent, LiveSnapshot } from '../contracts';
-import { applyEvent } from './applyEvent';
+import { applyEvent, latestEdgeTs } from './applyEvent';
 import { LiveSocket, type BackoffOptions, type LiveStatus } from './socket';
 
 export interface LiveConnection {
@@ -76,6 +76,17 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
   const onEventRef = useRef(options.onEvent);
   onEventRef.current = options.onEvent;
   const pending = useRef<EdgeEvent[]>([]);
+  // Seconds the site's event clock runs ahead of this browser, never negative: ~0 in
+  // production; positive when the edge clock is fast, or for a sped-up simulated edge
+  // (`rv-edge simulate --speed 20`), whose events carry simulated time. Timers that compare
+  // event times with "now" (table timers, "guests waiting") add it to the wall clock. Each new
+  // sample replaces the last, so one odd timestamp cannot skew the clock for long.
+  const [clockOffsetS, setClockOffsetS] = useState(0);
+  const noteEdgeTs = useRef((ts: number | null) => {
+    if (ts === null) return;
+    const ahead = Math.max(0, ts - Date.now() / 1000);
+    setClockOffsetS((o) => (Math.abs(ahead - o) < 0.5 ? o : ahead));
+  });
   const socketEnabled = options.socket !== false && !!siteId;
   const { WebSocketImpl } = options;
   const alertsOnly = options.alertsOnly === true;
@@ -96,13 +107,17 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
     refetchInterval: connection.status === 'open' ? false : 15_000,
   });
 
+  useEffect(() => {
+    if (query.data) noteEdgeTs.current(latestEdgeTs(query.data));
+  }, [query.data]);
+
   // Apply events that arrived before the first snapshot.
   useEffect(() => {
     if (!siteId || !query.data || pending.current.length === 0) return;
     const events = pending.current;
     pending.current = [];
     qc.setQueryData<LiveSnapshot>(queryKeys.live(siteId), (old) =>
-      old ? events.reduce(applyEvent, old) : old,
+      old ? events.reduce((s, e) => applyEvent(s, e, Date.now() / 1000), old) : old,
     );
   }, [qc, siteId, query.data]);
 
@@ -131,6 +146,8 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
       },
       onEvent: (event) => {
         if (event.site_id !== siteId) return;
+        if (event.type !== 'alert.acknowledged' || event.via === 'local')
+          noteEdgeTs.current(event.ts);
         const current = qc.getQueryData<LiveSnapshot>(key);
         if (alertsOnly && event.type === 'alert.raised' && event.table_id !== null) {
           // No tables in the waiter cache, so no table label for a new alert: use one seen on
@@ -140,13 +157,13 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
           if (current && label !== null) {
             qc.setQueryData<LiveSnapshot>(
               key,
-              withLabel(applyEvent(current, event), event.alert_id, label),
+              withLabel(applyEvent(current, event, Date.now() / 1000), event.alert_id, label),
             );
           } else {
             void qc.invalidateQueries({ queryKey: key });
           }
         } else if (current) {
-          qc.setQueryData<LiveSnapshot>(key, applyEvent(current, event));
+          qc.setQueryData<LiveSnapshot>(key, applyEvent(current, event, Date.now() / 1000));
         } else {
           pending.current.push(event);
         }
@@ -158,5 +175,5 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
     return () => socket.stop();
   }, [api, client, qc, siteId, socketEnabled, backoffKey, WebSocketImpl, alertsOnly]);
 
-  return { ...query, connection };
+  return { ...query, connection, clockOffsetS };
 }

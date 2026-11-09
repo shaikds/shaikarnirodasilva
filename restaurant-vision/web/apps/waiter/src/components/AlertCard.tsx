@@ -14,12 +14,16 @@ import { alertTitle } from '../lib/alertText';
 export function AlertCard({
   alert,
   now,
+  wallNow = Date.now() / 1000,
   onAck,
   pending,
   failed,
 }: {
   alert: AlertView;
+  /** Now on the edge's clock (wall clock + useSiteLive's clockOffsetS), for "waiting". */
   now: number;
+  /** Now on this phone's clock, for "taken 1 min ago" (acks may carry the cloud's time). */
+  wallNow?: number;
   onAck: (id: string) => void;
   pending: boolean;
   failed: boolean;
@@ -79,7 +83,10 @@ export function AlertCard({
           {t('alerts.taken')}
           {alert.acked_at !== null && (
             <span className="text-sm font-normal">
-              · {t('alerts.takenAgo', { time: f.relative(alert.acked_at, now) })}
+              ·{' '}
+              {t('alerts.takenAgo', {
+                time: f.relative(Math.min(alert.acked_at, wallNow), wallNow),
+              })}
             </span>
           )}
         </p>

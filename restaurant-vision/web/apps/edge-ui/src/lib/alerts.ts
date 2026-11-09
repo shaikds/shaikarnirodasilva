@@ -1,12 +1,15 @@
 // Ordering and wording for the offline waiter page.
-import type { AlertView } from '@rv/shared';
+import { alertSince, type AlertView } from '@rv/shared';
 
+/** Longest waiting first: by when the condition began (guests seated), then by raise time. */
 const byAge = (a: AlertView, b: AlertView) =>
-  a.raised_at - b.raised_at || a.alert_id.localeCompare(b.alert_id);
+  alertSince(a) - alertSince(b) ||
+  a.raised_at - b.raised_at ||
+  a.alert_id.localeCompare(b.alert_id);
 
 /**
- * Alerts nobody took yet first, oldest (longest waiting) at the top; then alerts someone is on,
- * also oldest first. Resolved alerts are dropped.
+ * Alerts nobody took yet first, longest waiting guests at the top (`condition_since_ts`, else
+ * `raised_at`); then alerts someone is on, same order. Resolved alerts are dropped.
  */
 export function sortAlerts(alerts: readonly AlertView[]): { open: AlertView[]; taken: AlertView[] } {
   const live = alerts.filter((a) => a.status !== 'resolved');
