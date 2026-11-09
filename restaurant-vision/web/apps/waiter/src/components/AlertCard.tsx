@@ -1,4 +1,13 @@
-import { Badge, Button, cn, useFormatters, useTranslation, type AlertView } from '@rv/shared';
+import {
+  alertSince,
+  alertWaitingS,
+  Badge,
+  Button,
+  cn,
+  useFormatters,
+  useTranslation,
+  type AlertView,
+} from '@rv/shared';
 import { BellRing, Hand, Users } from 'lucide-react';
 import { alertTitle } from '../lib/alertText';
 
@@ -19,12 +28,15 @@ export function AlertCard({
   const f = useFormatters();
   const title = alertTitle(alert, t);
   const kind = t(`common:alertKind.${alert.kind}`);
-  const age = Math.max(0, now - alert.raised_at);
+  // How long the guests have been waiting: from when they sat down (condition_since_ts), not
+  // from when the edge raised the alert.
+  const age = alertWaitingS(alert, now);
+  const waitingLabel = t(`common:alertWaiting.${alert.kind}`);
   const taken = alert.status === 'acknowledged';
   const urgent = alert.severity === 'urgent';
   return (
     <article
-      aria-label={`${title}, ${kind}, ${t('alerts.waitingAria', { duration: f.duration(age) })}`}
+      aria-label={`${title}, ${kind}, ${t('alerts.waitingAria', { label: waitingLabel, duration: f.duration(age) })}`}
       data-alert-id={alert.alert_id}
       className={cn(
         'rounded-2xl border bg-surface p-4 shadow-card',
@@ -50,9 +62,12 @@ export function AlertCard({
           <h3 className="text-2xl font-bold leading-tight">{title}</h3>
           <p className="text-base">{kind}</p>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-            <span>
-              {t('alerts.waiting')}{' '}
-              <span className="rv-num font-semibold text-fg">{f.elapsed(age)}</span>
+            <span data-testid="alert-waiting">
+              {waitingLabel} <span className="rv-num font-semibold text-fg">{f.elapsed(age)}</span>
+              <span className="text-xs">
+                {' · '}
+                {t('common:alertSince', { time: f.time(alertSince(alert)) })}
+              </span>
             </span>
             {urgent && !taken && <Badge tone="danger">{t('alerts.urgent')}</Badge>}
           </p>

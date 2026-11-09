@@ -15,6 +15,7 @@ export interface LocalApiProviderProps {
 export function LocalApiProvider({ children, baseUrl, fetchImpl }: LocalApiProviderProps) {
   const [pin, setPin] = useState<string | null>(() => readPin());
   const [problem, setProblem] = useState<PinProblem | null>(null);
+  const [retryAfterS, setRetryAfterS] = useState<number | null>(null);
 
   const lock = useCallback((why: PinProblem | null = null) => {
     clearPin();
@@ -35,14 +36,21 @@ export function LocalApiProvider({ children, baseUrl, fetchImpl }: LocalApiProvi
         fetch: fetchImpl,
         getPin: readPin,
         // A 429 keeps the PIN (it may be right; the lockout is per client) but still stops setup.
-        onPinProblem: (why) => (why === 'invalid' ? lock('invalid') : setProblem('locked')),
+        onPinProblem: (why, wait) => {
+          if (why === 'invalid') {
+            lock('invalid');
+            return;
+          }
+          setRetryAfterS(wait);
+          setProblem('locked');
+        },
       }),
     [baseUrl, fetchImpl, lock],
   );
 
   const value = useMemo<LocalApiContextValue>(
-    () => ({ api, session: { pin, problem, unlock, lock } }),
-    [api, pin, problem, unlock, lock],
+    () => ({ api, session: { pin, problem, retryAfterS, unlock, lock } }),
+    [api, pin, problem, retryAfterS, unlock, lock],
   );
   return <LocalApiContext.Provider value={value}>{children}</LocalApiContext.Provider>;
 }

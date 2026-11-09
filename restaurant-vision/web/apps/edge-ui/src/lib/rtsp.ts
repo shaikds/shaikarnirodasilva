@@ -139,8 +139,9 @@ export interface ParsedCameraUrl {
 }
 
 /**
- * Best-effort reverse of `buildRtspUrl` for a (redacted) URL from `GET /local/cameras`, used to
- * prefill the edit form. Returns null when it is not an rtsp URL.
+ * Best-effort reverse of `buildRtspUrl` (rtsp_templates.parse_rtsp_url). The edge already lists
+ * these parts in `CameraOut`; the mock backend uses this to do the same. Returns null when it
+ * is not an rtsp URL.
  */
 export function parseCameraUrl(url: string): ParsedCameraUrl | null {
   const m = /^rtsps?:\/\/(?:[^@/]*@)?(\[[^\]]+\]|[^:/?#]+)(?::(\d+))?(\/[^#]*)?$/i.exec(url.trim());

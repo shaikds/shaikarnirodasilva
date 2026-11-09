@@ -350,10 +350,10 @@ export function DevicesTab({ siteId, canPair }: { siteId: string; canPair: boole
         <p className="text-sm">{t('live.devices.none')}</p>
       ) : (
         <div className="-mx-4 overflow-x-auto">
-          <table className="w-full min-w-[36rem]">
+          <table className="w-full min-w-[44rem]">
             <thead>
               <tr className="border-b border-border">
-                {(['device', 'status', 'version', 'lastSeen', 'cameras'] as const).map((c) => (
+                {(['device', 'status', 'version', 'lastSeen', 'cameras', 'localUrl'] as const).map((c) => (
                   <th key={c} scope="col" className={th}>
                     {t(`settings.devices.columns.${c}`)}
                   </th>
@@ -380,6 +380,15 @@ export function DevicesTab({ siteId, canPair }: { siteId: string; canPair: boole
                         : f.relative(d.last_seen_at, now)}
                     </td>
                     <td className="px-3 py-2">{f.number(d.cameras.length)}</td>
+                    <td className="px-3 py-2">
+                      {d.local_url ? (
+                        <span dir="ltr" className="font-mono text-xs" data-testid="device-local-url">
+                          {d.local_url}
+                        </span>
+                      ) : (
+                        f.none
+                      )}
+                    </td>
                   </tr>
                 );
               })}

@@ -61,6 +61,15 @@ export const commonEn = {
     bussing_needed: 'Bussing needed',
     long_queue: 'Long queue at the entrance',
   },
+  /** How long the guests have been waiting, measured from when the condition began. */
+  alertWaiting: {
+    waiter_needed: 'Guests waiting',
+    checkin_needed: 'Guests waiting',
+    bussing_needed: 'Waiting to be cleared',
+    long_queue: 'Guests waiting',
+  },
+  /** "since 19:42": when the guests sat down / the condition began. */
+  alertSince: 'since {{time}}',
   severity: {
     info: 'Info',
     warn: 'Warning',

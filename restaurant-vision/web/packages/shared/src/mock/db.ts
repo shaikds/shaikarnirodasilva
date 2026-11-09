@@ -22,7 +22,7 @@ import type {
   TableState,
   TokenPair,
 } from '../contracts';
-import { DEVICE_OFFLINE_AFTER_S } from '../contracts';
+import { CONTRACT_SCHEMA_VERSION, DEVICE_OFFLINE_AFTER_S } from '../contracts';
 import { pick, randInt, shortId, uuidv7 } from './random';
 import { SEED_DEVICES, SEED_ORG, SEED_USERS, seedSites, type MockUser } from './seed';
 
@@ -75,6 +75,8 @@ interface Persisted {
 }
 
 const TOKEN_PREFIX = 'mock.';
+/** Seconds a seating is backdated by (the edge's `seat_confirm_s`, shortened for the demo). */
+const SEAT_CONFIRM_MOCK_S = 15;
 
 function b64(json: unknown): string {
   return btoa(unescape(encodeURIComponent(JSON.stringify(json))))
@@ -118,9 +120,11 @@ export class MockDb {
     this.orgs.set(SEED_ORG.org_id, { ...SEED_ORG });
     for (const u of SEED_USERS) this.users.set(u.user_id, structuredClone(u));
     const now = this.now();
+    let lanHost = 20;
     for (const { settings, config } of seedSites()) {
       const site = this.addSiteRuntime(settings, config, now - 30 * 86400);
       for (const d of SEED_DEVICES.filter((x) => x.site_id === settings.site_id)) {
+        lanHost += 1;
         const last = d.last_seen_ago_s === null ? null : now - d.last_seen_ago_s;
         site.devices.set(d.device_id, {
           device_id: d.device_id,
@@ -136,6 +140,8 @@ export class MockDb {
           cpu_pct: last === null ? null : 38 + this.rand() * 20,
           mem_mb: last === null ? null : 610 + this.rand() * 80,
           outbox_depth: last === null ? null : 0,
+          // The edge's LAN address from its heartbeat (waiter offline link).
+          local_url: last === null ? null : `http://192.168.1.${lanHost}:8787`,
         });
       }
       if (seedLive && this.edgeOnline(site)) this.seedLiveState(site);
@@ -210,10 +216,10 @@ export class MockDb {
         }
       }
       if (state === 'seated' && ago > 30) {
-        this.createAlert(site, 'waiter_needed', 'warn', t, now - ago + 30, false);
+        this.createAlert(site, 'waiter_needed', 'warn', t, now - ago + 30, false, now - ago);
       }
       if (state === 'needs_bussing' && ago > 300) {
-        this.createAlert(site, 'bussing_needed', 'info', t, now - ago + 300, false);
+        this.createAlert(site, 'bussing_needed', 'info', t, now - ago + 300, false, now - ago);
       }
     }
     // One alert someone already took, to show the anonymous "someone is on it" state.
@@ -413,7 +419,7 @@ export class MockDb {
       event_id: uuidv7(ts * 1000, this.rand),
       site_id: siteId,
       ts,
-      schema_version: '1.0',
+      schema_version: CONTRACT_SCHEMA_VERSION,
     };
   }
 
@@ -426,6 +432,9 @@ export class MockDb {
     table: TableRuntime | null,
     ts: number,
     emit: boolean,
+    /** When the condition began (seated, last visit, guests left); defaults to the table's
+     * current state start, or `ts` for queue alerts. */
+    conditionSince: number | null = table?.live.since_ts ?? ts,
   ): AlertView {
     const siteId = site.settings.site_id;
     const queueZone = site.config.zones.find((z) => z.kind === 'queue')?.zone_id ?? null;
@@ -443,6 +452,7 @@ export class MockDb {
       ack_via: null,
       resolved_at: null,
       resolve_reason: null,
+      condition_since_ts: conditionSince === null ? null : Math.min(conditionSince, ts),
     };
     site.alerts.set(alert.alert_id, alert);
     if (table) table.live.open_alert_ids = [...table.live.open_alert_ids, alert.alert_id];
@@ -454,6 +464,7 @@ export class MockDb {
         table_id: alert.table_id,
         zone_id: alert.zone_id,
         severity,
+        condition_since_ts: alert.condition_since_ts,
       });
     }
     return alert;
@@ -538,16 +549,18 @@ export class MockDb {
     const now = this.now();
     const from = t.live.state;
     if (from === to) return;
+    // Like the edge: a state is confirmed after a delay, `since_ts` is when it really began.
+    const since = to === 'seated' ? now - SEAT_CONFIRM_MOCK_S : now;
     if (to === 'seated') {
       t.sessionId = uuidv7(now * 1000, this.rand);
-      t.seatedAt = now;
+      t.seatedAt = since;
       t.firstVisitAt = null;
       t.visits = 0;
       t.maxGuests = guests;
     }
     t.live.state = to;
     t.live.guest_count = guests;
-    t.live.since_ts = now;
+    t.live.since_ts = since;
     const sessionId = t.sessionId ?? uuidv7(now * 1000, this.rand);
     this.emit(siteId, {
       ...this.base(siteId, 'table.state_changed', now),
@@ -556,6 +569,7 @@ export class MockDb {
       to_state: to,
       guest_count: guests,
       session_id: sessionId,
+      since_ts: since,
     });
     if (to === 'needs_bussing' && t.seatedAt !== null) {
       this.emit(siteId, {
@@ -773,6 +787,7 @@ export class MockDb {
           cpu_pct: d.cpu_pct,
           mem_mb: d.mem_mb,
           outbox_depth: d.outbox_depth,
+          local_url: d.local_url,
         });
       }
     }
@@ -829,7 +844,7 @@ export class MockDb {
       floor_plan: [],
     };
     const config: SiteConfig = {
-      schema_version: '1.0',
+      schema_version: CONTRACT_SCHEMA_VERSION,
       site_id: siteId,
       timezone: input.timezone,
       locale: input.locale,
@@ -907,6 +922,7 @@ export class MockDb {
       cpu_pct: null,
       mem_mb: null,
       outbox_depth: null,
+      local_url: null,
     });
     return { device_id, site_id: info.site_id, token: `mockdev.${device_id}` };
   }

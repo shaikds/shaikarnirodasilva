@@ -1,17 +1,19 @@
 // Step 1: the local setup PIN. First time: choose one (`POST /local/setup-pin`). Afterwards:
-// enter it; it is checked against a protected endpoint and then kept in sessionStorage for this
-// tab only and sent as `X-Setup-Pin`. Wrong PINs (401) and the lockout (429) are explained.
+// enter it; it is checked with `GET /local/setup/pin-check` (204) and then kept in
+// sessionStorage for this tab only and sent as `X-Setup-Pin`. Wrong PINs (401) and the lockout
+// (429, counted down from the edge's `Retry-After`) are explained.
 import { Button, TextField, useTranslation } from '@rv/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { usePinSession, useLocalApi } from '../../api/context';
+import { retryAfterOf } from '../../api/localApi';
 import { PIN_MAX_LEN, PIN_MIN_LEN, type SetupStatus } from '../../api/types';
 import { errorKind, isStatus } from '../../lib/errors';
 import type { StepProps } from './SetupLayout';
 import { SETUP_STATUS_KEY, useSetup } from './setupState';
 
-/** rv_edge PinGuard: 5 wrong PINs lock the client out for 30 s. */
+/** Fallback when a 429 carries no `Retry-After` (rv_edge PinGuard locks out for 30 s). */
 export const LOCKOUT_S = 30;
 
 function useCountdown(): [number, (seconds: number) => void] {
@@ -43,7 +45,7 @@ export function PinStep({ onDone }: StepProps) {
   const [lockLeft, startLock] = useCountdown();
 
   useEffect(() => {
-    if (session.problem === 'locked') startLock(LOCKOUT_S);
+    if (session.problem === 'locked') startLock(session.retryAfterS ?? LOCKOUT_S);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the problem changes
   }, [session.problem]);
 
@@ -108,7 +110,7 @@ export function PinStep({ onDone }: StepProps) {
       const kind = errorKind(err);
       if (kind === 'pin') setError(t('pin.wrong'));
       else if (kind === 'locked') {
-        startLock(LOCKOUT_S);
+        startLock(retryAfterOf(err) ?? LOCKOUT_S);
         setError(null);
       } else if (kind === 'network') setError(t('errors.network'));
       else setError(t('errors.server'));

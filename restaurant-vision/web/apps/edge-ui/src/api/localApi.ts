@@ -7,6 +7,7 @@ import {
   ApiError,
   createApiClient,
   detailMessage,
+  parseRetryAfter,
   type AlertView,
   type ApiClient,
   type CoverageReport,
@@ -37,8 +38,11 @@ export interface LocalApiOptions {
   baseUrl?: string;
   /** Current setup PIN (read on every request). */
   getPin: () => string | null;
-  /** A setup call was rejected: wrong/missing PIN (401) or too many wrong PINs (429). */
-  onPinProblem?: (problem: PinProblem) => void;
+  /**
+   * A setup call was rejected: wrong/missing PIN (401) or too many wrong PINs (429; then
+   * `retryAfterS` is the edge's `Retry-After`, when it sent one).
+   */
+  onPinProblem?: (problem: PinProblem, retryAfterS: number | null) => void;
   fetch?: typeof fetch;
 }
 
@@ -49,6 +53,11 @@ export function pinProblemOf(error: unknown): PinProblem | null {
   if (error.status === 401) return 'invalid';
   if (error.status === 429) return 'locked';
   return null;
+}
+
+/** Seconds the edge asked to wait (`Retry-After` of a 429), or null. */
+export function retryAfterOf(error: unknown): number | null {
+  return error instanceof ApiError ? error.retryAfterS : null;
 }
 
 export function createLocalApi(options: LocalApiOptions) {
@@ -75,7 +84,7 @@ export function createLocalApi(options: LocalApiOptions) {
       });
     } catch (err) {
       const problem = pinProblemOf(err);
-      if (problem) options.onPinProblem?.(problem);
+      if (problem) options.onPinProblem?.(problem, retryAfterOf(err));
       throw err;
     }
   }
@@ -110,9 +119,10 @@ export function createLocalApi(options: LocalApiOptions) {
         status: res.status,
         kind: res.status === 401 ? 'auth' : 'http',
         body,
+        retryAfterS: parseRetryAfter(res.headers.get('Retry-After')),
       });
       const problem = pinProblemOf(error);
-      if (problem) options.onPinProblem?.(problem);
+      if (problem) options.onPinProblem?.(problem, error.retryAfterS);
       throw error;
     }
     return res.blob();
@@ -136,10 +146,13 @@ export function createLocalApi(options: LocalApiOptions) {
     },
 
     // ------------------------------------------------------------- setup (X-Setup-Pin)
-    /** Checks a PIN without storing it: any 2xx from a protected endpoint means it is right. */
+    /**
+     * Checks a PIN without storing it: `GET /local/setup/pin-check` answers 204 when it is
+     * right, 401 when not, 429 (with `Retry-After`) after too many wrong PINs.
+     */
     // Not reported through onPinProblem: the PIN step shows the result inline.
     verifyPin: async (pin: string): Promise<void> => {
-      await client.request<CameraOut[]>('/local/cameras', {
+      await client.request<void>('/local/setup/pin-check', {
         auth: false,
         headers: { [PIN_HEADER]: pin },
       });

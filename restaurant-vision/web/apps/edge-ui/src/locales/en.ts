@@ -207,6 +207,7 @@ export const edgeEn = {
     noneBody: 'Add a camera by its address, or search the network.',
     listLabel: 'Cameras',
     simulated: 'Simulated',
+    simulatedReadOnly: 'Comes from the demo scenario: it cannot be edited or deleted here.',
     notInConfig: 'Not saved yet',
     noStream: 'No stream address (simulated camera)',
     credentialsStored: 'Login saved',

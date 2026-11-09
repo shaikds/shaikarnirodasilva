@@ -5,18 +5,36 @@ export class ApiError extends Error {
   readonly status: number;
   readonly kind: ApiErrorKind;
   readonly body: unknown;
+  /** Seconds from a `Retry-After` header (429/503), or null. */
+  readonly retryAfterS: number | null;
 
-  constructor(message: string, opts: { status: number; kind: ApiErrorKind; body?: unknown }) {
+  constructor(
+    message: string,
+    opts: { status: number; kind: ApiErrorKind; body?: unknown; retryAfterS?: number | null },
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = opts.status;
     this.kind = opts.kind;
     this.body = opts.body;
+    this.retryAfterS = opts.retryAfterS ?? null;
   }
 
   get isNetwork(): boolean {
     return this.kind === 'network';
   }
+}
+
+/**
+ * `Retry-After` in seconds: delta-seconds or an HTTP date (relative to `nowMs`); null when
+ * missing or unparsable.
+ */
+export function parseRetryAfter(value: string | null, nowMs = Date.now()): number | null {
+  if (value === null) return null;
+  const text = value.trim();
+  if (/^\d+$/.test(text)) return Number(text);
+  const at = Date.parse(text);
+  return Number.isNaN(at) ? null : Math.max(0, Math.ceil((at - nowMs) / 1000));
 }
 
 export function isApiError(e: unknown): e is ApiError {

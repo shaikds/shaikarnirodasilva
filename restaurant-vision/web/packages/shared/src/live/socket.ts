@@ -1,15 +1,17 @@
-// Reconnecting WebSocket for `WS /api/v1/ws?token=&site_id=` (one EdgeEvent JSON per message)
-// and the edge's LAN socket `/local/ws` (EdgeEvents plus `{type:"live.snapshot", snapshot}`).
-// Exponential backoff with jitter; a fresh URL (token) on every attempt; auth close codes
-// trigger one token refresh; "forbidden" stops reconnecting.
+// Reconnecting WebSocket for `WS /api/v1/ws?token=&site_id=` and the edge's LAN socket
+// `/local/ws`. Both send EdgeEvents plus `LiveSnapshotMessage`s (`{type:"live.snapshot"}`: the
+// cloud sends one to owners and managers on connect, the edge on connect and every few seconds).
+// Exponential backoff with jitter; a fresh URL (token) on every attempt; `WsCloseCode` 4401
+// triggers one token refresh; 4403 (no access) and 4400 (bad request) stop reconnecting.
 import type { EdgeEvent, LiveSnapshot } from '../contracts';
-import { isEdgeEvent, isLiveSnapshotMessage } from '../contracts';
+import { isEdgeEvent, isLiveSnapshotMessage, WS_CLOSE_CODES } from '../contracts';
 
 export type LiveStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed';
 
-/** Close codes the backend uses (see report): auth expired/invalid, no access to the site. */
-export const WS_CLOSE_UNAUTHORIZED = 4401;
-export const WS_CLOSE_FORBIDDEN = 4403;
+/** `WsCloseCode` values of the cloud socket (contracts 1.1). */
+export const WS_CLOSE_BAD_REQUEST = WS_CLOSE_CODES.badRequest;
+export const WS_CLOSE_UNAUTHORIZED = WS_CLOSE_CODES.unauthorized;
+export const WS_CLOSE_FORBIDDEN = WS_CLOSE_CODES.forbidden;
 
 export interface BackoffOptions {
   initialMs: number;
@@ -156,7 +158,7 @@ export class LiveSocket {
       if (this.ws !== ws) return;
       this.ws = null;
       if (this.stopped) return;
-      if (ev.code === WS_CLOSE_FORBIDDEN) {
+      if (ev.code === WS_CLOSE_FORBIDDEN || ev.code === WS_CLOSE_BAD_REQUEST) {
         this.setStatus('closed');
         return;
       }

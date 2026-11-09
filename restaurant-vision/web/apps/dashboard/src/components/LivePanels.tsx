@@ -1,4 +1,6 @@
 import {
+  alertSince,
+  alertWaitingS,
   Badge,
   Button,
   Card,
@@ -122,8 +124,13 @@ function AlertRow({ alert, siteId, now }: { alert: AlertView; siteId: string; no
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{what}</p>
-        <p className="text-xs text-muted">
-          {t('live.alerts.age', { elapsed: f.elapsed(now - alert.raised_at) })}
+        <p className="text-xs text-muted" data-testid="alert-waiting">
+          {/* How long the guests have been waiting: from when they sat down, not the alert. */}
+          {t('live.alerts.waiting', {
+            label: t(`common:alertWaiting.${alert.kind}`),
+            elapsed: f.elapsed(alertWaitingS(alert, now)),
+            since: f.time(alertSince(alert)),
+          })}
           {alert.severity === 'urgent' && ` · ${t('common:severity.urgent')}`}
         </p>
       </div>
@@ -154,7 +161,10 @@ function AlertRow({ alert, siteId, now }: { alert: AlertView; siteId: string; no
 
 export function AlertsPanel({ live, now }: { live: LiveSnapshot; now: number }) {
   const { t } = useTranslation();
-  const alerts = [...live.open_alerts].sort((a, b) => a.raised_at - b.raised_at);
+  // Longest waiting guests first.
+  const alerts = [...live.open_alerts].sort(
+    (a, b) => alertSince(a) - alertSince(b) || a.raised_at - b.raised_at,
+  );
   return (
     <Card
       title={t('live.alerts.title')}
@@ -230,6 +240,14 @@ function DeviceBlock({
           : t('live.devices.lastSeen', { time: f.relative(device.last_seen_at, now) })}
         {device.version && ` · ${t('live.devices.version', { version: device.version })}`}
       </p>
+      {device.local_url && (
+        <p className="mt-1 text-xs text-muted">
+          {t('live.devices.localUrl')}{' '}
+          <span dir="ltr" className="font-mono text-fg">
+            {device.local_url}
+          </span>
+        </p>
+      )}
       {online && (
         <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
           <div>

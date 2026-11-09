@@ -2,7 +2,7 @@
 // FastAPI error bodies, and reachability reporting (the waiter app's offline banner).
 import type { TokenPair } from '../contracts';
 import { API_PREFIX, rvEnv } from '../lib/env';
-import { ApiError, detailMessage } from './errors';
+import { ApiError, detailMessage, parseRetryAfter } from './errors';
 
 export interface AuthAdapter {
   getAccessToken(): string | null;
@@ -162,6 +162,7 @@ export function createApiClient(config: ApiClientConfig = {}): ApiClient {
         status: res.status,
         kind: res.status === 401 ? 'auth' : 'http',
         body,
+        retryAfterS: parseRetryAfter(res.headers?.get('Retry-After') ?? null),
       });
     }
     return parse<T>(res);

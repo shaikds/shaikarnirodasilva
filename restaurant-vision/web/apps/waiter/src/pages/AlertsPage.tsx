@@ -1,4 +1,5 @@
 import {
+  cn,
   EmptyState,
   LoadingBlock,
   useAckAlert,
@@ -12,6 +13,7 @@ import { Navigate } from 'react-router-dom';
 import { AlertCard } from '../components/AlertCard';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { Shell } from '../components/Shell';
+import { useEdgeUrl } from '../lib/edgeUrl';
 import { useOffline } from '../lib/offline';
 import { useWaiterSettings } from '../lib/settings';
 import { sortAlertsForWaiter } from '../lib/sortAlerts';
@@ -30,11 +32,12 @@ export function AlertsPage() {
   const { me, site } = useWaiterSite();
   const siteId = site?.site_id;
   const now = useNow();
-  const live = useSiteLive(siteId);
+  // Waiters read open alerts (`/alerts`) and get `alert.*` events only.
+  const live = useSiteLive(siteId, { alertsOnly: true });
   const ack = useAckAlert(siteId ?? '');
   const [failedId, setFailedId] = useState<string | null>(null);
   const offline = useOffline(siteId ? live.connection : undefined);
-  const edgeUrl = useWaiterSettings((s) => s.edgeUrl);
+  const edgeUrl = useEdgeUrl(siteId).url;
   const soundOn = useWaiterSettings((s) => s.sound);
   const audioReady = useAudioReady();
   const announcement = useNewAlerts(live.data?.open_alerts, siteId);
@@ -57,10 +60,19 @@ export function AlertsPage() {
       <p aria-live="assertive" className="sr-only">
         {announcement}
       </p>
-      {soundOn && !audioReady && (
-        <p className="mb-3 flex items-center gap-2 rounded-xl bg-info-soft px-3 py-2 text-sm text-info">
+      {soundOn && (
+        // The row keeps its place once sound is unlocked: the first tap (often "On it") unlocks
+        // audio, and removing the row mid-tap would move the list and the button away from the
+        // finger, so that tap would miss. Only its text and colour change.
+        <p
+          data-testid="sound-banner"
+          className={cn(
+            'mb-3 flex min-h-[2.5rem] items-center gap-2 rounded-xl px-3 py-2 text-sm',
+            audioReady ? 'bg-success-soft text-success' : 'bg-info-soft text-info',
+          )}
+        >
           <Volume2 aria-hidden="true" className="h-4 w-4 shrink-0" />
-          {t('alerts.enableSound')}
+          {audioReady ? t('alerts.soundsOn') : t('alerts.enableSound')}
         </p>
       )}
       <div className="mb-3 flex items-baseline justify-between gap-2">

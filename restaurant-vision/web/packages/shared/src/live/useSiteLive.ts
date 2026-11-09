@@ -1,11 +1,16 @@
 // useSiteLive(siteId): initial `GET /sites/{id}/live`, then `WS /api/v1/ws?token=&site_id=`
 // with reconnect + backoff. Every event is merged into the React Query cache; on reconnect
-// the snapshot is refetched to recover anything missed.
+// the snapshot is refetched to recover anything missed. The cloud sends owners and managers a
+// `live.snapshot` right after connecting, which replaces the cache (`onSnapshot`).
+//
+// `alertsOnly` (the waiter app): waiters may not read `/live` and their socket carries
+// `alert.*` events only, so the cached snapshot is built from `GET /sites/{id}/alerts` (open
+// alerts, with table labels) and holds no tables, queues or devices.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useApi, useApiClient } from '../api/provider';
 import { queryKeys } from '../api/queryKeys';
-import type { EdgeEvent, LiveSnapshot } from '../contracts';
+import type { AlertView, EdgeEvent, LiveSnapshot } from '../contracts';
 import { applyEvent } from './applyEvent';
 import { LiveSocket, type BackoffOptions, type LiveStatus } from './socket';
 
@@ -22,8 +27,41 @@ export interface UseSiteLiveOptions {
   onEvent?: (event: EdgeEvent) => void;
   /** Turn the socket off (e.g. module disabled); the snapshot is still fetched. */
   socket?: boolean;
+  /** Waiter view: open alerts only, from `GET /sites/{id}/alerts` instead of `/live`. */
+  alertsOnly?: boolean;
   backoff?: Partial<BackoffOptions>;
   WebSocketImpl?: typeof WebSocket;
+}
+
+function knownLabel(snapshot: LiveSnapshot, tableId: string): string | null {
+  return (
+    snapshot.tables.find((t) => t.table_id === tableId)?.label ??
+    snapshot.open_alerts.find((a) => a.table_id === tableId && a.table_label !== null)
+      ?.table_label ??
+    null
+  );
+}
+
+function withLabel(snapshot: LiveSnapshot, alertId: string, label: string): LiveSnapshot {
+  return {
+    ...snapshot,
+    open_alerts: snapshot.open_alerts.map((a) =>
+      a.alert_id === alertId && a.table_label === null ? { ...a, table_label: label } : a,
+    ),
+  };
+}
+
+/** A LiveSnapshot that carries open alerts only (waiter view). */
+export function alertsSnapshot(siteId: string, openAlerts: AlertView[]): LiveSnapshot {
+  return {
+    site_id: siteId,
+    ts: Date.now() / 1000,
+    tables: [],
+    occupancy: null,
+    queues: [],
+    open_alerts: openAlerts,
+    devices: [],
+  };
 }
 
 export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOptions = {}) {
@@ -40,12 +78,18 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
   const pending = useRef<EdgeEvent[]>([]);
   const socketEnabled = options.socket !== false && !!siteId;
   const { WebSocketImpl } = options;
+  const alertsOnly = options.alertsOnly === true;
   // Callers often pass an inline object; key the effect on its content.
   const backoffKey = JSON.stringify(options.backoff ?? {});
 
   const query = useQuery({
     queryKey: queryKeys.live(siteId ?? ''),
-    queryFn: ({ signal }) => api.getLive(siteId!, signal),
+    queryFn: ({ signal }) =>
+      alertsOnly
+        ? api
+            .listAlerts(siteId!, { status: 'open' }, signal)
+            .then((open_alerts) => alertsSnapshot(siteId!, open_alerts))
+        : api.getLive(siteId!, signal),
     enabled: !!siteId,
     staleTime: 5_000,
     // Poll while the socket is down; the socket keeps the cache fresh otherwise.
@@ -88,15 +132,31 @@ export function useSiteLive(siteId: string | undefined, options: UseSiteLiveOpti
       onEvent: (event) => {
         if (event.site_id !== siteId) return;
         const current = qc.getQueryData<LiveSnapshot>(key);
-        if (current) qc.setQueryData<LiveSnapshot>(key, applyEvent(current, event));
-        else pending.current.push(event);
+        if (alertsOnly && event.type === 'alert.raised' && event.table_id !== null) {
+          // No tables in the waiter cache, so no table label for a new alert: use one seen on
+          // an earlier alert of that table, else wait for `/alerts` to bring the labelled alert
+          // (so it never shows up, or gets announced, without its table).
+          const label = current ? knownLabel(current, event.table_id) : null;
+          if (current && label !== null) {
+            qc.setQueryData<LiveSnapshot>(
+              key,
+              withLabel(applyEvent(current, event), event.alert_id, label),
+            );
+          } else {
+            void qc.invalidateQueries({ queryKey: key });
+          }
+        } else if (current) {
+          qc.setQueryData<LiveSnapshot>(key, applyEvent(current, event));
+        } else {
+          pending.current.push(event);
+        }
         setConnection((c) => ({ ...c, lastEventAt: Date.now() }));
         onEventRef.current?.(event);
       },
     });
     socket.start();
     return () => socket.stop();
-  }, [api, client, qc, siteId, socketEnabled, backoffKey, WebSocketImpl]);
+  }, [api, client, qc, siteId, socketEnabled, backoffKey, WebSocketImpl, alertsOnly]);
 
   return { ...query, connection };
 }

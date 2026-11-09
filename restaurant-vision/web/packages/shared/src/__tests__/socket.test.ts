@@ -128,4 +128,13 @@ describe('LiveSocket', () => {
     expect(FakeSocket.instances).toHaveLength(2);
     expect(statuses.at(-1)).toBe('closed');
   });
+
+  it('stops on 4400 (bad request): retrying cannot help', () => {
+    const { socket, statuses } = make();
+    socket.start();
+    FakeSocket.instances[0]!.drop(4400);
+    vi.advanceTimersByTime(60_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+    expect(statuses.at(-1)).toBe('closed');
+  });
 });

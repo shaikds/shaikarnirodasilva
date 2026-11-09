@@ -11,11 +11,13 @@ import type {
   Currency,
   EdgeEvent,
   EventType,
-  LiveSnapshot,
+  LiveSnapshotMessage,
   Locale,
   Role,
   TableState,
   Thresholds,
+  TimeseriesMetric,
+  WsCloseCode,
 } from './types';
 
 export const TABLE_STATES = [
@@ -45,6 +47,16 @@ export const CAMERA_STATUSES = [
 export const CURRENCIES = ['ILS', 'USD', 'AUD'] as const satisfies readonly Currency[];
 export const LOCALES = ['he', 'en'] as const satisfies readonly Locale[];
 export const ROLES = ['owner', 'manager', 'waiter'] as const satisfies readonly Role[];
+
+/** `GET /sites/{id}/metrics/timeseries?metric=` values (contracts 1.1 adds the last two). */
+export const TIMESERIES_METRICS = [
+  'occupancy',
+  'queue',
+  'walkaways',
+  'response_time',
+  'response_time_p90',
+  'queue_wait',
+] as const satisfies readonly TimeseriesMetric[];
 
 export const EVENT_TYPES = [
   'table.state_changed',
@@ -76,6 +88,16 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   track_id_ttl_h: 24,
 };
 
+/** Close codes of the cloud `WS /ws` when it refuses a connection (contracts `WsCloseCode`). */
+export const WS_CLOSE_CODES = {
+  /** Missing `token` or `site_id`. */
+  badRequest: 4400,
+  /** Bad or expired access token: refresh and reconnect. */
+  unauthorized: 4401,
+  /** No access to the site: stop reconnecting. */
+  forbidden: 4403,
+} as const satisfies Record<string, WsCloseCode>;
+
 /** Seconds without a heartbeat before the cloud shows a device offline (rv_contracts). */
 export const DEVICE_OFFLINE_AFTER_S = 90;
 
@@ -85,14 +107,9 @@ export type EdgeEventOf<T extends EventType> = Extract<EdgeEvent, { type: T }>;
 const EVENT_TYPE_SET: ReadonlySet<string> = new Set(EVENT_TYPES);
 
 /**
- * Full-state message the edge's local WebSocket (`/local/ws`) sends alongside EdgeEvents
- * (and that a cloud socket may send too): replaces the cached LiveSnapshot.
+ * True for the `live.snapshot` message (generated `LiveSnapshotMessage`) that the edge's local
+ * socket and the cloud socket (owners and managers, on connect) send alongside EdgeEvents.
  */
-export interface LiveSnapshotMessage {
-  type: 'live.snapshot';
-  snapshot: LiveSnapshot;
-}
-
 export function isLiveSnapshotMessage(value: unknown): value is LiveSnapshotMessage {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;

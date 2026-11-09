@@ -11,11 +11,12 @@ import {
   useTranslation,
 } from '@rv/shared';
 import { ArrowLeft, ArrowRight, BellRing, Check, LogOut } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { PushError, disablePush, enablePush, pushPermission, type PushState } from '../lib/push';
-import { DEFAULT_EDGE_URL, isValidEdgeUrl, useWaiterSettings } from '../lib/settings';
+import { useEdgeUrl } from '../lib/edgeUrl';
+import { isValidEdgeUrl, useWaiterSettings } from '../lib/settings';
 import { playAlertSound, vibrate } from '../lib/sound';
 import { useWaiterSite } from '../lib/useSite';
 
@@ -88,17 +89,24 @@ function NotificationsSetting({ siteId }: { siteId: string | undefined }) {
   );
 }
 
-function EdgeUrlSetting() {
+function EdgeUrlSetting({ siteId }: { siteId: string | undefined }) {
   const { t } = useTranslation();
-  const stored = useWaiterSettings((s) => s.edgeUrl);
+  const edge = useEdgeUrl(siteId);
   const setEdgeUrl = useWaiterSettings((s) => s.setEdgeUrl);
-  const [value, setValue] = useState(stored);
+  const [value, setValue] = useState(edge.url);
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  // Follow the automatic address (it arrives with the device list) until the user types.
+  useEffect(() => {
+    if (!dirty) setValue(edge.url);
+  }, [edge.url, dirty]);
   const invalid = !isValidEdgeUrl(value);
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (invalid) return;
-    setEdgeUrl(value);
+    // Saving the automatic address itself keeps it automatic (it follows the edge).
+    setEdgeUrl(value.trim() === edge.automatic ? null : value);
+    setDirty(false);
     setSaved(true);
   };
   return (
@@ -111,9 +119,16 @@ function EdgeUrlSetting() {
         value={value}
         onChange={(e) => {
           setSaved(false);
+          setDirty(true);
           setValue(e.target.value);
         }}
-        hint={t('settings.edgeUrlHint', { url: DEFAULT_EDGE_URL })}
+        hint={
+          edge.source === 'manual'
+            ? t('settings.edgeUrlManual', { url: edge.automatic })
+            : edge.source === 'edge'
+              ? t('settings.edgeUrlAuto')
+              : t('settings.edgeUrlHint', { url: edge.automatic })
+        }
         error={invalid ? t('settings.invalidUrl') : undefined}
         className="min-h-[52px] text-base"
       />
@@ -123,9 +138,11 @@ function EdgeUrlSetting() {
         </Button>
         <Button
           variant="ghost"
+          disabled={edge.source !== 'manual' && !dirty}
           onClick={() => {
-            setValue(DEFAULT_EDGE_URL);
-            setEdgeUrl(DEFAULT_EDGE_URL);
+            setEdgeUrl(null);
+            setValue(edge.automatic);
+            setDirty(false);
             setSaved(true);
           }}
         >
@@ -185,7 +202,7 @@ export function SettingsPage() {
           </div>
         </Card>
         <Card title={t('settings.offlineSection')}>
-          <EdgeUrlSetting />
+          <EdgeUrlSetting siteId={site?.site_id} />
         </Card>
         <Card title={t('settings.branchSection')}>
           <div className="flex flex-wrap items-center justify-between gap-2">

@@ -1,15 +1,7 @@
 // Step 3: cameras. ONVIF discovery, add/edit/delete, a blurred test picture per camera. Stream
 // URLs and credentials go to the edge's local secrets (`/local/cameras`); the camera's name and
 // on/off switch live in the SiteConfig (saved with `PUT /local/config`).
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Spinner,
-  Switch,
-  useTranslation,
-} from '@rv/shared';
+import { Badge, Button, Card, EmptyState, Spinner, Switch, useTranslation } from '@rv/shared';
 import { Camera, ImageIcon, KeyRound, Pencil, Plus, Radar, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useLocalApi } from '../../api/context';
@@ -31,9 +23,7 @@ import type { StepProps } from './SetupLayout';
 import { useSetup } from './setupState';
 
 type Editing =
-  | { type: 'add'; preset?: Partial<CameraFormValues> }
-  | { type: 'edit'; cameraId: string }
-  | null;
+  { type: 'add'; preset?: Partial<CameraFormValues> } | { type: 'edit'; cameraId: string } | null;
 
 const STATUS_TONE = { ok: 'success', degraded: 'warning', offline: 'danger' } as const;
 
@@ -63,7 +53,10 @@ export function CamerasStep(_: StepProps) {
   const [discovering, setDiscovering] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
 
-  const takenIds = () => [...config.cameras.map((c) => c.camera_id), ...ctx.streams.map((s) => s.camera_id)];
+  const takenIds = () => [
+    ...config.cameras.map((c) => c.camera_id),
+    ...ctx.streams.map((s) => s.camera_id),
+  ];
 
   const addCamera = async (r: CameraFormResult): Promise<boolean> => {
     if (!r.url) return false;
@@ -77,8 +70,12 @@ export function CamerasStep(_: StepProps) {
         url: r.url,
         username: r.username,
         password: r.password,
+        ...(r.options ? { options: r.options } : {}),
       });
-      const saved = await ctx.save({ ...config, cameras: [...config.cameras, newCameraConfig(cameraId, r.name)] });
+      const saved = await ctx.save({
+        ...config,
+        cameras: [...config.cameras, newCameraConfig(cameraId, r.name)],
+      });
       await ctx.refetchStreams();
       if (saved) setEditing(null);
       return saved;
@@ -98,13 +95,21 @@ export function CamerasStep(_: StepProps) {
         if (r.url || r.username || r.password) {
           await api.updateCamera(row.camera_id, {
             ...(r.url ? { url: r.url } : {}),
+            ...(r.url && r.options ? { options: r.options } : {}),
             ...(r.username ? { username: r.username } : {}),
             ...(r.password ? { password: r.password } : {}),
           });
         }
       } else if (r.url) {
         // In the config but the edge has no stream for it yet (e.g. config from the cloud).
-        await api.addCamera({ camera_id: row.camera_id, kind: 'rtsp', url: r.url, username: r.username, password: r.password });
+        await api.addCamera({
+          camera_id: row.camera_id,
+          kind: 'rtsp',
+          url: r.url,
+          username: r.username,
+          password: r.password,
+          ...(r.options ? { options: r.options } : {}),
+        });
       }
       const cameras = row.config
         ? config.cameras.map((c) => (c.camera_id === row.camera_id ? { ...c, name: r.name } : c))
@@ -155,8 +160,11 @@ export function CamerasStep(_: StepProps) {
     }
   };
 
-  const editingRow = editing?.type === 'edit' ? rows.find((r) => r.camera_id === editing.cameraId) : undefined;
-  const devices = (discovery?.devices ?? []).map(asDevice).filter((d): d is DiscoveredDevice => !!d?.address);
+  const editingRow =
+    editing?.type === 'edit' ? rows.find((r) => r.camera_id === editing.cameraId) : undefined;
+  const devices = (discovery?.devices ?? [])
+    .map(asDevice)
+    .filter((d): d is DiscoveredDevice => !!d?.address);
 
   return (
     <div className="flex flex-col gap-4">
@@ -186,9 +194,13 @@ export function CamerasStep(_: StepProps) {
           ) : (
             <ul className="divide-y divide-border" aria-label={t('cameras.discoveryTitle')}>
               {devices.map((d) => {
-                const label = [d.manufacturer, d.model].filter(Boolean).join(' ') || d.name || d.address;
+                const label =
+                  [d.manufacturer, d.model].filter(Boolean).join(' ') || d.name || d.address;
                 return (
-                  <li key={d.address} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <li
+                    key={d.address}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2"
+                  >
                     <span className="min-w-0">
                       <span className="block font-medium" dir="auto">
                         {label}
@@ -233,15 +245,24 @@ export function CamerasStep(_: StepProps) {
       )}
 
       {rows.length === 0 && !editing ? (
-        <EmptyState icon={<Camera className="h-10 w-10" />} title={t('cameras.none')} description={t('cameras.noneBody')} />
+        <EmptyState
+          icon={<Camera className="h-10 w-10" />}
+          title={t('cameras.none')}
+          description={t('cameras.noneBody')}
+        />
       ) : (
         <ul className="flex flex-col gap-3" aria-label={t('cameras.listLabel')}>
           {rows.map((row) => {
             const isEditing = editingRow?.camera_id === row.camera_id;
             const zoneCount = config.zones.filter((z) => z.camera_id === row.camera_id).length;
             const status = row.stream?.status ?? null;
+            // Simulated cameras (`rv-edge simulate`) come from the scenario: read-only.
+            const readOnly = row.source === 'simulated' || row.stream?.kind === 'simulated';
             return (
-              <li key={row.camera_id} className="rounded-xl border border-border bg-surface p-4 shadow-card">
+              <li
+                key={row.camera_id}
+                className="rounded-xl border border-border bg-surface p-4 shadow-card"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-2">
@@ -250,8 +271,10 @@ export function CamerasStep(_: StepProps) {
                         {row.name}
                       </span>
                       <span className="rv-num text-xs text-muted">{row.camera_id}</span>
-                      {status && <Badge tone={STATUS_TONE[status]}>{t(`common:camera.${status}`)}</Badge>}
-                      {row.source === 'simulated' && <Badge tone="info">{t('cameras.simulated')}</Badge>}
+                      {status && (
+                        <Badge tone={STATUS_TONE[status]}>{t(`common:camera.${status}`)}</Badge>
+                      )}
+                      {readOnly && <Badge tone="info">{t('cameras.simulated')}</Badge>}
                       {!row.config && <Badge tone="warning">{t('cameras.notInConfig')}</Badge>}
                     </p>
                     <p className="mt-1 break-all text-xs text-muted" dir="ltr">
@@ -272,30 +295,38 @@ export function CamerasStep(_: StepProps) {
                       size="sm"
                       variant="ghost"
                       aria-expanded={preview === row.camera_id}
-                      onClick={() => setPreview((p) => (p === row.camera_id ? null : row.camera_id))}
+                      onClick={() =>
+                        setPreview((p) => (p === row.camera_id ? null : row.camera_id))
+                      }
                     >
                       <ImageIcon aria-hidden="true" className="h-4 w-4" />
                       {t('cameras.testPicture')}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setEditing(isEditing ? null : { type: 'edit', cameraId: row.camera_id })}
-                      aria-label={t('cameras.editNamed', { name: row.name })}
-                    >
-                      <Pencil aria-hidden="true" className="h-4 w-4" />
-                      {t('common:actions.edit')}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-danger"
-                      onClick={() => setConfirmDelete(row.camera_id)}
-                      aria-label={t('cameras.deleteNamed', { name: row.name })}
-                    >
-                      <Trash2 aria-hidden="true" className="h-4 w-4" />
-                      {t('common:actions.delete')}
-                    </Button>
+                    {!readOnly && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setEditing(isEditing ? null : { type: 'edit', cameraId: row.camera_id })
+                          }
+                          aria-label={t('cameras.editNamed', { name: row.name })}
+                        >
+                          <Pencil aria-hidden="true" className="h-4 w-4" />
+                          {t('common:actions.edit')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-danger"
+                          onClick={() => setConfirmDelete(row.camera_id)}
+                          aria-label={t('cameras.deleteNamed', { name: row.name })}
+                        >
+                          <Trash2 aria-hidden="true" className="h-4 w-4" />
+                          {t('common:actions.delete')}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -306,7 +337,9 @@ export function CamerasStep(_: StepProps) {
                       onChange={(enabled) =>
                         ctx.setConfig((c) => ({
                           ...c,
-                          cameras: c.cameras.map((cam) => (cam.camera_id === row.camera_id ? { ...cam, enabled } : cam)),
+                          cameras: c.cameras.map((cam) =>
+                            cam.camera_id === row.camera_id ? { ...cam, enabled } : cam,
+                          ),
                         }))
                       }
                       label={t('cameras.enabled')}
@@ -315,13 +348,26 @@ export function CamerasStep(_: StepProps) {
                   </div>
                 )}
 
-                {confirmDelete === row.camera_id && (
-                  <div role="alertdialog" aria-labelledby={`del-${row.camera_id}`} className="mt-3 rounded-lg border border-danger/40 bg-danger-soft p-3">
+                {readOnly && (
+                  <p className="mt-2 text-xs text-muted">{t('cameras.simulatedReadOnly')}</p>
+                )}
+
+                {confirmDelete === row.camera_id && !readOnly && (
+                  <div
+                    role="alertdialog"
+                    aria-labelledby={`del-${row.camera_id}`}
+                    className="mt-3 rounded-lg border border-danger/40 bg-danger-soft p-3"
+                  >
                     <p id={`del-${row.camera_id}`} className="text-sm font-medium">
                       {t('cameras.confirmDelete', { name: row.name, count: zoneCount })}
                     </p>
                     <div className="mt-2 flex gap-2">
-                      <Button variant="danger" size="sm" loading={busy} onClick={() => void deleteCamera(row)}>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        loading={busy}
+                        onClick={() => void deleteCamera(row)}
+                      >
                         {t('common:actions.delete')}
                       </Button>
                       <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(null)}>
@@ -331,18 +377,28 @@ export function CamerasStep(_: StepProps) {
                   </div>
                 )}
 
-                {preview === row.camera_id && <CameraPreview cameraId={row.camera_id} name={row.name} />}
+                {preview === row.camera_id && (
+                  <CameraPreview cameraId={row.camera_id} name={row.name} />
+                )}
 
-                {isEditing && (
+                {isEditing && !readOnly && (
                   <div className="mt-4 border-t border-border pt-4">
                     <CameraForm
                       initial={{
                         name: row.name,
                         redactedUrl: row.stream?.url ?? null,
+                        address: row.stream
+                          ? {
+                              brand: row.stream.brand,
+                              host: row.stream.host,
+                              port: row.stream.port,
+                              channel: row.stream.channel,
+                              substream: row.stream.substream,
+                            }
+                          : null,
                         hasCredentials: !!row.stream?.has_credentials,
                         streamless: !row.stream,
                       }}
-                      nameOnly={row.source === 'simulated'}
                       busy={busy}
                       onSubmit={(r) => editCamera(row, r)}
                       onCancel={() => setEditing(null)}
@@ -368,7 +424,9 @@ function CameraPreview({ cameraId, name }: { cameraId: string; name: string }) {
         imageAlt={t('snapshot.alt', { name })}
         loading={snap.loading}
         aria-hidden="true"
-        placeholder={snap.error ? <ServerErrors error={snap.error} title={t('snapshot.failed')} /> : undefined}
+        placeholder={
+          snap.error ? <ServerErrors error={snap.error} title={t('snapshot.failed')} /> : undefined
+        }
       >
         {() => null}
       </SnapshotFrame>

@@ -3,6 +3,7 @@
 import { setupWorker } from 'msw/browser';
 import { safeGetItem, safeSetItem } from '../lib/storage';
 import { MockDb } from './db';
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from './demo';
 import { createHandlers } from './handlers';
 
 const DB_KEY = 'rv-mock-db';
@@ -30,7 +31,9 @@ export function startMockWorker(options: StartMockOptions = {}): Promise<MockDb>
         quiet: true,
       });
       db.startSimulation(options.tickMs ?? 2000);
-      console.info('[rv] Mock backend active (VITE_MOCK=1). Demo password: demo1234');
+      console.info(
+        `[rv] Mock backend active (VITE_MOCK=1). Demo logins: ${DEMO_ACCOUNTS.map((a) => a.email).join(', ')} / ${DEMO_PASSWORD}`,
+      );
       return db;
     })();
   }

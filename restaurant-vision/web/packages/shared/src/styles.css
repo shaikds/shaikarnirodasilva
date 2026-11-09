@@ -31,6 +31,7 @@
 
     /* Charts (validated with the dataviz palette checks against these surfaces). */
     --rv-chart-1: 42 120 214; /* #2a78d6 */
+    --rv-chart-2: 235 104 52; /* #eb6834, second series (validated pair with chart-1) */
     --rv-chart-grid: 229 231 235;
     --rv-chart-axis: 107 114 128;
 
@@ -71,6 +72,7 @@
     --rv-focus: 132 187 255;
 
     --rv-chart-1: 57 135 229; /* #3987e5 */
+    --rv-chart-2: 217 89 38; /* #d95926 */
     --rv-chart-grid: 44 51 62;
     --rv-chart-axis: 160 171 186;
 

@@ -11,9 +11,15 @@ import type {
   TableState,
 } from '@rv/shared';
 import { CONTRACT_SCHEMA_VERSION } from '@rv/shared';
-import type { CameraOut, SetupStatus, SuggestNote, TableSuggestion } from '../api/types';
+import type {
+  CameraOut,
+  OptionValue,
+  SetupStatus,
+  SuggestNote,
+  TableSuggestion,
+} from '../api/types';
 import { uncoveredTables, errorsOf, validateConfig } from '../lib/validation';
-import { redactUrl } from '../lib/rtsp';
+import { normalizeBrand, parseCameraUrl, redactUrl } from '../lib/rtsp';
 
 export interface MockCamera {
   camera_id: string;
@@ -21,6 +27,8 @@ export interface MockCamera {
   /** Stored URL, credentials included (never returned as is). */
   url: string;
   loop: boolean;
+  /** Non-secret options the wizard stored (`brand`, `channel`, `substream`). */
+  options?: Record<string, OptionValue>;
 }
 
 export interface EdgeMockOptions {
@@ -118,6 +126,7 @@ export class EdgeMockDb {
       pending_config_push: false,
       outbox_depth: 0,
       camera_count: this.cameras.size,
+      uniform_calibrated: this.uniformHsv !== null,
     };
   }
 
@@ -139,14 +148,24 @@ export class EdgeMockDb {
   }
 
   // ---------------------------------------------------------------- cameras
+  /** Like local_api.CameraOut: non-secret address parts from the stored options, else the URL. */
   cameraOut(c: MockCamera): CameraOut {
     const cfg = this.config?.cameras.find((x) => x.camera_id === c.camera_id);
+    const simulated = c.kind === 'simulated';
+    const parsed = c.kind === 'rtsp' ? parseCameraUrl(c.url) : null;
+    const opt = c.options ?? {};
+    const channel = typeof opt.channel === 'number' && opt.channel >= 1 ? opt.channel : null;
     return {
       camera_id: c.camera_id,
       kind: c.kind,
-      url: redactUrl(c.url),
-      has_credentials: /:\/\/[^/]*@/.test(c.url),
+      url: simulated ? `simulated://${c.camera_id}` : redactUrl(c.url),
+      has_credentials: !simulated && /:\/\/[^/]*@/.test(c.url),
       loop: c.loop,
+      brand: typeof opt.brand === 'string' && opt.brand ? normalizeBrand(opt.brand) : (parsed?.brand ?? null),
+      host: parsed?.host ?? null,
+      port: parsed?.port ?? null,
+      channel: channel ?? parsed?.channel ?? null,
+      substream: typeof opt.substream === 'boolean' ? opt.substream : (parsed?.substream ?? null),
       in_config: !!cfg,
       name: cfg?.name ?? null,
       enabled: cfg?.enabled ?? null,
@@ -233,6 +252,7 @@ export class EdgeMockDb {
           cpu_pct: 18,
           mem_mb: 420,
           outbox_depth: 0,
+          local_url: 'http://192.168.1.20:8787',
         },
       ],
     };
@@ -266,7 +286,9 @@ export class EdgeMockDb {
 
   setTableState(tableId: string, state: TableState, guests: number) {
     const prev = this.tableState.get(tableId);
-    this.tableState.set(tableId, { state, guests, since: this.now() });
+    // Like the edge: a seating is confirmed after `seat_confirm_s`; `since_ts` is backdated.
+    const since = state === 'seated' ? this.now() - 20 : this.now();
+    this.tableState.set(tableId, { state, guests, since });
     this.emit({
       ...this.eventBase(),
       type: 'table.state_changed',
@@ -275,6 +297,7 @@ export class EdgeMockDb {
       to_state: state,
       guest_count: guests,
       session_id: `sess-${tableId}`,
+      since_ts: since,
     } as EdgeEvent);
   }
 
@@ -296,9 +319,20 @@ export class EdgeMockDb {
       ack_via: null,
       resolved_at: null,
       resolve_reason: null,
+      // When the condition began (e.g. the guests sat down), from the table's current state.
+      condition_since_ts: (tableId ? this.tableState.get(tableId)?.since : null) ?? base.ts,
     };
     this.alerts.set(alertId, view);
-    this.emit({ ...base, type: 'alert.raised', alert_id: alertId, kind, table_id: tableId, zone_id: null, severity } as EdgeEvent);
+    this.emit({
+      ...base,
+      type: 'alert.raised',
+      alert_id: alertId,
+      kind,
+      table_id: tableId,
+      zone_id: null,
+      severity,
+      condition_since_ts: view.condition_since_ts,
+    } as EdgeEvent);
     return view;
   }
 

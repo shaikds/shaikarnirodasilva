@@ -19,7 +19,7 @@ export {
   type TimeseriesQuery,
   type AlertStatusFilter,
 } from './api/endpoints';
-export { ApiError, isApiError, detailMessage } from './api/errors';
+export { ApiError, isApiError, detailMessage, parseRetryAfter } from './api/errors';
 export * from './api/hooks';
 export {
   RvProvider,
@@ -41,12 +41,13 @@ export {
 export { accessFromMe, canAccessSite, type Access } from './auth/roles';
 
 // live
-export { applyEvent, isDeviceOnline } from './live/applyEvent';
+export { alertSince, alertWaitingS, applyEvent, isDeviceOnline } from './live/applyEvent';
 export { useSiteLive, type LiveConnection, type UseSiteLiveOptions } from './live/useSiteLive';
 export {
   LiveSocket,
   computeBackoff,
   DEFAULT_BACKOFF,
+  WS_CLOSE_BAD_REQUEST,
   WS_CLOSE_FORBIDDEN,
   WS_CLOSE_UNAUTHORIZED,
   type LiveStatus,

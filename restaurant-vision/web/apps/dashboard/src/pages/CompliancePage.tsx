@@ -2,18 +2,27 @@ import { Card, PageHeader, useTranslation } from '@rv/shared';
 import { Download, ShieldCheck } from 'lucide-react';
 
 /**
- * Templates are served from `/compliance/` (public/compliance, added by the docs engineer).
- * File names are fixed here; see the web report for the list.
+ * The compliance pack (`docs/compliance/<name>-<he|en>.md`), rendered to PDF by
+ * `deploy/scripts/compliance_pdfs.py` at image build time and served by the cloud at
+ * `/compliance/<name>-<he|en>.pdf`. Names here must match those files (a test checks it).
  */
-const COMPLIANCE_DOCS = [
-  { key: 'signageHe', file: 'signage-he.pdf', lang: 'he' },
-  { key: 'signageEn', file: 'signage-en.pdf', lang: 'en' },
-  { key: 'staffHe', file: 'staff-notice-he.pdf', lang: 'he' },
-  { key: 'staffEn', file: 'staff-notice-en.pdf', lang: 'en' },
-  { key: 'nonIdentification', file: 'non-identification-statement.pdf', lang: undefined },
-  { key: 'dpia', file: 'dpia-template.docx', lang: undefined },
-  { key: 'dpa', file: 'dpa-outline.docx', lang: undefined },
+export const COMPLIANCE_DOCS = [
+  'signage',
+  'privacy-notice',
+  'staff-notice',
+  'non-identification-statement',
+  'dpia-template',
+  'dpa-outline',
 ] as const;
+
+export const COMPLIANCE_LANGS = ['he', 'en'] as const;
+
+export type ComplianceDoc = (typeof COMPLIANCE_DOCS)[number];
+
+/** `compliance/<name>-<lang>.pdf`, relative to the app base. */
+export function compliancePdf(doc: ComplianceDoc, lang: (typeof COMPLIANCE_LANGS)[number]) {
+  return `compliance/${doc}-${lang}.pdf`;
+}
 
 const PRINCIPLES = ['noFaces', 'noVideo', 'noStaff', 'rotation'] as const;
 
@@ -34,21 +43,26 @@ export function CompliancePage() {
             ))}
           </ul>
         </Card>
-        <Card title={t('compliance.templatesTitle')}>
+        <Card title={t('compliance.templatesTitle')} description={t('compliance.templatesHint')}>
           <ul className="divide-y divide-border">
-            {COMPLIANCE_DOCS.map((d) => (
-              <li key={d.key} className="flex items-center justify-between gap-3 py-2">
-                <span className="text-sm">{t(`compliance.docs.${d.key}`)}</span>
-                <a
-                  href={`${base}compliance/${d.file}`}
-                  hrefLang={d.lang}
-                  download
-                  className="inline-flex min-h-tap items-center gap-1 rounded-lg px-2 text-sm font-medium text-primary hover:bg-surface-2"
-                  aria-label={`${t('compliance.download')}: ${t(`compliance.docs.${d.key}`)}`}
-                >
-                  <Download aria-hidden="true" className="h-4 w-4" />
-                  {t('compliance.download')}
-                </a>
+            {COMPLIANCE_DOCS.map((doc) => (
+              <li key={doc} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="min-w-0 text-sm">{t(`compliance.docs.${doc}`)}</span>
+                <span className="flex gap-1">
+                  {COMPLIANCE_LANGS.map((lang) => (
+                    <a
+                      key={lang}
+                      href={`${base}${compliancePdf(doc, lang)}`}
+                      hrefLang={lang}
+                      download
+                      className="inline-flex min-h-tap items-center gap-1 rounded-lg px-2 text-sm font-medium text-primary hover:bg-surface-2"
+                      aria-label={`${t('compliance.download')}: ${t(`compliance.docs.${doc}`)} (${t(`compliance.lang.${lang}`)})`}
+                    >
+                      <Download aria-hidden="true" className="h-4 w-4" />
+                      {t(`compliance.lang.${lang}`)}
+                    </a>
+                  ))}
+                </span>
               </li>
             ))}
           </ul>

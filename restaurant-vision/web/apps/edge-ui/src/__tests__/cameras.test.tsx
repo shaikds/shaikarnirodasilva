@@ -66,6 +66,41 @@ describe('cameras step', () => {
     expect(within(edit).getByLabelText('Password')).toHaveValue('');
     expect(within(edit).getByLabelText('IP address or host')).toHaveValue('192.168.1.70');
     expect(document.body.innerHTML).not.toContain(SECRET);
+    // The brand form's non-secret parts were stored with the camera.
+    expect(db.cameras.get('entrance')!.options).toEqual({ brand: 'hikvision', channel: 1, substream: true });
+  });
+
+  it('prefills the edit form from the address parts the edge lists, not the redacted URL', async () => {
+    db.cameras.set('bar', {
+      camera_id: 'bar',
+      kind: 'rtsp',
+      url: 'rtsp://admin:pw@192.168.1.80:8554/live/main',
+      loop: true,
+      options: { brand: 'dahua', channel: 3, substream: false },
+    });
+    db.config = { ...db.config!, cameras: [...db.config!.cameras, { ...db.config!.cameras[0]!, camera_id: 'bar', name: 'Bar' }] };
+    const user = userEvent.setup();
+    renderEdge('/setup/cameras');
+    await user.click(await screen.findByRole('button', { name: 'Edit Bar' }));
+    const edit = screen.getByRole('form', { name: 'Edit camera' });
+    expect(within(edit).getByLabelText('Brand')).toHaveValue('dahua');
+    expect(within(edit).getByLabelText('IP address or host')).toHaveValue('192.168.1.80');
+    expect(within(edit).getByLabelText('RTSP port')).toHaveValue(8554);
+    expect(within(edit).getByLabelText('Channel')).toHaveValue(3);
+    expect(within(edit).getByRole('switch', { name: /Use the substream/ })).not.toBeChecked();
+  });
+
+  it('shows simulated cameras read-only: no edit or delete', async () => {
+    db.cameras.set('sim-1', { camera_id: 'sim-1', kind: 'simulated', url: 'simulated://sim-1', loop: true });
+    renderEdge('/setup/cameras');
+    const list = await screen.findByRole('list', { name: 'Cameras' });
+    expect(await within(list).findByText('simulated://sim-1')).toBeInTheDocument();
+    expect(within(list).getByText('Simulated')).toBeInTheDocument();
+    expect(within(list).getByText(/cannot be edited or deleted/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit sim-1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete sim-1' })).not.toBeInTheDocument();
+    // Real cameras keep their buttons.
+    expect(screen.getByRole('button', { name: 'Edit Dining room' })).toBeInTheDocument();
   });
 
   it('changes only the password: the stored address is kept', async () => {

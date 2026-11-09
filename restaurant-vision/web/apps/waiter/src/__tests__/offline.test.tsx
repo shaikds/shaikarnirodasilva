@@ -70,7 +70,7 @@ describe('isOffline', () => {
 describe('offline banner and edge URL setting', () => {
   beforeEach(async () => {
     await setupWaiterI18n('en');
-    useWaiterSettings.setState({ edgeUrl: DEFAULT_EDGE_URL });
+    useWaiterSettings.setState({ edgeUrl: null, autoEdgeUrls: {} });
   });
 
   it('links to the local edge alerts page', () => {
@@ -82,8 +82,9 @@ describe('offline banner and edge URL setting', () => {
     );
   });
 
-  it('defaults to rv-edge.local and validates addresses', () => {
-    expect(useWaiterSettings.getState().edgeUrl).toBe('http://rv-edge.local:8787/local-alerts');
+  it('has no manual address by default and validates addresses', () => {
+    expect(useWaiterSettings.getState().edgeUrl).toBeNull();
+    expect(DEFAULT_EDGE_URL).toBe('http://rv-edge.local:8787/local-alerts');
     expect(isValidEdgeUrl('http://192.168.1.20:8787/local-alerts')).toBe(true);
     expect(isValidEdgeUrl('ftp://x')).toBe(false);
     expect(isValidEdgeUrl('not a url')).toBe(false);
@@ -93,7 +94,7 @@ describe('offline banner and edge URL setting', () => {
     useWaiterSettings.getState().setEdgeUrl('http://192.168.1.20:8787/local-alerts');
     expect(window.localStorage.getItem(WAITER_SETTINGS_KEY)).toContain('192.168.1.20');
     useWaiterSettings.getState().setEdgeUrl('javascript:alert(1)');
-    expect(useWaiterSettings.getState().edgeUrl).toBe(DEFAULT_EDGE_URL);
+    expect(useWaiterSettings.getState().edgeUrl).toBeNull(); // back to automatic
   });
 
   it('keeps working when localStorage throws', () => {

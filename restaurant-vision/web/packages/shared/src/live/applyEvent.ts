@@ -24,9 +24,12 @@ export function applyEvent(snapshot: LiveSnapshot, event: EdgeEvent): LiveSnapsh
 
   switch (event.type) {
     case 'table.state_changed': {
+      // `since_ts` (contracts 1.1) is when the state really began, backdated to the evidence;
+      // 1.0 producers omit it, then the transition time stands in.
+      const since = event.since_ts ?? event.ts;
       const tables = updateTable(snapshot.tables, event.table_id, (t) => {
-        if (t.since_ts !== null && event.ts < t.since_ts) return t; // stale
-        return { ...t, state: event.to_state, guest_count: event.guest_count, since_ts: event.ts };
+        if (t.since_ts !== null && since < t.since_ts) return t; // stale
+        return { ...t, state: event.to_state, guest_count: event.guest_count, since_ts: since };
       });
       return tables === snapshot.tables ? snapshot : { ...snapshot, tables };
     }
@@ -48,6 +51,7 @@ export function applyEvent(snapshot: LiveSnapshot, event: EdgeEvent): LiveSnapsh
         ack_via: null,
         resolved_at: null,
         resolve_reason: null,
+        condition_since_ts: event.condition_since_ts ?? null,
       };
       const open_alerts = [...snapshot.open_alerts, alert].sort(
         (a, b) => a.raised_at - b.raised_at,
@@ -130,6 +134,7 @@ export function applyEvent(snapshot: LiveSnapshot, event: EdgeEvent): LiveSnapsh
         cpu_pct: event.cpu_pct,
         mem_mb: event.mem_mb,
         outbox_depth: event.outbox_depth,
+        local_url: event.local_url ?? null,
       };
       const devices = existing
         ? snapshot.devices.map((d) => (d.device_id === event.device_id ? device : d))
@@ -146,6 +151,20 @@ export function applyEvent(snapshot: LiveSnapshot, event: EdgeEvent): LiveSnapsh
     default:
       return snapshot;
   }
+}
+
+/** When the condition behind an alert began (e.g. guests seated): `condition_since_ts`,
+ * falling back to `raised_at` (1.0 producers). */
+export function alertSince(alert: Pick<AlertView, 'condition_since_ts' | 'raised_at'>): number {
+  return alert.condition_since_ts ?? alert.raised_at;
+}
+
+/** Seconds the guests have been waiting at `nowS` (never negative, clock skew included). */
+export function alertWaitingS(
+  alert: Pick<AlertView, 'condition_since_ts' | 'raised_at'>,
+  nowS: number,
+): number {
+  return Math.max(0, nowS - alertSince(alert));
 }
 
 /** A device counts as online when the cloud says so and its heartbeat is recent. */

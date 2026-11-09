@@ -31,7 +31,13 @@ export function createEdgeHandlers(db: EdgeMockDb): (HttpHandler | WebSocketHand
     (info) => {
       db.lastSetupHeaders = info.request.headers;
       const problem = db.checkPin(info.request.headers.get('X-Setup-Pin'));
-      if (problem === 429) return detail(429, 'too many wrong PINs; wait');
+      if (problem === 429) {
+        const wait = Math.max(1, Math.ceil((db.lockedUntil - Date.now()) / 1000));
+        return HttpResponse.json(
+          { detail: 'too many wrong PINs; wait' },
+          { status: 429, headers: { 'Retry-After': String(wait) } },
+        );
+      }
       if (problem === 401) return detail(401, db.pin === null ? 'setup PIN not set' : 'invalid setup PIN');
       return fn(info);
     };
@@ -62,6 +68,7 @@ export function createEdgeHandlers(db: EdgeMockDb): (HttpHandler | WebSocketHand
     }),
 
     // -------------------------------------------------------------- setup (PIN)
+    http.get('*/local/setup/pin-check', guarded(() => new HttpResponse(null, { status: 204 }))),
     http.get(
       '*/local/cameras',
       guarded(() => HttpResponse.json([...db.cameras.values()].map((c) => db.cameraOut(c)))),
@@ -91,6 +98,7 @@ export function createEdgeHandlers(db: EdgeMockDb): (HttpHandler | WebSocketHand
           kind: body.kind ?? 'rtsp',
           url: withCredentials(body.url, body.username, body.password),
           loop: body.loop ?? true,
+          options: body.options ?? {},
         };
         db.cameras.set(cam.camera_id, cam);
         return HttpResponse.json(db.cameraOut(cam), { status: 201 });
@@ -100,13 +108,15 @@ export function createEdgeHandlers(db: EdgeMockDb): (HttpHandler | WebSocketHand
       '*/local/cameras/:cameraId',
       guarded<{ cameraId: string }>(async ({ request, params }) => {
         const existing = db.cameras.get(params.cameraId);
-        if (!existing) return detail(404, 'unknown camera');
+        // Simulated cameras are not stored ones: the edge answers 404 like for unknown ids.
+        if (!existing || existing.kind === 'simulated') return detail(404, 'unknown camera');
         const body = (await request.json()) as CameraUpdate;
         const url = body.url ?? existing.url;
         const next: MockCamera = {
           ...existing,
           kind: body.kind ?? existing.kind,
           url: withCredentials(url, body.username, body.password),
+          options: body.options ?? existing.options,
         };
         db.cameras.set(next.camera_id, next);
         return HttpResponse.json(db.cameraOut(next));
@@ -115,6 +125,7 @@ export function createEdgeHandlers(db: EdgeMockDb): (HttpHandler | WebSocketHand
     http.delete(
       '*/local/cameras/:cameraId',
       guarded<{ cameraId: string }>(({ params }) => {
+        if (db.cameras.get(params.cameraId)?.kind === 'simulated') return detail(404, 'unknown camera');
         if (!db.cameras.delete(params.cameraId)) return detail(404, 'unknown camera');
         return new HttpResponse(null, { status: 204 });
       }),

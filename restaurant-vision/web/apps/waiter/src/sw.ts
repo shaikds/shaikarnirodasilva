@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 // Waiter PWA service worker: precaches the app shell, shows a notification for every Web Push
-// (table label + alert kind, in the user's language) and focuses the app on click.
+// (the body is an `AlertPush`: table label + alert kind in the user's language, severity, and
+// the time the guests started waiting) and focuses the app on click.
 import { clientsClaim } from 'workbox-core';
 import {
   cleanupOutdatedCaches,

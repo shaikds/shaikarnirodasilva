@@ -44,7 +44,7 @@ export const SEED_USERS: MockUser[] = [
   {
     user_id: 'usr-owner',
     org_id: SEED_ORG.org_id,
-    email: 'owner@zayit.demo',
+    email: 'demo@example.com',
     name: 'דנה לוי',
     locale: 'he',
     password: DEMO_PASSWORD,
@@ -53,7 +53,7 @@ export const SEED_USERS: MockUser[] = [
   {
     user_id: 'usr-manager',
     org_id: SEED_ORG.org_id,
-    email: 'manager@zayit.demo',
+    email: 'manager@example.com',
     name: 'אבי כהן',
     locale: 'he',
     password: DEMO_PASSWORD,
@@ -62,7 +62,7 @@ export const SEED_USERS: MockUser[] = [
   {
     user_id: 'usr-waiter',
     org_id: SEED_ORG.org_id,
-    email: 'waiter@zayit.demo',
+    email: 'waiter@example.com',
     name: 'נועה מזרחי',
     locale: 'he',
     password: DEMO_PASSWORD,
@@ -71,7 +71,7 @@ export const SEED_USERS: MockUser[] = [
   {
     user_id: 'usr-waiter-hfa',
     org_id: SEED_ORG.org_id,
-    email: 'waiter.haifa@zayit.demo',
+    email: 'waiter.haifa@example.com',
     name: 'עומר שפירא',
     locale: 'he',
     password: DEMO_PASSWORD,

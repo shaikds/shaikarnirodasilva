@@ -35,6 +35,8 @@ interface HourStats {
   queue: number;
   walkaways: number;
   responseP50: number | null;
+  /** Mean seconds parties waited in the queue before being seated; null when nobody queued. */
+  queueWait: number | null;
   sessions: number;
   guests: number;
 }
@@ -58,10 +60,19 @@ function hourStats(m: SiteModel, hourTs: number): HourStats {
   const queue = pressure > 0 ? pressure * 30 * (0.6 + n('q') * 0.8) : 0;
   const walkaways = pressure > 0 ? Math.round(pressure * 10 * n('w') * 1.6) : 0;
   const responseP50 = base > 0.05 ? Math.round(55 + base * 110 + n('r') * 40) : null;
+  const queueWait = queue > 0.5 ? Math.round(120 + queue * 35 + n('qw') * 90) : null;
   const avgParty = 2.6;
   const dwellH = 0.95;
   const sessions = occ / avgParty / dwellH;
-  return { occupancy: occ, queue, walkaways, responseP50, sessions, guests: sessions * avgParty };
+  return {
+    occupancy: occ,
+    queue,
+    walkaways,
+    responseP50,
+    queueWait,
+    sessions,
+    guests: sessions * avgParty,
+  };
 }
 
 function hoursIn(from: number, to: number, now: number): number[] {
@@ -154,10 +165,23 @@ export function timeseries(
       case 'walkaways':
         value = Math.round(hours.reduce((s, h) => s + h.walkaways, 0) * fraction);
         break;
-      case 'response_time': {
+      case 'response_time':
+      case 'response_time_p90': {
+        // p90 follows the p50 with the long tail of a busy floor (same 1.9x as `summary`).
+        const tail = metric === 'response_time_p90' ? 1.9 : 1;
         const r = hours.map((h) => h.responseP50).filter((v): v is number => v !== null);
-        value = r.length ? Math.round(r.reduce((a, b) => a + b, 0) / r.length) : null;
+        value = r.length ? Math.round((r.reduce((a, b) => a + b, 0) / r.length) * tail) : null;
         break;
+      }
+      case 'queue_wait': {
+        // Mean seconds per bucket; null (a gap) when nobody was seated from the queue.
+        const w = hours.map((h) => h.queueWait).filter((v): v is number => v !== null);
+        value = w.length ? Math.round(w.reduce((a, b) => a + b, 0) / w.length) : null;
+        break;
+      }
+      default: {
+        const unknown: never = metric;
+        throw new Error(`unknown metric ${String(unknown)}`);
       }
     }
     points.push({ ts: t, value });

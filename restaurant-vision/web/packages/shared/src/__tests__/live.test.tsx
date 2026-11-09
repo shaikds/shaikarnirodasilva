@@ -1,5 +1,6 @@
 // Integration: MSW mock backend (REST + WebSocket) -> useSiteLive -> React Query cache.
 import { act, screen, waitFor } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { useAckAlert } from '../api/hooks';
 import { useSiteLive } from '../live/useSiteLive';
@@ -13,12 +14,12 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 beforeEach(async () => {
   await setupTestI18n('en');
-  signInAs(db, 'waiter@zayit.demo');
+  signInAs(db, 'manager@example.com');
 });
 afterEach(() => signOut());
 
-function LiveProbe({ siteId }: { siteId: string }) {
-  const live = useSiteLive(siteId);
+function LiveProbe({ siteId, alertsOnly }: { siteId: string; alertsOnly?: boolean }) {
+  const live = useSiteLive(siteId, { alertsOnly });
   const ack = useAckAlert(siteId);
   if (!live.data) return <p>loading</p>;
   return (
@@ -28,7 +29,7 @@ function LiveProbe({ siteId }: { siteId: string }) {
       <ul>
         {live.data.open_alerts.map((a) => (
           <li key={a.alert_id} data-testid={`alert-${a.alert_id}`}>
-            {a.kind}:{a.status}
+            {a.kind}:{a.status}:{a.table_label ?? '-'}
             <button onClick={() => ack.mutate(a.alert_id)}>ack {a.alert_id}</button>
           </li>
         ))}
@@ -47,7 +48,9 @@ describe('useSiteLive with the mock backend', () => {
     act(() => {
       alertId = db.raiseAlert('site-tlv', 'waiter_needed', 'tlv-t3').alert_id;
     });
-    expect(await screen.findByTestId(`alert-${alertId}`)).toHaveTextContent('waiter_needed:open');
+    expect(await screen.findByTestId(`alert-${alertId}`)).toHaveTextContent(
+      'waiter_needed:open',
+    );
 
     act(() => db.tick());
     expect(screen.getByTestId('tables')).toHaveTextContent('14');
@@ -64,6 +67,42 @@ describe('useSiteLive with the mock backend', () => {
     const stored = db.openAlerts('site-tlv').find((a) => a.alert_id === alert.alert_id)!;
     expect(stored).toMatchObject({ status: 'acknowledged', ack_via: 'cloud' });
     expect(JSON.stringify(stored)).not.toMatch(/usr-|waiter@/);
+  });
+
+  it('starts from the live.snapshot the socket sends owners and managers', async () => {
+    const alert = db.raiseAlert('site-tlv', 'checkin_needed', 'tlv-t5', 'info');
+    // A stale REST snapshot without the alert: only the socket's live.snapshot carries it.
+    server.use(
+      http.get('*/api/v1/sites/:siteId/live', () =>
+        HttpResponse.json({ ...db.liveSnapshot('site-tlv')!, open_alerts: [] }),
+      ),
+    );
+    renderWithProviders(<LiveProbe siteId="site-tlv" />);
+    expect(await screen.findByTestId(`alert-${alert.alert_id}`)).toHaveTextContent(
+      'checkin_needed:open',
+    );
+  });
+
+  it('waiters: open alerts from /alerts, alert events only, labels refetched', async () => {
+    signInAs(db, 'waiter@example.com');
+    const before = db.raiseAlert('site-tlv', 'bussing_needed', 'tlv-t6', 'info');
+    renderWithProviders(<LiveProbe siteId="site-tlv" alertsOnly />);
+    expect(await screen.findByTestId(`alert-${before.alert_id}`)).toHaveTextContent(
+      `bussing_needed:open:${before.table_label}`,
+    );
+    expect(screen.getByTestId('tables')).toHaveTextContent('0');
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('open'));
+    let raised = before;
+    act(() => {
+      raised = db.raiseAlert('site-tlv', 'waiter_needed', 'tlv-t2');
+      db.tick(); // table, queue and occupancy events: not sent to waiters
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId(`alert-${raised.alert_id}`)).toHaveTextContent(
+        `waiter_needed:open:${raised.table_label}`,
+      ),
+    );
+    expect(screen.getByTestId('tables')).toHaveTextContent('0');
   });
 
   it('closes the socket for a site the user cannot access', async () => {

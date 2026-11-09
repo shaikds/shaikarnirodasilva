@@ -7,6 +7,8 @@ export interface PinSession {
   pin: string | null;
   /** Why the last setup call was rejected (cleared on the next successful unlock). */
   problem: PinProblem | null;
+  /** With `problem === 'locked'`: seconds the edge asked to wait (`Retry-After`), if known. */
+  retryAfterS: number | null;
   unlock: (pin: string) => void;
   lock: (problem?: PinProblem | null) => void;
 }

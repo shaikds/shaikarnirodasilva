@@ -62,6 +62,14 @@ export const commonHe = {
     bussing_needed: 'נדרש פינוי',
     long_queue: 'תור ארוך בכניסה',
   },
+  /** כמה זמן האורחים ממתינים, מרגע שהמצב התחיל. */
+  alertWaiting: {
+    waiter_needed: 'האורחים ממתינים',
+    checkin_needed: 'האורחים ממתינים',
+    bussing_needed: 'ממתין לפינוי',
+    long_queue: 'אורחים ממתינים',
+  },
+  alertSince: 'מאז {{time}}',
   severity: {
     info: 'מידע',
     warn: 'אזהרה',

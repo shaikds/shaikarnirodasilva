@@ -16,7 +16,10 @@ export interface SetupStatus {
   config_version: number;
   pending_config_push: boolean;
   outbox_depth: number;
+  /** Cameras the edge can open (stored ones, plus simulated ones in `rv-edge simulate`). */
   camera_count: number;
+  /** A staff uniform colour was calibrated (`POST /local/uniform/calibrate`). */
+  uniform_calibrated: boolean;
 }
 
 export type OptionValue = string | number | boolean;
@@ -42,13 +45,27 @@ export interface CameraUpdate {
   options?: Record<string, OptionValue> | null;
 }
 
-/** A camera as the edge lists it. `url` is always redacted (`rtsp://***@host/...`). */
+/** Camera kinds the edge lists; `simulated` ones (`rv-edge simulate`) are read-only. */
+export type CameraKind = 'rtsp' | 'file' | 'simulated';
+
+/**
+ * A camera as the edge lists it. `url` is always redacted (`rtsp://***@host/...`; simulated
+ * cameras: `simulated://<id>`). The address parts are non-secret: from the options the wizard
+ * stored, else matched against the brand templates; null when unknown (custom path, file or
+ * simulated source).
+ */
 export interface CameraOut {
   camera_id: string;
-  kind: string;
+  kind: CameraKind | (string & {});
   url: string;
   has_credentials: boolean;
   loop: boolean;
+  /** Brand key (`hikvision`, `dahua`, ...), see lib/rtsp BRANDS. */
+  brand: string | null;
+  host: string | null;
+  port: number | null;
+  channel: number | null;
+  substream: boolean | null;
   in_config: boolean;
   name: string | null;
   enabled: boolean | null;

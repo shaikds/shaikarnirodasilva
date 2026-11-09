@@ -14,7 +14,7 @@ import type {
   UserCreate,
   UserUpdate,
 } from '../contracts';
-import { DEFAULT_THRESHOLDS } from '../contracts';
+import { DEFAULT_THRESHOLDS, TIMESERIES_METRICS, WS_CLOSE_CODES } from '../contracts';
 import type { MockDb } from './db';
 import * as metrics from './metrics';
 import { shortId } from './random';
@@ -276,11 +276,26 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       if (user instanceof Response) return user;
       return HttpResponse.json(db.createPairingCode(siteId), { status: 201 });
     }),
+    // Waiters get a reduced view (online flag and LAN address, for the offline link).
     http.get(`${API}/sites/:siteId/devices`, ({ request, params }) => {
       const siteId = String(params.siteId);
-      const user = siteAccess(request, siteId, staff);
+      const user = siteAccess(request, siteId, all);
       if (user instanceof Response) return user;
-      return HttpResponse.json(db.devices(siteId));
+      const devices = db.devices(siteId);
+      if (db.roleForSite(user, siteId) !== 'waiter') return HttpResponse.json(devices);
+      return HttpResponse.json(
+        devices.map((d) => ({
+          device_id: d.device_id,
+          version: null,
+          last_seen_at: d.last_seen_at,
+          online: d.online,
+          cameras: [],
+          cpu_pct: null,
+          mem_mb: null,
+          outbox_depth: null,
+          local_url: d.local_url,
+        })),
+      );
     }),
 
     // ------------------------------------------------------------ edge (device token)
@@ -317,9 +332,10 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
     }),
 
     // ------------------------------------------------------------ live and alerts
+    // Owners and managers only, like rv_cloud (waiters read `/alerts`).
     http.get(`${API}/sites/:siteId/live`, ({ request, params }) => {
       const siteId = String(params.siteId);
-      const user = siteAccess(request, siteId, all);
+      const user = siteAccess(request, siteId, staff);
       if (user instanceof Response) return user;
       return HttpResponse.json(db.liveSnapshot(siteId));
     }),
@@ -329,6 +345,8 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       if (user instanceof Response) return user;
       const url = new URL(request.url);
       const status = url.searchParams.get('status') ?? 'open';
+      if (status === 'all' && db.roleForSite(user, siteId) === 'waiter')
+        return detail(403, 'Waiters can list open alerts only');
       let alerts = status === 'all' ? db.allAlerts(siteId) : db.openAlerts(siteId);
       const from = url.searchParams.get('from');
       const to = url.searchParams.get('to');
@@ -368,7 +386,7 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       const url = new URL(request.url);
       const metric = (url.searchParams.get('metric') ?? 'occupancy') as TimeseriesMetric;
       const bucket = (url.searchParams.get('bucket') ?? '15m') as Bucket;
-      if (!['occupancy', 'queue', 'walkaways', 'response_time'].includes(metric))
+      if (!(TIMESERIES_METRICS as readonly string[]).includes(metric))
         return detail(422, 'unknown metric');
       if (!['5m', '15m', '1h', '1d'].includes(bucket)) return detail(422, 'unknown bucket');
       const s = db.sites.get(siteId)!;
@@ -465,20 +483,36 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
     http.get(`${API}/healthz`, () => HttpResponse.json({ status: 'ok', version: 'mock' })),
 
     // ------------------------------------------------------------ live WebSocket
+    // Like rv_cloud's `WS /ws`: owners and managers first get a `live.snapshot`, waiters get
+    // `alert.*` events only; refusals close with a `WsCloseCode`.
     liveSocket.addEventListener('connection', ({ client }) => {
       const url = new URL(client.url);
-      const user = db.userForAccessToken(url.searchParams.get('token'));
-      if (!user) {
-        client.close(4401, 'unauthorized');
-        return;
-      }
+      const token = url.searchParams.get('token');
       const siteId = url.searchParams.get('site_id') ?? '';
-      if (!db.roleForSite(user, siteId)) {
-        client.close(4403, 'forbidden');
+      if (!token || !siteId) {
+        client.close(WS_CLOSE_CODES.badRequest, 'bad request');
         return;
       }
-      const unsubscribe = db.subscribe(siteId, (event) => client.send(JSON.stringify(event)));
+      const user = db.userForAccessToken(token);
+      if (!user) {
+        client.close(WS_CLOSE_CODES.unauthorized, 'unauthorized');
+        return;
+      }
+      const role = db.roleForSite(user, siteId);
+      if (!role) {
+        client.close(WS_CLOSE_CODES.forbidden, 'forbidden');
+        return;
+      }
+      const alertsOnly = role === 'waiter';
+      const unsubscribe = db.subscribe(siteId, (event) => {
+        if (alertsOnly && !event.type.startsWith('alert.')) return;
+        client.send(JSON.stringify(event));
+      });
       client.addEventListener('close', unsubscribe);
+      if (!alertsOnly) {
+        const snapshot = db.liveSnapshot(siteId);
+        if (snapshot) client.send(JSON.stringify({ type: 'live.snapshot', snapshot }));
+      }
     }),
   ];
 }

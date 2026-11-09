@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EdgeEvent, LiveSnapshot } from '../contracts';
-import { applyEvent, isDeviceOnline } from '../live/applyEvent';
+import { alertWaitingS, applyEvent, isDeviceOnline } from '../live/applyEvent';
 
 const base = {
   event_id: '01900000-0000-7000-8000-000000000000',
@@ -57,6 +57,38 @@ describe('applyEvent', () => {
       } as never),
     );
     expect(s.tables[0]).toMatchObject({ state: 'seated', guest_count: 3, since_ts: 1001 });
+  });
+
+  it('starts the timer at the backdated since_ts (contracts 1.1)', () => {
+    const s = applyEvent(
+      snapshot(),
+      ev({
+        type: 'table.state_changed',
+        ts: 1030,
+        table_id: 't1',
+        from_state: 'empty',
+        to_state: 'seated',
+        guest_count: 2,
+        session_id: 'x',
+        since_ts: 1005,
+      } as never),
+    );
+    expect(s.tables[0]).toMatchObject({ state: 'seated', since_ts: 1005 });
+    // Stale check on the same value: a transition that began before the current state is old.
+    const stale = applyEvent(
+      s,
+      ev({
+        type: 'table.state_changed',
+        ts: 1040,
+        table_id: 't1',
+        from_state: 'seated',
+        to_state: 'empty',
+        guest_count: 0,
+        session_id: 'x',
+        since_ts: 1001,
+      } as never),
+    );
+    expect(stale).toBe(s);
   });
 
   it('ignores stale state changes', () => {
@@ -129,6 +161,28 @@ describe('applyEvent', () => {
     expect(s.tables[0]!.open_alert_ids).toEqual([]);
   });
 
+  it('copies condition_since_ts and measures the wait from it', () => {
+    const s = applyEvent(
+      snapshot(),
+      ev({
+        type: 'alert.raised',
+        ts: 1200,
+        alert_id: 'a2',
+        kind: 'waiter_needed',
+        table_id: 't1',
+        zone_id: null,
+        severity: 'warn',
+        condition_since_ts: 1010,
+      } as never),
+    );
+    const alert = s.open_alerts[0]!;
+    expect(alert.condition_since_ts).toBe(1010);
+    expect(alertWaitingS(alert, 1250)).toBe(240);
+    // 1.0 producers: no condition_since_ts, fall back to raised_at; never negative.
+    expect(alertWaitingS({ ...alert, condition_since_ts: null }, 1250)).toBe(50);
+    expect(alertWaitingS(alert, 1000)).toBe(0);
+  });
+
   it('does not duplicate a replayed alert', () => {
     const raised = ev({
       type: 'alert.raised',
@@ -195,9 +249,15 @@ describe('applyEvent', () => {
         cpu_pct: 30,
         mem_mb: 500,
         outbox_depth: 0,
+        local_url: 'http://192.168.1.20:8787',
       } as never),
     );
-    expect(s.devices[0]).toMatchObject({ device_id: 'd1', online: true, last_seen_at: 1007 });
+    expect(s.devices[0]).toMatchObject({
+      device_id: 'd1',
+      online: true,
+      last_seen_at: 1007,
+      local_url: 'http://192.168.1.20:8787',
+    });
     expect(isDeviceOnline(s.devices[0]!, 1050)).toBe(true);
     expect(isDeviceOnline(s.devices[0]!, 1200)).toBe(false);
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createApiClient, type AuthAdapter } from '../api/client';
-import { ApiError } from '../api/errors';
+import { ApiError, parseRetryAfter } from '../api/errors';
 import type { TokenPair } from '../contracts';
 
 function memoryAuth(initial: { access: string | null; refresh: string | null }) {
@@ -188,5 +188,27 @@ describe('API client', () => {
       client.request('/push/subscriptions/1', { method: 'DELETE' }),
     ).resolves.toBeUndefined();
     expect(reach).toHaveBeenCalledWith(true);
+  });
+
+  it('exposes Retry-After of a 429 as seconds', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ detail: 'too many wrong PINs; wait' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json', 'Retry-After': '17' },
+        }),
+    );
+    const client = createApiClient({ baseUrl: 'https://x', prefix: '', fetch: fetchImpl });
+    const error = await client.request('/local/setup/pin-check').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(429);
+    expect((error as ApiError).retryAfterS).toBe(17);
+  });
+
+  it('parses Retry-After seconds and HTTP dates', () => {
+    expect(parseRetryAfter(null)).toBeNull();
+    expect(parseRetryAfter(' 30 ')).toBe(30);
+    expect(parseRetryAfter('Thu, 01 Jan 2026 00:00:10 GMT', Date.UTC(2026, 0, 1))).toBe(10);
+    expect(parseRetryAfter('soon')).toBeNull();
   });
 });

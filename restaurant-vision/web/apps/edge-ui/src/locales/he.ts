@@ -212,6 +212,7 @@ export const edgeHe = {
     noneBody: 'הוסיפו מצלמה לפי הכתובת שלה, או חפשו ברשת.',
     listLabel: 'מצלמות',
     simulated: 'מדומה',
+    simulatedReadOnly: 'מגיעה מתרחיש ההדגמה: אי אפשר לערוך או למחוק אותה כאן.',
     notInConfig: 'עוד לא נשמרה',
     noStream: 'אין כתובת זרם (מצלמה מדומה)',
     credentialsStored: 'פרטי כניסה שמורים',

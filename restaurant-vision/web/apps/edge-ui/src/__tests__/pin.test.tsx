@@ -79,15 +79,33 @@ describe('setup PIN', () => {
     expect(window.sessionStorage.getItem('rv-edge-setup-pin')).toBeNull();
   });
 
-  it('explains the lockout after too many wrong PINs (429)', async () => {
+  it('explains the lockout after too many wrong PINs (429), counting down from Retry-After', async () => {
     const user = userEvent.setup();
     renderEdge('/setup/pin');
     act(() => {
-      db.lockedUntil = Date.now() + 30_000;
+      db.lockedUntil = Date.now() + 12_000;
     });
     await user.type(await screen.findByLabelText('Setup PIN', { selector: 'input' }), '2468');
     await user.click(screen.getByRole('button', { name: 'Unlock setup' }));
-    expect(await screen.findByText(/Too many wrong PINs\. Try again in \d+ s\./)).toBeInTheDocument();
+    expect(await screen.findByText(/Too many wrong PINs\. Try again in 1[12] s\./)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Unlock setup' })).toBeDisabled();
+  });
+
+  it('checks the PIN with GET /local/setup/pin-check (204)', async () => {
+    const seen: string[] = [];
+    const onRequest = ({ request }: { request: Request }) => {
+      seen.push(new URL(request.url).pathname);
+    };
+    server.events.on('request:start', onRequest);
+    const user = userEvent.setup();
+    renderEdge('/setup/pin');
+    await user.type(await screen.findByLabelText('Setup PIN', { selector: 'input' }), '2468');
+    await user.click(screen.getByRole('button', { name: 'Unlock setup' }));
+    await waitFor(() => expect(location()).toBe('/setup/pair'));
+    server.events.removeListener('request:start', onRequest);
+    expect(seen).toContain('/local/setup/pin-check');
+    expect(seen.indexOf('/local/setup/pin-check')).toBeLessThan(
+      seen.indexOf('/local/cameras') === -1 ? Infinity : seen.indexOf('/local/cameras'),
+    );
   });
 });
