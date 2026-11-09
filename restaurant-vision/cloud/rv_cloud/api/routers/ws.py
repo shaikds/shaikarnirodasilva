@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from rv_contracts import LiveSnapshotMessage, Role, WsCloseCode
+from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from ...errors import Forbidden, NotFound, Unauthorized
@@ -50,9 +51,9 @@ class _Grant:
     role: Role
 
 
-def _auth_service(state: AppState, session: object) -> AuthService:
+def _auth_service(state: AppState, session: Session) -> AuthService:
     return AuthService(
-        session,  # type: ignore[arg-type]
+        session,
         settings=state.settings,
         clock=state.clock,
         hasher=state.hasher,
