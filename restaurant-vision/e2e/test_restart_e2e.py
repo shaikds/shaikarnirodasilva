@@ -9,18 +9,21 @@ import random
 from pathlib import Path
 from typing import Any
 
+from rv_sim.adapter import load_simulation
+from rv_sim.clock import ManualClock
+
 from conftest import CLOUD_URL, SMOKE, CloudApi, CloudTransport, RecordingNotifier, TestClient
 from conftest import cloud_settings as make_cloud_settings
 from rv_cloud.main import create_app
 from rv_edge.runtime.cli import build_simulated_runtime, simulation_settings
 from rv_edge.runtime.runtime import EdgeRuntime
 from rv_edge.runtime.settings import EdgeSettings
-from rv_sim.adapter import load_simulation
 
 
 def test_edge_restart_expires_orphaned_cloud_alerts_and_table_states(tmp_path: Path) -> None:
     sim = load_simulation(SMOKE, manual=True)
     clock = sim.clock
+    assert isinstance(clock, ManualClock)
     app = create_app(make_cloud_settings(tmp_path), clock=clock, notifier=RecordingNotifier())
     with TestClient(app) as client:
         cloud = CloudApi(client)
@@ -90,7 +93,8 @@ def test_edge_restart_expires_orphaned_cloud_alerts_and_table_states(tmp_path: P
             runtime.step()
             runtime.sync.run_once()
 
-        history = {a["alert_id"]: a for a in cloud.get(owner, f"/sites/{site_id}/alerts", status="all")}
+        all_alerts = cloud.get(owner, f"/sites/{site_id}/alerts", status="all")
+        history = {a["alert_id"]: a for a in all_alerts}
         for alert_id in before:
             alert = history[alert_id]
             assert alert["status"] == "resolved" and alert["resolve_reason"] == "expired"
@@ -98,7 +102,8 @@ def test_edge_restart_expires_orphaned_cloud_alerts_and_table_states(tmp_path: P
         edge_open = {a.alert_id for a in runtime.live_state().open_alerts}
         assert {a["alert_id"] for a in open_alerts()} == edge_open
         edge_tables = {t.table_id: t.state.value for t in runtime.live_state().tables}
-        cloud_tables = {t["table_id"]: t["state"] for t in cloud.get(owner, f"/sites/{site_id}/live")["tables"]}
+        live = cloud.get(owner, f"/sites/{site_id}/live")
+        cloud_tables = {t["table_id"]: t["state"] for t in live["tables"]}
         assert cloud_tables == edge_tables
         runtime.stop()
     sim.close()

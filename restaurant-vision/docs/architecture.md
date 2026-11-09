@@ -136,7 +136,7 @@ class AnalyticsModule(Protocol):
 
 ### 5.3 Events (`EdgeEvent`, discriminated union on `type`)
 
-Common fields: `event_id` (UUID v7 string, idempotency key), `site_id`, `ts` (epoch seconds, float), `schema_version` (currently `1.1`; readers accept any minor of their major).
+Common fields: `event_id` (UUID v7 string, idempotency key), `site_id`, `ts` (epoch seconds, float), `schema_version` (currently `1.2`; readers accept any minor of their major).
 
 | type | payload |
 |---|---|
@@ -149,7 +149,7 @@ Common fields: `event_id` (UUID v7 string, idempotency key), `site_id`, `ts` (ep
 | `queue.seated` | `zone_id, waited_s` |
 | `queue.walkaway` | `zone_id, waited_s, party_size_est` |
 | `occupancy.snapshot` | `guests, tables_occupied, tables_total, staff_on_floor` |
-| `edge.heartbeat` | `device_id, version, cameras: [{camera_id, status: ok\|degraded\|offline, fps, last_frame_age_s}], cpu_pct, mem_mb, outbox_depth, local_url \| None` |
+| `edge.heartbeat` | `device_id, version, cameras: [{camera_id, status: ok\|degraded\|offline, fps, last_frame_age_s}], cpu_pct, mem_mb, outbox_depth, local_url \| None, started_at \| None` |
 
 Table states: `empty`, `seated` (guests present, no staff visit yet), `attended`, `needs_bussing`. (`waiting_for_check` arrives in phase 2 with POS.)
 
@@ -161,6 +161,8 @@ Contracts 1.1 additions (all optional, backward compatible):
 - **WebSocket messages**: the cloud `WS /ws` and the edge `WS /local/ws` send `EdgeEvent | LiveSnapshotMessage` (`{type: "live.snapshot", snapshot: LiveSnapshot}`); cloud close codes are `WsCloseCode` 4400 / 4401 / 4403.
 - **`AlertPush`**: the Web Push body `{alert_id, site_id, kind, severity, table_label, raised_at, condition_since_ts}`.
 - Time series metrics `queue_wait` and `response_time_p90`.
+
+Contracts 1.2: `edge.heartbeat.started_at`, the edge runtime's boot time. Alerts and table states live in the edge's memory, so when a heartbeat brings a newer `started_at` the cloud resolves the site's open alerts raised before it (`expired`, excluded from response times) and resets table states changed before it to `empty`, broadcasting both to live clients.
 
 `rv_contracts` exposes `export_json_schema(path)` producing `web/packages/shared/src/contracts/schema.json`, and TS types are generated from it (`json-schema-to-typescript`).
 
@@ -232,14 +234,14 @@ Auth and tenancy
 
 Edge
 - `POST /edge/pair {code}` → `{device_id, site_id, token}`
-- `POST /edge/events {events: EdgeEvent[]}` → `{accepted, duplicates}`
+- `POST /edge/events {events: EdgeEvent[]}` → `{accepted, duplicates}` (422 if an event `ts` is more than `RV_MAX_EVENT_FUTURE_S`, default 300 s, ahead of the server clock; 0 disables it for sped-up demos)
 - `GET /edge/config` (ETag) · `PUT /edge/config` (zones/tables saved from edge-ui)
 - `GET /edge/commands?after=<cursor>` → acks and config-changed notices
 
 Live and alerts
 - `GET /sites/{site_id}/config` · `GET /sites/{site_id}/live` (tables, occupancy, queue, open alerts, device health)
 - `GET /sites/{site_id}/alerts?status=open|all&from&to` · `POST /alerts/{alert_id}/ack`
-- `WS /ws?token=&site_id=` (live events for dashboards and the waiter app; owners and managers first get a `live.snapshot`; waiters get `alert.*` only; close codes 4400/4401/4403)
+- `WS /ws?token=&site_id=` (live events for dashboards and the waiter app; owners and managers first get a `live.snapshot`; waiters get `alert.*` only; close codes 4400/4401/4403). Open sockets re-check token expiry before every message and, at least every `RV_WS_REVALIDATE_INTERVAL_S` (30 s, cached in between), that the user still exists with the same token version and site access; otherwise 4401/4403.
 
 Metrics and reports
 - `GET /sites/{site_id}/metrics/summary?from&to` → KPIs: guests served, sessions, avg dwell, turnover per table, waiter response p50/p90, bussing delay p50, queue avg/max wait, walkaways, estimated lost revenue
@@ -249,13 +251,13 @@ Metrics and reports
 - `GET /orgs/{org_id}/reports/compare?from&to` (owners)
 
 Push
-- `GET /push/vapid-public-key` · `POST /push/subscriptions` · `DELETE /push/subscriptions/{id}`; each push body is an `AlertPush`.
+- `GET /push/vapid-public-key` · `POST /push/subscriptions` · `DELETE /push/subscriptions/{id}`; each push body is an `AlertPush`. Endpoints must be `https` URLs of an allowlisted push service (`RV_PUSH_ALLOWED_HOSTS`, default FCM, Mozilla, WNS, Apple), else 422. Pushes go only to subscriptions whose user still has access to the site, and are sent by a bounded background worker pool (capped and time-limited per ingest batch), never on the ingest request path.
 
 Health: `GET /healthz` (also `/api/v1/healthz`).
 
 ### 7.3.1 Data retention
 
-Configurable, applied by a periodic task in the app (`RV_RETENTION_INTERVAL_S`, default 6 h) or `python -m rv_cloud.tools.retention`: raw edge events (and processed commands) after `RV_RETENTION_RAW_EVENTS_DAYS` (default 90), derived metrics (snapshots, queue facts, alerts, table sessions) after `RV_RETENTION_METRICS_DAYS` (default 400). Latest-state rows are kept. The compliance pack states these defaults.
+Configurable, applied by a periodic task in the app (`RV_RETENTION_INTERVAL_S`, default 6 h) or `python -m rv_cloud.tools.retention`: raw edge events (by cloud receive time) and processed commands after `RV_RETENTION_RAW_EVENTS_DAYS` (default 90; ingest counts events whose `ts` is older than this as duplicates, and derived rows are idempotent on `event_id`, so redelivery never double counts), derived metrics (snapshots, queue facts, alerts, table sessions) after `RV_RETENTION_METRICS_DAYS` (default 400). Latest-state rows are kept. The compliance pack states these defaults.
 
 ### 7.4 ROI model (all labeled as estimates in the UI)
 

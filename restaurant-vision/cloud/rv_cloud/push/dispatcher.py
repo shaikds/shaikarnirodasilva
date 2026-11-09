@@ -32,7 +32,7 @@ class PushDispatcher:
         with self._lock:
             return self._pending
 
-    def submit(self, job: Callable[[], None]) -> bool:
+    def submit(self, job: Callable[[], object]) -> bool:
         """Queue ``job``. False (and nothing runs) when the queue is full or closed."""
         with self._lock:
             if self._closed:
@@ -60,7 +60,7 @@ class PushDispatcher:
         self.drain(timeout)
         self._executor.shutdown(wait=False, cancel_futures=True)
 
-    def _run(self, job: Callable[[], None]) -> None:
+    def _run(self, job: Callable[[], object]) -> None:
         try:
             job()
         except Exception:  # a job must never kill the worker

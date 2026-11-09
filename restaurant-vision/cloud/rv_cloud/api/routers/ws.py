@@ -19,6 +19,7 @@ the site. An idle socket wakes up for this check too. On failure the socket is c
 import asyncio
 import contextlib
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from rv_contracts import LiveSnapshotMessage, Role, WsCloseCode
@@ -136,8 +137,9 @@ async def _pump(websocket: WebSocket, subscription: Subscription, guard: _Revali
         while True:
             if getter is None:
                 getter = asyncio.ensure_future(subscription.get())
+            waiting: set[asyncio.Future[Any]] = {getter, receiver}
             done, _ = await asyncio.wait(
-                {getter, receiver},
+                waiting,
                 timeout=guard.wake_after(),
                 return_when=asyncio.FIRST_COMPLETED,
             )

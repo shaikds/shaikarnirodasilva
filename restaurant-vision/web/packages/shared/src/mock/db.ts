@@ -788,6 +788,7 @@ export class MockDb {
           mem_mb: d.mem_mb,
           outbox_depth: d.outbox_depth,
           local_url: d.local_url,
+          started_at: null,
         });
       }
     }

@@ -266,7 +266,8 @@ def test_deleting_a_user_deletes_their_subscriptions(api: Api, owner: Account) -
     site, device = api.site_with_config(owner)
     waiter = api.add_user(owner, "w@a.test", Role.WAITER, site)
     subscribe(api, waiter, site, "https://push.example.com/w1")
-    r = api.client.delete(f"/api/v1/orgs/{owner.org_id}/users/{waiter.user_id}", headers=owner.headers)
+    path = f"/api/v1/orgs/{owner.org_id}/users/{waiter.user_id}"
+    r = api.client.delete(path, headers=owner.headers)
     assert r.status_code == 204
     assert push_count(api) == 0
     api.post_events(device, raised(site, api.clock.now(), new_uuid7()))

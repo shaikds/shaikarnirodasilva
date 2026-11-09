@@ -144,7 +144,8 @@ def test_app_applies_retention_periodically(tmp_path: Path) -> None:
     with TestClient(app) as client:
         api = Api(client=client, clock=clock, notifier=FakeNotifier(), app=app)
         site, device = api.site_with_config(api.signup())
-        api.post_events_at(clock.now() - 200 * DAY, device, occupancy(site, clock.now() - 200 * DAY))
+        then = clock.now() - 200 * DAY
+        api.post_events_at(then, device, occupancy(site, then))
         deadline = time.monotonic() + 5.0
         while count(api, Event) and time.monotonic() < deadline:
             time.sleep(0.02)
@@ -211,6 +212,9 @@ def test_raw_retention_counts_from_receipt_not_edge_ts(api: Api, owner: Account)
 def test_events_older_than_the_raw_window_count_as_processed(api: Api, owner: Account) -> None:
     site, device = api.site_with_config(owner)
     t = api.clock.now()
-    old = [occupancy(site, t - 91 * DAY), event(QueueSeated, site, t - 91 * DAY, zone_id="z-queue", waited_s=5.0)]
+    old = [
+        occupancy(site, t - 91 * DAY),
+        event(QueueSeated, site, t - 91 * DAY, zone_id="z-queue", waited_s=5.0),
+    ]
     assert api.post_events(device, *old) == {"accepted": 0, "duplicates": 2}
     assert (count(api, Event), count(api, MetricSnapshot), count(api, QueueEvent)) == (0, 0, 0)

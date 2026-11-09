@@ -10,8 +10,8 @@ from pydantic import SecretStr, ValidationError
 from rv_contracts import PairResponse, SiteConfig
 from rv_contracts.fixtures import sample_site_config
 
-from rv_edge.runtime.config_store import ConfigStore
 from rv_edge.ingest.rtsp_templates import redact_url as ingest_redact_url
+from rv_edge.runtime.config_store import ConfigStore
 from rv_edge.runtime.secrets_store import (
     CameraSecret,
     SecretsStore,
