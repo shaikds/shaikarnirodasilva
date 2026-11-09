@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..db.models import Device, DeviceHealth, PairingCode
 from ..tenancy import SiteScope
+from .queues import replaces
 
 
 class DeviceRepository:
@@ -69,13 +70,15 @@ class DeviceRepository:
         mem_mb: float,
         outbox_depth: int,
         local_url: str | None = None,
+        future_limit: float | None = None,
     ) -> None:
-        """Store a heartbeat unless a newer one (by edge ``ts``) is already stored."""
+        """Store a heartbeat unless a newer one (by edge ``ts``) is already stored. A stored
+        heartbeat beyond ``future_limit`` (a wrong device clock) is always replaced."""
         row = self.get_health(device_id)
         if row is None:
             row = DeviceHealth(device_id=device_id, site_id=self._scope.site_id)
             self._session.add(row)
-        elif row.ts > ts:
+        elif not replaces(row.ts, ts, future_limit):
             return
         row.ts = ts
         row.version = version

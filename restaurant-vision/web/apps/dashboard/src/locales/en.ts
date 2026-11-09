@@ -424,7 +424,8 @@ export const dashboardEn = {
       rotation: 'Anonymous tracking IDs rotate at least daily.',
     },
     templatesTitle: 'Templates',
-    templatesHint: 'PDF templates in Hebrew and English. Have local counsel review them before use.',
+    templatesHint:
+      'PDF templates in Hebrew and English. Have local counsel review them before use.',
     docs: {
       signage: 'Guest signage and QR text',
       'privacy-notice': 'Website privacy notice',

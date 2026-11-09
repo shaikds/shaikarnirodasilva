@@ -11,8 +11,12 @@ Rules (robust to retries and to old events arriving late):
 * Alerts: raise once per ``alert_id`` (with ``condition_since_ts``); the earliest
   acknowledgement wins (time and channel only); the first resolution wins. Acks/resolutions
   of unknown alerts are ignored.
-* Queue facts are appended; occupancy/queue snapshots are appended for time series and replace
-  the "latest" rows only when newer.
+* Queue facts are appended and occupancy/queue snapshots are appended for time series, once per
+  ``event_id`` (a redelivery whose raw event is already gone never inserts twice); snapshots
+  replace the "latest" rows only when newer.
+* "Latest" rows (table state, occupancy, queue, device health) are ordered by edge ``ts``, but a
+  stored row whose ``ts`` is beyond the accepted future skew (``max_future_s``, written by a
+  device with a wrong clock before such events were rejected) never blocks a newer event.
 * ``edge.heartbeat`` updates the sending device: its health and ``local_url`` (if newer) and
   ``last_seen_at`` (cloud receive time).
 """
@@ -57,7 +61,15 @@ log = logging.getLogger(__name__)
 class Projector:
     """Applies events of one site; collects the ids of newly raised alerts."""
 
-    def __init__(self, session: Session, scope: SiteScope, *, device_id: str, now: float) -> None:
+    def __init__(
+        self,
+        session: Session,
+        scope: SiteScope,
+        *,
+        device_id: str,
+        now: float,
+        max_future_s: float | None = None,
+    ) -> None:
         self._tables = TableRepository(session, scope)
         self._alerts = AlertRepository(session, scope)
         self._queues = QueueRepository(session, scope)
@@ -65,6 +77,8 @@ class Projector:
         self._devices = DeviceRepository(session, scope)
         self._device_id = device_id
         self._now = now
+        self._future_limit = now + max_future_s if max_future_s is not None else None
+        """Stored "latest" rows with a ``ts`` beyond this are invalid and always replaced."""
         self.raised_alert_ids: list[str] = []
 
     def apply(self, event: EdgeEvent) -> None:
@@ -115,6 +129,7 @@ class Projector:
             session_id=e.session_id,
             since_ts=since,
             changed_at=e.ts,
+            future_limit=self._future_limit,
         )
         if e.from_state is TableState.EMPTY and e.to_state is TableState.SEATED:
             session = self._tables.get_or_create_session(e.session_id, e.table_id)
@@ -180,6 +195,7 @@ class Projector:
 
     def _queue_snapshot(self, e: QueueSnapshot) -> None:
         self._snapshots.add(
+            event_id=e.event_id,
             kind=SNAPSHOT_QUEUE,
             ts=e.ts,
             value=float(e.people),
@@ -195,10 +211,12 @@ class Projector:
             parties_est=e.parties_est,
             longest_wait_s=e.longest_wait_s,
             avg_wait_s=e.avg_wait_s,
+            future_limit=self._future_limit,
         )
 
     def _occupancy_snapshot(self, e: OccupancySnapshot) -> None:
         self._snapshots.add(
+            event_id=e.event_id,
             kind=SNAPSHOT_OCCUPANCY,
             ts=e.ts,
             value=float(e.guests),
@@ -213,6 +231,7 @@ class Projector:
             tables_occupied=e.tables_occupied,
             tables_total=e.tables_total,
             staff=e.staff_on_floor,
+            future_limit=self._future_limit,
         )
 
     # ------------------------------------------------------------------ devices
@@ -230,6 +249,7 @@ class Projector:
             mem_mb=e.mem_mb,
             outbox_depth=e.outbox_depth,
             local_url=e.local_url,
+            future_limit=self._future_limit,
         )
         device.version = e.version
         if device.last_seen_at is None or device.last_seen_at < self._now:

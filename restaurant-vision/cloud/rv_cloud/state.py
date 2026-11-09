@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .clock import Clock
 from .config import Settings
-from .push import Notifier
+from .push import Notifier, PushDispatcher
 from .realtime import EventBroker
 from .security import PasswordHasher, RateLimiter, TokenService
 
@@ -24,3 +24,5 @@ class AppState:
     tokens: TokenService
     login_limiter: RateLimiter
     pair_limiter: RateLimiter
+    push: PushDispatcher
+    """Runs Web Push jobs off the request path (``push.drain()`` waits for them in tests)."""

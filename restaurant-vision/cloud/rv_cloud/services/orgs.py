@@ -29,12 +29,13 @@ from ..repositories import (
     OrgRepository,
     SiteRepository,
     SnapshotRepository,
+    UserPushRepository,
     UserRepository,
 )
 from ..security import PasswordHasher
 from ..tenancy import SiteScope
 from . import views
-from .auth import CurrentUser, normalize_email
+from .auth import CurrentUser, build_scope, normalize_email
 
 
 def require_own_org(user: CurrentUser, org_id: str) -> None:
@@ -174,6 +175,10 @@ class UserService:
             if not keeps_owner and repo.count_owners(exclude_user_id=target.id) == 0:
                 raise Conflict("An organization needs at least one owner")
             repo.set_memberships(target, request.memberships)
+            # Pushes for sites the user can no longer access must stop now.
+            UserPushRepository(self._session, org_id, target.id).delete_inaccessible(
+                build_scope(target)
+            )
         self._session.commit()
         return views.org_user(target)
 
@@ -187,6 +192,7 @@ class UserService:
             raise Conflict("You cannot delete yourself")
         if repo.count_owners(exclude_user_id=target.id) == 0:
             raise Conflict("An organization needs at least one owner")
+        UserPushRepository(self._session, org_id, target.id).delete_all()
         repo.delete(target)
         self._session.commit()
 

@@ -17,7 +17,7 @@ from ..config import Settings
 from ..db.models import User
 from ..errors import Conflict, Unauthorized
 from ..repositories import AuthRepository, OrgRepository, UserRepository
-from ..security import PasswordHasher, RateLimiter, TokenService
+from ..security import PasswordHasher, RateLimiter, TokenClaims, TokenService
 from ..tenancy import OrgScope, best_role
 
 
@@ -116,7 +116,12 @@ class AuthService:
         return self._tokens.issue_pair(user.id, user.org_id, user.token_version)
 
     def authenticate(self, access_token: str) -> CurrentUser:
-        claims = self._tokens.decode(access_token, "access")
+        return self.authenticate_claims(self._tokens.decode(access_token, "access"))
+
+    def authenticate_claims(self, claims: TokenClaims) -> CurrentUser:
+        """The user of already verified access-token ``claims``, loaded fresh: raises
+        :class:`Unauthorized` if the user is gone or its ``token_version`` changed (used by
+        long-lived WebSockets to re-validate)."""
         user = self._load(claims.user_id, claims.org_id, claims.token_version)
         return CurrentUser(user=user, scope=build_scope(user))
 

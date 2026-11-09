@@ -1,12 +1,13 @@
 """Table state and table sessions of one site."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..db.models import TableSession, TableStateCurrent
 from ..tenancy import SiteScope
+from .queues import replaces
 
 
 class TableRepository:
@@ -34,23 +35,35 @@ class TableRepository:
         session_id: str,
         since_ts: float,
         changed_at: float,
+        future_limit: float | None = None,
     ) -> bool:
         """Record a transition unless a later one is already stored. True if applied.
 
         Transitions are ordered by ``changed_at`` (the event ``ts``); ``since_ts`` is the
-        backdated start of the state, for display."""
+        backdated start of the state, for display. A stored transition beyond
+        ``future_limit`` (a wrong device clock) never blocks a newer one."""
         row = self.get_state(table_id)
         if row is None:
             row = TableStateCurrent(site_id=self._scope.site_id, table_id=table_id)
             self._session.add(row)
-        elif (row.changed_at if row.changed_at is not None else row.since_ts) > changed_at:
-            return False
+        else:
+            stored = row.changed_at if row.changed_at is not None else row.since_ts
+            if not replaces(stored, changed_at, future_limit):
+                return False
         row.state = state
         row.guest_count = guest_count
         row.session_id = session_id
         row.since_ts = since_ts
         row.changed_at = changed_at
         return True
+
+    def prune_states(self, keep_table_ids: Collection[str]) -> int:
+        """Delete current-state rows of tables not in ``keep_table_ids`` (removed from config)."""
+        query = delete(TableStateCurrent).where(TableStateCurrent.site_id == self._scope.site_id)
+        if keep_table_ids:
+            query = query.where(TableStateCurrent.table_id.not_in(list(keep_table_ids)))
+        result = self._session.execute(query.execution_options(synchronize_session="fetch"))
+        return int(getattr(result, "rowcount", 0) or 0)
 
     # ------------------------------------------------------------------ sessions
 

@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 import pytest
-from rv_contracts import SiteConfig
+from rv_contracts import OccupancySnapshot, SiteConfig, make_event
 from rv_contracts.fixtures import sample_events, sample_site_config
 
 from rv_edge.runtime.config_store import ConfigStore
@@ -234,4 +234,27 @@ def test_events_of_another_site_are_dead_lettered(h: Harness) -> None:
     h.sync.run_once()
     assert h.outbox.depth() == 0
     assert set(h.cloud.stored) == {e.event_id for e in ours}
+    assert h.sync.online
+
+
+def test_event_rejected_as_future_dated_is_dead_lettered(h: Harness) -> None:
+    """The cloud answers 422 for a batch holding an event whose ``ts`` is too far ahead of its
+    clock (an edge clock reset into the future). The edge isolates and dead-letters that event
+    and delivers the rest, so the outbox is never wedged."""
+    events = sample_events()
+    now = max(e.ts for e in events)
+    future = make_event(
+        OccupancySnapshot, SITE_ID, now + 365 * 86400.0,
+        guests=40, tables_occupied=0, tables_total=8, staff_on_floor=0,
+    )
+    h.cloud.now = lambda: now
+    h.cloud.max_future_s = 300.0
+    for event in [*events[:3], future, *events[3:]]:
+        h.outbox.append(event)
+    for _ in range(30):
+        h.sync.run_once()
+        if h.outbox.depth() == 0:
+            break
+    assert h.outbox.depth() == 0
+    assert set(h.cloud.stored) == {e.event_id for e in events}
     assert h.sync.online

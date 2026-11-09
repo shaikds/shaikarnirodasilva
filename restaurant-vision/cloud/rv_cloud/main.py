@@ -29,7 +29,7 @@ from .config import Settings
 from .db import create_db_engine, create_session_factory, upgrade_head
 from .errors import DomainError, RateLimited
 from .logsetup import AccessLogMiddleware, configure_logging
-from .push import Notifier, NullNotifier, WebPushNotifier
+from .push import Notifier, NullNotifier, PushDispatcher, WebPushNotifier
 from .realtime import EventBroker, InMemoryBroker
 from .security import PasswordHasher, RateLimiter, TokenService
 from .services.retention import apply_retention
@@ -86,7 +86,9 @@ class SPAStaticFiles(StaticFiles):
 def _default_notifier(settings: Settings) -> Notifier:
     if settings.push_enabled and settings.vapid_private_key is not None:
         return WebPushNotifier(
-            settings.vapid_private_key.get_secret_value(), settings.vapid_subject
+            settings.vapid_private_key.get_secret_value(),
+            settings.vapid_subject,
+            timeout_s=settings.push_timeout_s,
         )
     return NullNotifier()
 
@@ -163,6 +165,7 @@ def create_app(
         tokens=TokenService(settings, clock),
         login_limiter=RateLimiter(settings.login_max_attempts, settings.login_window_s, clock),
         pair_limiter=RateLimiter(settings.pair_max_attempts, settings.pair_window_s, clock),
+        push=PushDispatcher(workers=settings.push_workers, max_pending=settings.push_queue_size),
     )
 
     @asynccontextmanager
@@ -182,6 +185,7 @@ def create_app(
                 retention.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await retention
+            await run_in_threadpool(state.push.shutdown)
             engine.dispose()
 
     app = FastAPI(

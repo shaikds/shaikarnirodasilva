@@ -144,7 +144,10 @@ class Event(Base):
     """Raw edge event, stored once (``event_id`` is the idempotency key)."""
 
     __tablename__ = "events"
-    __table_args__ = (Index("ix_events_site_type_ts", "site_id", "type", "ts"),)
+    __table_args__ = (
+        Index("ix_events_site_type_ts", "site_id", "type", "ts"),
+        Index("ix_events_received_at", "received_at"),
+    )
 
     event_id: Mapped[str] = mapped_column(EVENT_ID, primary_key=True)
     site_id: Mapped[str] = mapped_column(ID, ForeignKey("sites.id", ondelete="CASCADE"))
@@ -152,6 +155,8 @@ class Event(Base):
     ts: Mapped[float]
     payload_json: Mapped[dict[str, Any]]
     received_at: Mapped[float]
+    """Cloud receive time: the raw-event retention horizon is measured from it (never from the
+    edge ``ts``, so an old event received late is still deduplicated for the full window)."""
     device_id: Mapped[str | None] = mapped_column(ID)
     """Device that delivered the event (audit only; not a foreign key)."""
 
@@ -247,6 +252,9 @@ class MetricSnapshot(Base):
     __table_args__ = (Index("ix_metric_snapshots_site_kind_ts", "site_id", "kind", "ts"),)
 
     id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
+    event_id: Mapped[str | None] = mapped_column(EVENT_ID, unique=True)
+    """The snapshot event (idempotency key across raw-event retention; None on rows written
+    before 0003)."""
     site_id: Mapped[str] = mapped_column(ID, ForeignKey("sites.id", ondelete="CASCADE"))
     ts: Mapped[float]
     kind: Mapped[str] = mapped_column(ENUM)

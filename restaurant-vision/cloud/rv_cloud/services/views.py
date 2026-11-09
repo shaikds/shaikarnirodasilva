@@ -25,6 +25,7 @@ from rv_contracts import (
     SiteSettings,
     Table,
     UserInfo,
+    ZoneKind,
 )
 
 from ..db.models import Alert, Device, DeviceHealth, Membership, Site, User
@@ -48,6 +49,11 @@ def store_config(site: Site, config: SiteConfig) -> None:
 
 def table_labels(config: SiteConfig) -> dict[str, str]:
     return {t.table_id: t.label for t in config.tables}
+
+
+def queue_zone_ids(config: SiteConfig) -> set[str]:
+    """Zones of the current config whose snapshots belong in the live view's queues."""
+    return {z.zone_id for z in config.zones if z.kind is ZoneKind.QUEUE}
 
 
 def validate_timezone(name: str) -> str:

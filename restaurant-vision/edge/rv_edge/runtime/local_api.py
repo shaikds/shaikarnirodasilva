@@ -72,7 +72,7 @@ from rv_edge.interfaces import SourceSpec
 from .pairing import PairingError
 from .probes import run_discovery
 from .runtime import CalibrationError, ConfigRejected, EdgeRuntime
-from .secrets_store import CameraSecret, OptionValue, with_credentials
+from .secrets_store import CameraSecret, OptionValue, address_url, with_credentials
 from .settings import EdgeSettings
 from .setup_pin import PIN_MAX_LEN, PIN_MIN_LEN, PinGuard, hash_pin, verify_pin
 
@@ -228,8 +228,11 @@ class SuggestTablesOut(_Model):
 
 
 def _address(kind: str, url: str, options: dict[str, Any]) -> dict[str, Any]:
-    """Non-secret address fields of :class:`CameraOut` (see its docstring)."""
-    parts = parse_rtsp_url(url) if kind == "rtsp" else None
+    """Non-secret address fields of :class:`CameraOut` (see its docstring). The URL is parsed
+    without its user info, so a password with unencoded ``/ # ? @`` can never end up in
+    ``host``; when the host cannot be found reliably the address fields stay None."""
+    clean = address_url(url) if kind == "rtsp" else None
+    parts = parse_rtsp_url(clean) if clean is not None else None
     brand = options.get("brand")
     channel = options.get("channel")
     substream = options.get("substream")
@@ -292,20 +295,30 @@ def create_local_app(
         x_setup_pin: Annotated[str | None, Header(alias="X-Setup-Pin")] = None,
     ) -> None:
         client = request.client.host if request.client else "unknown"
-        wait_s = guard.retry_after(client)
+        # Reserve the attempt before the (slow) hash, so concurrent guesses cannot all be
+        # evaluated before the first failure is recorded.
+        wait_s = guard.acquire(client)
         if wait_s > 0:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,
                 "too many wrong PINs; wait",
                 headers={"Retry-After": str(max(1, math.ceil(wait_s)))},
             )
-        stored = stored_pin_hash()
-        if stored is None:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "setup PIN not set")
-        if not x_setup_pin or not verify_pin(x_setup_pin, stored):
-            guard.failure(client)
+        verdict: bool | None = None
+        try:
+            stored = stored_pin_hash()
+            if stored is None:
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "setup PIN not set")
+            verdict = bool(x_setup_pin) and verify_pin(x_setup_pin or "", stored)
+        finally:
+            if verdict is None:
+                guard.release(client)
+            elif verdict:
+                guard.success(client)
+            else:
+                guard.failure(client)
+        if not verdict:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid setup PIN")
-        guard.success(client)
 
     # --------------------------------------------------------------- open endpoints (LAN)
     @app.get("/local/health", response_model=HealthStatus)

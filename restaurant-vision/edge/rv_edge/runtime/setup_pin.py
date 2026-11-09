@@ -42,8 +42,19 @@ def verify_pin(pin: str, stored: str) -> bool:
     return hmac.compare_digest(digest, expected)
 
 
+BUSY_RETRY_S = 1.0
+"""``Retry-After`` while all remaining attempts of a client are being checked right now."""
+
+
 class PinGuard:
-    """Locks a client out for ``lockout_s`` after ``max_failures`` consecutive wrong PINs."""
+    """Locks a client out for ``lockout_s`` after ``max_failures`` consecutive wrong PINs.
+
+    Checking a PIN is slow on purpose (PBKDF2), so a client must :meth:`acquire` an attempt
+    slot *before* hashing and then report the verdict with :meth:`success`, :meth:`failure` or
+    :meth:`release`. Slots are reserved under the lock and attempts still in flight count as
+    failures for the limit, so concurrent guesses can never evaluate more than
+    ``max_failures`` PINs per lockout window.
+    """
 
     def __init__(
         self,
@@ -56,6 +67,7 @@ class PinGuard:
         self._now = monotonic
         self._lock = threading.Lock()
         self._failures: dict[str, int] = {}
+        self._in_flight: dict[str, int] = {}
         self._locked_until: dict[str, float] = {}
 
     def locked(self, client: str) -> bool:
@@ -64,10 +76,26 @@ class PinGuard:
     def retry_after(self, client: str) -> float:
         """Seconds until ``client`` may try again (0 when it is not locked out)."""
         with self._lock:
-            return max(0.0, self._locked_until.get(client, 0.0) - self._now())
+            return self._lockout_left(client)
+
+    def acquire(self, client: str) -> float:
+        """Reserve one attempt for ``client``. Returns 0 when the attempt may be evaluated (the
+        caller must then report the verdict), else the seconds to wait: the lockout left, or
+        :data:`BUSY_RETRY_S` while the remaining attempts are all in flight."""
+        with self._lock:
+            wait = self._lockout_left(client)
+            if wait > 0:
+                return wait
+            in_flight = self._in_flight.get(client, 0)
+            if self._failures.get(client, 0) + in_flight >= self._max:
+                return BUSY_RETRY_S
+            self._in_flight[client] = in_flight + 1
+            return 0.0
 
     def failure(self, client: str) -> None:
+        """A wrong PIN (confirms a slot taken with :meth:`acquire`)."""
         with self._lock:
+            self._settle(client)
             count = self._failures.get(client, 0) + 1
             if count >= self._max:
                 self._locked_until[client] = self._now() + self._lockout
@@ -75,6 +103,23 @@ class PinGuard:
             self._failures[client] = count
 
     def success(self, client: str) -> None:
+        """The right PIN: resets the client's failures and lockout."""
         with self._lock:
+            self._settle(client)
             self._failures.pop(client, None)
             self._locked_until.pop(client, None)
+
+    def release(self, client: str) -> None:
+        """Give back a slot without a verdict (the PIN could not be checked)."""
+        with self._lock:
+            self._settle(client)
+
+    def _lockout_left(self, client: str) -> float:
+        return max(0.0, self._locked_until.get(client, 0.0) - self._now())
+
+    def _settle(self, client: str) -> None:
+        in_flight = self._in_flight.get(client, 0) - 1
+        if in_flight > 0:
+            self._in_flight[client] = in_flight
+        else:
+            self._in_flight.pop(client, None)

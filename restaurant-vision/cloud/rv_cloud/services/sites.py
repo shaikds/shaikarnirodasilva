@@ -7,7 +7,8 @@ Ownership of ``SiteConfig`` parts:
   ``modules``.
 
 Every saved change bumps ``config_version`` (the ETag) and appends a ``config_changed`` command
-so edges re-fetch ``GET /edge/config``.
+so edges re-fetch ``GET /edge/config``. It also prunes the live projections (current table
+states, latest queue rows) of tables and queue zones that are no longer in the config.
 """
 
 from typing import Any
@@ -24,7 +25,13 @@ from sqlalchemy.orm import Session
 from ..clock import Clock
 from ..db.models import Site
 from ..errors import Forbidden, InvalidInput
-from ..repositories import CommandRepository, OrgRepository, ScopedSiteRepository
+from ..repositories import (
+    CommandRepository,
+    OrgRepository,
+    QueueRepository,
+    ScopedSiteRepository,
+    TableRepository,
+)
 from ..tenancy import SiteScope
 from . import views
 
@@ -126,6 +133,8 @@ class SiteService:
         except ValueError as exc:
             raise InvalidInput(str(exc)) from exc
         views.store_config(site, new_config)
+        TableRepository(self._session, scope).prune_states({t.table_id for t in new_config.tables})
+        QueueRepository(self._session, scope).prune_latest(views.queue_zone_ids(new_config))
         now = self._clock.now()
         CommandRepository(self._session, scope).append(
             CommandKind.CONFIG_CHANGED.value, {"config_version": new_config.config_version}, now

@@ -129,7 +129,9 @@ describe('waiter alerts', () => {
     const titles = cardTitles(list);
     expect(titles.indexOf('Table 4')).toBeLessThan(titles.indexOf('Table 2'));
     const first = within(list).getAllByRole('article')[titles.indexOf('Table 4')]!;
-    expect(within(first).getByTestId('alert-waiting')).toHaveTextContent(/^Guests waiting 6:(39|4\d)/);
+    expect(within(first).getByTestId('alert-waiting')).toHaveTextContent(
+      /^Guests waiting 6:(39|4\d)/,
+    );
     expect(first).toHaveTextContent(`since ${formatTime(seatedAt, 'en')}`);
     expect(first).toHaveAccessibleName(/Guests waiting for [67] min/);
   });

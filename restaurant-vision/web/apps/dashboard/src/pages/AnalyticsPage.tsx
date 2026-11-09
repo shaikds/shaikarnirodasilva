@@ -40,6 +40,20 @@ function useBucketLabel(bucket: Bucket, timeZone: string) {
   return (ts: number) => fmt.format(new Date(ts * 1000));
 }
 
+/** [first, last] bucket index with a non-null, non-zero value in any series; null if none. */
+function activeSpan(series: (Timeseries | undefined)[]): [number, number] | null {
+  let first = Infinity;
+  let last = -1;
+  for (const s of series) {
+    s?.points.forEach((p, i) => {
+      if (p.value === null || p.value === 0) return;
+      first = Math.min(first, i);
+      last = Math.max(last, i);
+    });
+  }
+  return last < 0 ? null : [first, last];
+}
+
 export function AnalyticsPage() {
   const { siteId } = useParams();
   const { t } = useTranslation();
@@ -47,7 +61,8 @@ export function AnalyticsPage() {
   const meta = useSiteMeta(siteId);
   const [rangeKey, setRangeKey] = useState<RangeKey>('7d');
   const range = useRange(rangeKey, meta.timezone);
-  const bucket: Bucket = rangeKey === 'today' ? '1h' : '1d';
+  // Today: 15-minute buckets (a service has quarter-hour dynamics); longer ranges: per day.
+  const bucket: Bucket = rangeKey === 'today' ? '15m' : '1d';
   const label = useBucketLabel(bucket, meta.timezone);
 
   const summary = useMetricsSummary(siteId, range);
@@ -59,13 +74,22 @@ export function AnalyticsPage() {
   const queueWait = useTimeseries(siteId, { metric: 'queue_wait', bucket, ...range });
   const tables = useTableStats(siteId, range);
 
+  // Today's charts span only the buckets with activity (first to last), shared by the queue
+  // charts so they line up; interior empty buckets stay as gaps.
+  const span =
+    rangeKey === 'today'
+      ? activeSpan([queue.data, queueWait.data, walkaways.data, response.data, responseP90.data])
+      : null;
+  const clip = <T,>(rows: T[]): T[] => (span ? rows.slice(span[0], span[1] + 1) : rows);
   const toData = (s: Timeseries | undefined, scale = 1): ChartDatum[] =>
-    (s?.points ?? []).map((p) => ({
+    clip(s?.points ?? []).map((p) => ({
       label: label(p.ts),
       value: p.value === null ? null : Math.round((p.value / scale) * 10) / 10,
     }));
   // p50 and p90 share buckets (same range and bucket); minutes, one decimal; null = gap.
-  const responseData: MultiDatum[] = (response.data?.points ?? []).map((p, i) => {
+  const responseData: MultiDatum[] = clip(
+    (response.data?.points ?? []).map((p, i) => ({ p, i })),
+  ).map(({ p, i }) => {
     const p90 = responseP90.data?.points[i];
     const min = (v: number | null | undefined) =>
       v === null || v === undefined ? null : Math.round((v / 60) * 10) / 10;

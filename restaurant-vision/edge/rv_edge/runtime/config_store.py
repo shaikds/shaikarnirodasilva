@@ -3,7 +3,9 @@ be pushed to the cloud (``<data_dir>/site_config.json``)."""
 
 from __future__ import annotations
 
+import logging
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
@@ -11,7 +13,12 @@ from rv_contracts import SiteConfig
 
 from .fsutil import ensure_private_dir, read_json, write_private_json
 
+log = logging.getLogger(__name__)
+
 CONFIG_FILE = "site_config.json"
+
+ConfigListener = Callable[[SiteConfig], None]
+"""Called with the new current config after every change (see :meth:`ConfigStore.add_listener`)."""
 
 
 class PendingPush(NamedTuple):
@@ -39,6 +46,19 @@ class ConfigStore:
         )
         self._etag: str | None = raw.get("etag")
         self._pending: bool = bool(raw.get("pending_push", False))
+        self._listeners: list[ConfigListener] = []
+
+    def add_listener(self, listener: ConfigListener) -> None:
+        """Call ``listener`` (outside the store's lock) with the current config whenever the
+        stored config changes, whatever the source: a local edit, a config fetched from the
+        cloud, or the cloud's merged answer to a push."""
+        with self._lock:
+            self._listeners.append(listener)
+
+    def remove_listener(self, listener: ConfigListener) -> None:
+        with self._lock:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
 
     @property
     def current(self) -> SiteConfig | None:
@@ -64,13 +84,15 @@ class ConfigStore:
         """Save an edit made on the edge (edge-ui); it will be pushed to the cloud."""
         with self._lock:
             self._revision += 1
-            self._write(config, self._etag, pending=True)
+            changed = self._write(config, self._etag, pending=True)
+        self._notify(changed)
 
     def replace(self, config: SiteConfig, *, etag: str | None = None) -> None:
         """Save a config without scheduling a push (e.g. a local-only simulation)."""
         with self._lock:
             self._revision += 1
-            self._write(config, etag, pending=False)
+            changed = self._write(config, etag, pending=False)
+        self._notify(changed)
 
     def save_from_cloud(self, config: SiteConfig, etag: str | None) -> bool:
         """Save a config fetched from the cloud. Refused (False) while a local edit is pending."""
@@ -78,8 +100,9 @@ class ConfigStore:
             if self._pending:
                 return False
             self._revision += 1
-            self._write(config, etag, pending=False)
-            return True
+            changed = self._write(config, etag, pending=False)
+        self._notify(changed)
+        return True
 
     def pending_push(self) -> PendingPush | None:
         with self._lock:
@@ -93,12 +116,29 @@ class ConfigStore:
         with self._lock:
             if revision != self._revision or self._config is None:
                 return False
-            self._write(config or self._config, etag, pending=False)
-            return True
+            changed = self._write(config or self._config, etag, pending=False)
+        self._notify(changed)
+        return True
 
-    def _write(self, config: SiteConfig, etag: str | None, *, pending: bool) -> None:
+    def _write(self, config: SiteConfig, etag: str | None, *, pending: bool) -> bool:
+        """Persist and keep in memory. True if the config itself changed."""
+        previous = self._config
         write_private_json(
             self._path,
             {"config": config.model_dump(mode="json"), "etag": etag, "pending_push": pending},
         )
         self._config, self._etag, self._pending = config, etag, pending
+        return previous is None or previous.model_dump() != config.model_dump()
+
+    def _notify(self, changed: bool) -> None:
+        if not changed:
+            return
+        with self._lock:
+            config, listeners = self._config, list(self._listeners)
+        if config is None:
+            return
+        for listener in listeners:
+            try:
+                listener(config)
+            except Exception:
+                log.exception("site config listener failed")

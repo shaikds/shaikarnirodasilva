@@ -51,6 +51,8 @@ class TokenClaims:
     org_id: str
     token_type: TokenType
     token_version: int
+    expires_at: float = 0.0
+    """``exp`` (epoch seconds)."""
 
 
 class TokenService:
@@ -99,6 +101,7 @@ class TokenService:
             org_id=str(claims["org"]),
             token_type=expected,
             token_version=int(claims["ver"]),
+            expires_at=float(claims["exp"]),
         )
 
     def _encode(

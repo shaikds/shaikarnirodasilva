@@ -115,6 +115,30 @@ function ChartTooltip({
 
 const axisTick = (color: string) => ({ fill: color, fontSize: 12 });
 
+/**
+ * Lines skip nulls (gaps), so a value with no neighbour would draw nothing: give exactly those
+ * points an 8px marker (ringed by the surface) so a lone bucket stays visible.
+ */
+function isolatedDot(values: (number | null | undefined)[], color: string, surface: string) {
+  const has = (i: number) => values[i] !== null && values[i] !== undefined;
+  return (props: { cx?: number; cy?: number; index?: number }) => {
+    const i = props.index ?? -1;
+    if (props.cx === undefined || props.cy === undefined || !has(i) || has(i - 1) || has(i + 1))
+      return <g key={`dot-${i}`} />;
+    return (
+      <circle
+        key={`dot-${i}`}
+        cx={props.cx}
+        cy={props.cy}
+        r={4}
+        fill={color}
+        stroke={surface}
+        strokeWidth={2}
+      />
+    );
+  };
+}
+
 export interface SingleSeriesChartProps {
   data: ChartDatum[];
   /** Series name for the tooltip and table header. */
@@ -238,7 +262,11 @@ export function LineAreaChart({
             fill={c.series}
             fillOpacity={0.1}
             connectNulls={false}
-            dot={false}
+            dot={isolatedDot(
+              data.map((d) => d.value),
+              c.series,
+              c.surface,
+            )}
             activeDot={{ r: 5, stroke: c.surface, strokeWidth: 2, fill: c.series }}
             isAnimationActive={false}
           />
@@ -385,7 +413,11 @@ export function MultiLineChart({
                 strokeWidth={2}
                 strokeDasharray={i === 1 ? '6 4' : undefined}
                 connectNulls={false}
-                dot={false}
+                dot={isolatedDot(
+                  data.map((d) => d.values[s.key]),
+                  colors[i]!,
+                  c.surface,
+                )}
                 activeDot={{ r: 5, stroke: c.surface, strokeWidth: 2, fill: colors[i] }}
                 isAnimationActive={false}
               />

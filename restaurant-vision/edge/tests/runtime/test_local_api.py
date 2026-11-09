@@ -3,9 +3,12 @@ from __future__ import annotations
 import builtins
 import io
 import json
+import logging
 import os
 import sys
+import threading
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -160,6 +163,47 @@ def test_pin_lockout(make_api: Callable[..., Api]) -> None:
     assert 1 <= int(locked.headers["Retry-After"]) <= 60
 
 
+def test_concurrent_wrong_pins_cannot_bypass_the_lockout(
+    make_api: Callable[..., Api], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """40 wrong PINs fired at once: at most ``max_failures`` are ever hashed per lockout
+    window; the rest get 429 right away (the slow check no longer runs before a failure is
+    recorded)."""
+    import rv_edge.runtime.local_api as local_api
+
+    api = make_api(guard=PinGuard(max_failures=5, lockout_s=60))
+    real_verify = local_api.verify_pin
+    evaluated: list[str] = []
+    lock = threading.Lock()
+    release = threading.Event()
+
+    def slow_verify(pin: str, stored: str) -> bool:
+        with lock:
+            evaluated.append(pin)
+        release.wait(5.0)  # every evaluated guess overlaps with all the others
+        return real_verify(pin, stored)
+
+    monkeypatch.setattr(local_api, "verify_pin", slow_verify)
+
+    def guess(i: int) -> int:
+        resp = api.client.get("/local/setup/pin-check", headers={"X-Setup-Pin": f"9{i:03d}"})
+        return resp.status_code
+
+    with ThreadPoolExecutor(40) as pool:
+        futures = [pool.submit(guess, i) for i in range(40)]
+        # The guesses beyond the limit are refused while the first five are still hashing.
+        refused_early = wait_until(lambda: sum(f.done() for f in futures) >= 35, timeout=10.0)
+        release.set()
+        codes = [f.result() for f in futures]
+    assert refused_early
+    assert len(evaluated) == 5
+    assert (codes.count(401), codes.count(429)) == (5, 35)
+    locked = api.client.get("/local/setup/pin-check", headers=AUTH)  # even the right PIN
+    assert locked.status_code == 429
+    assert 1 <= int(locked.headers["Retry-After"]) <= 60
+    assert len(evaluated) == 5
+
+
 def test_pin_check(api: Api) -> None:
     ok = api.client.get("/local/setup/pin-check", headers=AUTH)
     assert ok.status_code == 204 and ok.content == b""
@@ -220,6 +264,40 @@ def test_camera_credentials_are_write_only(make_api: Callable[..., Api]) -> None
     assert api.client.delete("/local/cameras/cam-door", headers=AUTH).status_code == 204
     assert api.client.delete("/local/cameras/cam-door", headers=AUTH).status_code == 404
     assert api.client.put("/local/cameras/cam-door", json={}, headers=AUTH).status_code == 404
+
+
+@pytest.mark.parametrize("password", ["pa/ss", "P@ss/w0rd", "pa#ss", "pa?ss", "pa%2Fss"])
+def test_camera_url_with_special_characters_is_never_echoed_or_logged(
+    make_api: Callable[..., Api], password: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    api = make_api(use_secrets=True)
+    url = f"rtsp://admin:{password}@192.168.1.64:554/Streaming/Channels/102"
+    body = {"camera_id": "cam-x", "url": url}
+    created = api.client.post("/local/cameras", json=body, headers=AUTH)
+    assert created.status_code == 201
+    out = created.json()
+    assert out["url"] == "rtsp://***:***@192.168.1.64:554/Streaming/Channels/102"
+    assert out["has_credentials"] is True
+    assert {k: out[k] for k in ("brand", "host", "port", "channel", "substream")} == {
+        "brand": "hikvision", "host": "192.168.1.64", "port": 554, "channel": 1,
+        "substream": True,
+    }
+    assert api.runtime.secrets.camera_specs()["cam-x"].url == url  # stored as given
+    responses = [
+        created,
+        api.client.get("/local/cameras", headers=AUTH),
+        api.client.put("/local/cameras/cam-x", json={"url": url}, headers=AUTH),
+        api.client.post("/local/cameras", json=body, headers=AUTH),  # 409
+        api.client.post("/local/cameras", json={**body, "camera_id": "bad id!"}, headers=AUTH),
+        api.client.put("/local/cameras/cam-x", json={"url": url, "kind": "nope"}, headers=AUTH),
+    ]
+    assert [r.status_code for r in responses] == [201, 200, 200, 409, 422, 422]
+    for resp in responses:
+        assert password not in resp.text and "admin" not in resp.text
+    assert caplog.records  # the camera was stored and logged (redacted)
+    for record in caplog.records:
+        assert password not in record.getMessage()
 
 
 def test_discovery_degrades_gracefully(api: Api, monkeypatch: pytest.MonkeyPatch) -> None:

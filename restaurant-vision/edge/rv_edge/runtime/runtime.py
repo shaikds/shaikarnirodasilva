@@ -79,7 +79,7 @@ from .governor import ResourceGovernor
 from .netinfo import resolve_local_url
 from .outbox import Outbox
 from .pairing import pair as pair_device
-from .secrets_store import SecretsStore
+from .secrets_store import SecretsStore, redact_text
 from .settings import EdgeSettings
 from .snapshot import compose_snapshot, encode_jpeg
 from .sync import CloudSync
@@ -288,7 +288,9 @@ class CameraWorker:
                 pipeline = self._build()
                 pipeline.start()
             except Exception as exc:
-                log.error("camera %s: cannot start pipeline: %s", self.camera_id, exc)
+                log.error(
+                    "camera %s: cannot start pipeline: %s", self.camera_id, redact_text(str(exc))
+                )
                 log.debug("pipeline start failure", exc_info=True)
                 self._stop.wait(backoff)
                 backoff = min(60.0, backoff * 2)
@@ -312,7 +314,9 @@ class CameraWorker:
                 pipeline = self._build()
                 pipeline.start()
             except Exception as exc:
-                log.error("camera %s: cannot start pipeline: %s", self.camera_id, exc)
+                log.error(
+                    "camera %s: cannot start pipeline: %s", self.camera_id, redact_text(str(exc))
+                )
                 return None
             with self._lock:
                 self._pipeline = pipeline
@@ -440,6 +444,9 @@ class EdgeRuntime:
         self._next_heartbeat = 0.0
         self._next_governor = 0.0
         self._local_url: tuple[float, str | None] | None = None
+        # Every change of the stored config (local edit, cloud fetch, the cloud's merged answer
+        # to a push) reaches the analytics engine through the control queue.
+        self.config_store.add_listener(self._on_config_stored)
 
     # identity ----------------------------------------------------------------------------
     @property
@@ -534,6 +541,7 @@ class EdgeRuntime:
             self._analytics_thread.join(timeout)
         if self.sync is not None:
             self.sync.stop(timeout)
+        self.config_store.remove_listener(self._on_config_stored)
         self.outbox.close()
         log.info("edge runtime stopped")
 
@@ -724,10 +732,10 @@ class EdgeRuntime:
             )
 
     def apply_local_config(self, config: SiteConfig) -> SiteConfig:
-        """Save an edge-ui edit, apply it to analytics and cameras, and queue a cloud push."""
+        """Save an edge-ui edit (applied to analytics and cameras by the store listener) and
+        queue a cloud push."""
         self._check_site(config)
         self.config_store.save_local(config)
-        self._apply(config)
         if self.sync is not None:
             self.sync.notify()
         return config
@@ -739,8 +747,11 @@ class EdgeRuntime:
             log.error("ignoring cloud config: %s", exc)
             return
         if self.config_store.save_from_cloud(config, etag):
-            log.info("applying site config version %d from the cloud", config.config_version)
-            self._apply(config)
+            log.info("stored site config version %d from the cloud", config.config_version)
+
+    def _on_config_stored(self, config: SiteConfig) -> None:
+        """Store listener: the stored config changed (any source); apply it."""
+        self._apply(config)
 
     def _apply(self, config: SiteConfig) -> None:
         if self.running:
@@ -926,7 +937,9 @@ class EdgeRuntime:
             except queue.Empty:
                 return
             if isinstance(request, _ConfigRequest):
-                self._configure(request.config)
+                # The latest stored config wins, so requests queued out of order by racing
+                # writers can never leave the engine on an older config than the store.
+                self._configure(self.config_store.current or request.config)
                 if request.done is not None:
                     request.done.set_result(None)
             else:

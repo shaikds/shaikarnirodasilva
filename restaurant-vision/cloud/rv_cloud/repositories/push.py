@@ -1,15 +1,18 @@
 """Web Push subscriptions: per site (:class:`PushRepository`) and per owning user
-(:class:`UserPushRepository`)."""
+(:class:`UserPushRepository`).
+
+``user_id`` is ownership only (who subscribed, so who may delete it, and whose site access the
+subscription depends on); it is never attached to alerts, acks or metrics."""
 
 import hashlib
 from collections.abc import Collection, Sequence
 
-from rv_contracts import new_uuid7
+from rv_contracts import Role, new_uuid7
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ..db.models import PushSubscription, Site
-from ..tenancy import SiteScope
+from ..db.models import Membership, PushSubscription, Site, User
+from ..tenancy import OrgScope, SiteScope
 
 
 def endpoint_hash(endpoint: str) -> str:
@@ -27,6 +30,26 @@ class PushRepository:
             .where(PushSubscription.site_id == self._scope.site_id)
             .order_by(PushSubscription.created_at)
         ).all()
+
+    def owners_with_access(self, user_ids: Collection[str]) -> set[str]:
+        """Which of ``user_ids`` still exist in this org and may access this site (an owner
+        membership, or any membership on the site)."""
+        if not user_ids:
+            return set()
+        rows = self._session.execute(
+            select(Membership.user_id, Membership.role, Membership.site_id)
+            .join(User, User.id == Membership.user_id)
+            .where(
+                Membership.user_id.in_(list(user_ids)),
+                Membership.org_id == self._scope.org_id,
+                User.org_id == self._scope.org_id,
+            )
+        ).all()
+        return {
+            user_id
+            for user_id, role, site_id in rows
+            if role == Role.OWNER.value or site_id == self._scope.site_id
+        }
 
     def upsert(
         self, *, user_id: str, endpoint: str, keys: dict[str, str], now: float
@@ -80,3 +103,21 @@ class UserPushRepository:
     def delete(self, subscription: PushSubscription) -> None:
         self._session.delete(subscription)
         self._session.flush()
+
+    def delete_all(self) -> int:
+        """Every subscription of the user (the user is being deleted)."""
+        result = self._session.execute(
+            delete(PushSubscription).where(PushSubscription.user_id == self._user_id)
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
+
+    def delete_inaccessible(self, scope: OrgScope) -> int:
+        """Subscriptions for sites the user can no longer access under ``scope`` (after a
+        membership change)."""
+        if scope.is_owner:
+            return 0
+        query = delete(PushSubscription).where(PushSubscription.user_id == self._user_id)
+        if scope.site_roles:
+            query = query.where(PushSubscription.site_id.not_in(list(scope.site_roles)))
+        result = self._session.execute(query.execution_options(synchronize_session=False))
+        return int(getattr(result, "rowcount", 0) or 0)

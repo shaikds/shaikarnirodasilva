@@ -3,9 +3,10 @@
 Every route except ``/edge/pair`` takes ``Authorization: Bearer <device token>``.
 """
 
+from functools import partial
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Header, Query, Request, Response, status
+from fastapi import APIRouter, Header, Query, Request, Response, status
 from rv_contracts import (
     CommandsPage,
     EventBatch,
@@ -40,22 +41,34 @@ def pair(body: PairRequest, request: Request, state: StateDep, session: SessionD
 
 @router.post("/events", response_model=EventsAccepted)
 def post_events(
-    body: EventBatch,
-    device: DeviceDep,
-    state: StateDep,
-    session: SessionDep,
-    background: BackgroundTasks,
+    body: EventBatch, device: DeviceDep, state: StateDep, session: SessionDep
 ) -> EventsAccepted:
     """Up to 500 events; idempotent on ``event_id``. Every event must carry the device's
-    ``site_id``; otherwise the whole batch is rejected with 422 (401 means a bad token)."""
-    result = IngestService(session, state.clock, state.broker).ingest(device, body.events)
+    ``site_id``, and no ``ts`` may be more than ``RV_MAX_EVENT_FUTURE_S`` ahead of the server
+    clock; otherwise the whole batch is rejected with 422 (the edge then isolates and
+    dead-letters the offending event). Events older than the raw-event retention count as
+    duplicates. 401 means a bad token. Web Push for raised alerts is queued for the push
+    workers, so slow push services never delay this response."""
+    settings = state.settings
+    result = IngestService(
+        session,
+        state.clock,
+        state.broker,
+        max_future_s=settings.max_event_future_s,
+        raw_retention_days=settings.retention_raw_events_days,
+    ).ingest(device, body.events)
     if result.push_payloads:
-        background.add_task(
-            notify_alerts,
-            state.session_factory,
-            state.notifier,
-            device_scope(device),
-            result.push_payloads,
+        state.push.submit(
+            partial(
+                notify_alerts,
+                state.session_factory,
+                state.notifier,
+                device_scope(device),
+                result.push_payloads,
+                allowed_hosts=tuple(settings.push_allowed_hosts),
+                max_sends=settings.push_max_sends_per_batch,
+                deadline_s=settings.push_batch_deadline_s,
+            )
         )
     return EventsAccepted(accepted=result.accepted, duplicates=result.duplicates)
 

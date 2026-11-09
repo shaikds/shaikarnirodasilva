@@ -2,8 +2,11 @@
 
 Two horizons (``Settings``):
 
-* ``RV_RETENTION_RAW_EVENTS_DAYS`` (default 90): raw edge events (``events``, by event ``ts``)
-  and processed edge commands (``commands``, by ``created_at``). Expired pairing codes go too.
+* ``RV_RETENTION_RAW_EVENTS_DAYS`` (default 90): raw edge events (``events``, by the cloud's
+  ``received_at``, not the edge ``ts``) and processed edge commands (``commands``, by
+  ``created_at``). Expired pairing codes go too. Ingest treats events whose ``ts`` is older
+  than this horizon as already processed, so the raw rows are never needed for deduplication
+  after they are deleted (see :mod:`rv_cloud.services.ingest`).
 * ``RV_RETENTION_METRICS_DAYS`` (default 400): the derived read models behind metrics and
   reports: ``metric_snapshots`` and ``queue_events`` (by ``ts``), ``alerts`` (by
   ``raised_at``) and ``table_sessions`` (by ``left_at``, or ``seated_at`` if never closed).
@@ -58,7 +61,7 @@ def _targets(
     now: float, raw_cutoff: float, metrics_cutoff: float
 ) -> list[tuple[str, Any, Callable[[], ColumnElement[bool]]]]:
     return [
-        ("events", Event, lambda: Event.ts < raw_cutoff),
+        ("events", Event, lambda: Event.received_at < raw_cutoff),
         ("commands", Command, lambda: Command.created_at < raw_cutoff),
         ("pairing_codes", PairingCode, lambda: PairingCode.expires_at < now),
         ("metric_snapshots", MetricSnapshot, lambda: MetricSnapshot.ts < metrics_cutoff),

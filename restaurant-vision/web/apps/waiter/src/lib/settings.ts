@@ -51,7 +51,9 @@ export const useWaiterSettings = create<WaiterSettings>()(
       setEdgeUrl: (url) => set({ edgeUrl: url && isValidEdgeUrl(url) ? url.trim() : null }),
       setAutoEdgeUrl: (siteId, url) =>
         set((s) =>
-          s.autoEdgeUrls[siteId] === url ? s : { autoEdgeUrls: { ...s.autoEdgeUrls, [siteId]: url } },
+          s.autoEdgeUrls[siteId] === url
+            ? s
+            : { autoEdgeUrls: { ...s.autoEdgeUrls, [siteId]: url } },
         ),
       setSound: (sound) => set({ sound }),
       setVibrate: (vibrate) => set({ vibrate }),
@@ -65,7 +67,11 @@ export const useWaiterSettings = create<WaiterSettings>()(
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as PersistedV1 & Record<string, unknown>;
         if (version < 2 && state.edgeUrl === DEFAULT_EDGE_URL) state.edgeUrl = undefined;
-        return { autoEdgeUrls: {}, ...state, edgeUrl: state.edgeUrl ?? null } as unknown as WaiterSettings;
+        return {
+          autoEdgeUrls: {},
+          ...state,
+          edgeUrl: state.edgeUrl ?? null,
+        } as unknown as WaiterSettings;
       },
       partialize: (s) => ({
         edgeUrl: s.edgeUrl,

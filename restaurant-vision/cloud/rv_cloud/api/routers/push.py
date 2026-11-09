@@ -25,7 +25,9 @@ def vapid_public_key(state: StateDep) -> VapidPublicKey:
 def subscribe(
     body: PushSubscriptionIn, user: CurrentUserDep, state: StateDep, session: SessionDep
 ) -> PushSubscriptionOut:
-    return PushService(session, state.clock).subscribe(user, body)
+    return PushService(
+        session, state.clock, allowed_hosts=state.settings.push_allowed_hosts
+    ).subscribe(user, body)
 
 
 @router.delete("/subscriptions/{subscription_id}", status_code=status.HTTP_204_NO_CONTENT)

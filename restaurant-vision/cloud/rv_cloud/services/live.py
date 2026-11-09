@@ -77,6 +77,7 @@ class LiveService:
             if occ is not None
             else None
         )
+        queue_zones = views.queue_zone_ids(config)  # rows of removed zones never show
         queues = [
             QueueLive(
                 zone_id=q.zone_id,
@@ -87,6 +88,7 @@ class LiveService:
                 avg_wait_s=q.avg_wait_s,
             )
             for q in QueueRepository(self._session, scope).latest()
+            if q.zone_id in queue_zones
         ]
         return LiveSnapshot(
             site_id=scope.site_id,

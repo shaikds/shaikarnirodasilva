@@ -307,6 +307,10 @@ def checkerboard(width: int = 320, height: int = 240, cell: int = 4) -> np.ndarr
     return np.dstack([board, board, board])
 
 
+DASHBOARD_FIELDS = ("timezone", "locale", "thresholds", "modules")
+"""``SiteConfig`` parts the cloud dashboard owns (``PUT /edge/config`` keeps the cloud's)."""
+
+
 class FakeCloud:
     """Minimal cloud edge API behind ``httpx.MockTransport``."""
 
@@ -320,6 +324,9 @@ class FakeCloud:
         self.config: SiteConfig | None = None
         self.config_puts: list[dict[str, Any]] = []
         self.status_override: int | None = None
+        self.now: Callable[[], float] | None = None
+        self.max_future_s: float | None = None
+        """Like the real cloud: reject (422) a batch with an event ``ts`` this far ahead."""
 
     @property
     def etag(self) -> str | None:
@@ -341,6 +348,10 @@ class FakeCloud:
             events = json.loads(request.content)["events"]
             if any(e["event_id"] in self.reject_event_ids for e in events):
                 return httpx.Response(422, json={"detail": "bad event"})
+            if self.max_future_s is not None and self.now is not None:
+                limit = self.now() + self.max_future_s
+                if any(e["ts"] > limit for e in events):
+                    return httpx.Response(422, json={"detail": "event ts in the future"})
             accepted = 0
             for event in events:
                 if event["event_id"] not in self.stored:
@@ -366,7 +377,11 @@ class FakeCloud:
             data = json.loads(request.content)
             self.config_puts.append(data)
             version = (self.config.config_version if self.config else 0) + 1
-            self.config = SiteConfig.model_validate({**data, "config_version": version})
+            merged = dict(data)
+            if self.config is not None:  # the dashboard owns these; the edge's copy is ignored
+                stored = self.config.model_dump(mode="json")
+                merged.update({k: stored[k] for k in DASHBOARD_FIELDS})
+            self.config = SiteConfig.model_validate({**merged, "config_version": version})
             return httpx.Response(
                 200, content=self.config.model_dump_json(), headers={"ETag": self.etag or ""}
             )

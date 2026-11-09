@@ -10,6 +10,16 @@ from rv_contracts import Plan
 DEV_JWT_SECRET: Final = "dev-only-insecure-jwt-secret-change-me-0123456789abcdef"
 """Default signing key for local development. Refused when ``RV_ENVIRONMENT=production``."""
 
+DEFAULT_PUSH_ALLOWED_HOSTS: Final = (
+    "fcm.googleapis.com",
+    "updates.push.services.mozilla.com",
+    "*.push.services.mozilla.com",
+    "*.notify.windows.com",
+    "web.push.apple.com",
+    "*.push.apple.com",
+)
+"""Hosts of the browsers' Web Push services (Chrome/Edge via FCM, Firefox, Windows, Safari)."""
+
 
 class Settings(BaseSettings):
     """All configuration of the cloud app. Every field maps to ``RV_<NAME>``."""
@@ -37,6 +47,22 @@ class Settings(BaseSettings):
     vapid_public_key: str | None = None
     """URL-safe base64 uncompressed P-256 public key, served to browsers."""
     vapid_subject: str = "mailto:ops@example.com"
+    push_allowed_hosts: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: list(DEFAULT_PUSH_ALLOWED_HOSTS)
+    )
+    """Web Push endpoint hosts accepted for subscriptions (comma-separated or JSON list;
+    ``*.example.com`` matches subdomains). Anything else is refused with 422, so a tenant
+    cannot make the server POST to internal addresses."""
+    push_workers: int = Field(default=4, ge=1)
+    """Background threads that send Web Push (never on the ingest request path)."""
+    push_queue_size: int = Field(default=1000, ge=1)
+    """Alert batches waiting to be pushed; more are dropped (logged)."""
+    push_max_sends_per_batch: int = Field(default=500, ge=1)
+    """Cap on push requests for one ingest batch (alerts x subscriptions)."""
+    push_timeout_s: float = Field(default=5.0, gt=0)
+    """Timeout of one push request."""
+    push_batch_deadline_s: float = Field(default=60.0, gt=0)
+    """Sending for one ingest batch stops after this long."""
 
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://localhost:5174"]
@@ -57,11 +83,22 @@ class Settings(BaseSettings):
     pair_max_attempts: int = Field(default=10, ge=1)
     pair_window_s: float = Field(default=60.0, gt=0)
 
+    ws_revalidate_interval_s: float = Field(default=30.0, gt=0)
+    """Live WebSockets re-check token expiry on every message and, at least this often (cached
+    in between), that the user still exists with the same token version and still has access
+    to the site; otherwise they are closed with 4401 or 4403."""
+    max_event_future_s: float = Field(default=300.0, ge=0)
+    """Edge events whose ``ts`` is further ahead of the server clock are rejected (422), so a
+    device with a wrong clock cannot freeze the live projections."""
+
     signup_plan: Plan = Plan.PRO
     """Plan given to organizations created by ``POST /auth/signup``."""
 
     retention_raw_events_days: int = Field(default=90, ge=1)
-    """Raw edge events (and processed edge commands) are deleted after this many days."""
+    """Raw edge events (by cloud receive time) and processed edge commands are deleted after
+    this many days. Events whose ``ts`` is older than this are treated as already processed
+    (counted as duplicates, not projected), so a redelivery after retention never double
+    counts."""
     retention_metrics_days: int = Field(default=400, ge=1)
     """Derived metrics (snapshots, queue facts, alerts, table sessions) are deleted after this
     many days. Reports cannot reach further back."""
@@ -72,7 +109,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_json: bool = True
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "push_allowed_hosts", mode="before")
     @classmethod
     def _split_origins(cls, value: Any) -> Any:
         if isinstance(value, str):

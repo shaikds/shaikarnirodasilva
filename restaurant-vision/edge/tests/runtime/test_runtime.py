@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import threading
 from collections.abc import Callable
 from typing import Any
@@ -216,6 +217,63 @@ def test_local_config_change_reconfigures_engine_and_cameras(
     wait_until(lambda: entrance.stopped)
     assert runtime.config_store.has_pending_push
     assert [h.camera_id for h in runtime.camera_health()] == [CAM_DINING]
+
+
+def test_cloud_merged_config_after_an_offline_edit_reaches_the_engine(
+    make_runtime: Build, config: SiteConfig
+) -> None:
+    """Config drift: while the cloud is unreachable, a manager changes a threshold in the
+    dashboard and the installer edits a table label on the edge. After reconnecting, the edge
+    pushes its edit and stores the cloud's merged answer; the analytics engine must then run
+    with the cloud's thresholds and the local label (not the stale thresholds)."""
+    clock = ManualClock()
+    cloud = FakeCloud()
+    cloud.config = config
+    link = {"up": True}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if not link["up"]:
+            raise httpx.ConnectError("cloud unreachable", request=request)
+        return cloud.handler(request)
+
+    runtime, _, holder = make_runtime(
+        clock=clock,
+        enable_sync=True,
+        cloud_transport=httpx.MockTransport(handler),
+        sync_options={"monotonic": clock.now, "rng": random.Random(0), "backoff_max_s": 4.0},
+    )
+    runtime.start(threaded=False)
+    sync = runtime.sync
+    assert sync is not None
+    runtime.step()
+    sync.run_once()
+    engine = holder.engine
+    assert engine.config.thresholds.first_visit_timeout_s == 180.0
+
+    link["up"] = False
+    stored = cloud.config.model_dump()
+    stored["thresholds"]["first_visit_timeout_s"] = 60.0  # dashboard PATCH while offline
+    stored["config_version"] += 1
+    cloud.config = SiteConfig.model_validate(stored)
+    local = config.model_dump()
+    local["tables"][0]["label"] = "Window 1"  # PUT /local/config while offline
+    runtime.apply_local_config(SiteConfig.model_validate(local))
+    runtime.step()
+    sync.run_once()
+    assert not sync.online and runtime.config_store.has_pending_push
+    assert engine.config.tables[0].label == "Window 1"
+
+    link["up"] = True
+    for _ in range(10):
+        clock.advance(5.0)
+        sync.run_once()
+        runtime.step()
+    assert sync.online and not runtime.config_store.has_pending_push
+    current = runtime.config
+    assert current is not None and current.config_version == cloud.config.config_version
+    assert engine.config == current  # what analytics uses is what is stored
+    assert engine.config.thresholds.first_visit_timeout_s == 60.0
+    assert engine.config.tables[0].label == "Window 1"
 
 
 def test_config_for_another_site_is_rejected(make_runtime: Build, config: SiteConfig) -> None:
