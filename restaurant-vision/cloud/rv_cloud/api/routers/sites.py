@@ -8,6 +8,7 @@ from rv_contracts import (
     AlertView,
     Bucket,
     DeviceStatus,
+    HostView,
     LiveSnapshot,
     MetricsSummary,
     PairingCodeInfo,
@@ -16,13 +17,21 @@ from rv_contracts import (
     SiteConfig,
     SiteSettings,
     SiteSettingsPatch,
+    StaffingReport,
     TableStats,
     Timeseries,
     TimeseriesMetric,
 )
 
 from ...errors import Forbidden
-from ...services import AlertService, DeviceService, LiveService, MetricsService, SiteService
+from ...services import (
+    AlertService,
+    DeviceService,
+    HostService,
+    LiveService,
+    MetricsService,
+    SiteService,
+)
 from ..deps import AnySiteDep, OwnerSiteDep, SessionDep, StaffSiteDep, StateDep
 
 router = APIRouter(prefix="/sites/{site_id}", tags=["sites"])
@@ -67,6 +76,13 @@ def get_config(
 @router.get("/live", response_model=LiveSnapshot)
 def live(access: StaffSiteDep, state: StateDep, session: SessionDep) -> LiveSnapshot:
     return LiveService(session, state.clock).snapshot(access.scope)
+
+
+@router.get("/host", response_model=HostView)
+def host(access: AnySiteDep, state: StateDep, session: SessionDep) -> HostView:
+    """Host view (1.3): queue, free tables and the predicted next table to free. Owners,
+    managers and waiters of the site."""
+    return HostService(session, state.clock).view(access.scope)
 
 
 @router.get("/alerts", response_model=list[AlertView])
@@ -159,6 +175,18 @@ def metrics_timeseries(
 ) -> Timeseries:
     """Buckets aligned to the site's local time (``1d`` = local midnight)."""
     return _metrics(state, session).timeseries(access.scope, metric, bucket, from_ts, to_ts)
+
+
+@router.get("/metrics/staffing", response_model=StaffingReport)
+def metrics_staffing(
+    access: StaffSiteDep,
+    state: StateDep,
+    session: SessionDep,
+    weeks: Annotated[int, Query(ge=1, le=52)] = 4,
+) -> StaffingReport:
+    """Recommended waiters per local hour, weekday vs weekend, over the last ``weeks`` weeks
+    (1.3). An estimate: ``guests_per_waiter`` is a site setting to calibrate."""
+    return _metrics(state, session).staffing(access.scope, weeks)
 
 
 @router.get("/tables/stats", response_model=list[TableStats])

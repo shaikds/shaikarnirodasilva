@@ -11,6 +11,7 @@ import {
 } from '@rv/shared';
 import {
   BarChart3,
+  DoorOpen,
   FileText,
   LayoutDashboard,
   LayoutGrid,
@@ -87,6 +88,7 @@ export function Layout() {
           )}
           <ul className="flex flex-col gap-1">
             {link(`/sites/${siteId}/live`, t('nav.live'), LayoutGrid)}
+            {canOpen(access, 'host') && link(`/sites/${siteId}/host`, t('nav.host'), DoorOpen)}
             {link(`/sites/${siteId}/analytics`, t('nav.analytics'), BarChart3)}
             {link(`/sites/${siteId}/report`, t('nav.report'), FileText)}
             {link(`/sites/${siteId}/settings`, t('nav.settings'), Settings)}

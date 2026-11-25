@@ -64,9 +64,11 @@ export function buildNotification(
       ? s.waiter.alerts.entrance
       : null;
   const title =
-    kind && target
-      ? fill(s.waiter.push.title, { target, kind })
-      : (kind ?? s.waiter.push.fallbackTitle);
+    payload.kind === 'table_freed' && payload.table_label
+      ? fill(s.common.tableFreed, { label: payload.table_label })
+      : kind && target
+        ? fill(s.waiter.push.title, { target, kind })
+        : (kind ?? s.waiter.push.fallbackTitle);
   const urgent = payload.severity === 'urgent';
   const timestamp = waitingSinceMs(payload);
   return {

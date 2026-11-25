@@ -51,6 +51,9 @@ Endpoint -> model map (``/api/v1`` prefix):
 ``GET /sites/{site_id}/metrics/timeseries``            ``Timeseries``
 ``GET /sites/{site_id}/tables/stats``                  ``list[TableStats]``
 ``GET /sites/{site_id}/reports/shift?date=``           ``ShiftReport``
+``GET /sites/{site_id}/host``                          ``HostView`` (1.3; owner, manager,
+                                                       waiter)
+``GET /sites/{site_id}/metrics/staffing?weeks=4``      ``StaffingReport`` (1.3)
 ``GET /orgs/{org_id}/reports/compare``                 ``BranchComparison``
 ``GET /push/vapid-public-key``                         ``VapidPublicKey``
 ``POST /push/subscriptions``                           ``PushSubscriptionIn`` ->
@@ -95,6 +98,12 @@ Money = Annotated[float, Field(ge=0)]
 """Amount in the site's currency, major units."""
 
 NonNegative = Annotated[float, Field(ge=0)]
+
+IsoWeekday = Annotated[int, Field(ge=1, le=7)]
+"""ISO weekday: 1 = Monday ... 5 = Friday, 6 = Saturday, 7 = Sunday."""
+
+DEFAULT_GUESTS_PER_WAITER: Final = 20.0
+"""Default guests one waiter can serve, a guess to calibrate per site. Since 1.3."""
 
 # --------------------------------------------------------------------------- auth and tenancy
 
@@ -280,6 +289,13 @@ class SiteSettings(ContractModel):
     thresholds: Thresholds
     modules: Modules
     floor_plan: list[FloorPlanItem] = Field(default_factory=list)
+    guests_per_waiter: float = Field(default=DEFAULT_GUESTS_PER_WAITER, gt=0, le=500)
+    """Guests one waiter can serve at once, for the staffing recommendation. An estimate to
+    calibrate per site. Since 1.3."""
+    weekend_days: list[IsoWeekday] = Field(default_factory=lambda: [6, 7])
+    """ISO weekdays treated as weekend by the staffing recommendation. The cloud defaults it
+    by time zone: Friday + Saturday (``[5, 6]``) for ``Asia/Jerusalem``, Saturday + Sunday
+    (``[6, 7]``) otherwise. Since 1.3."""
 
 
 class SiteSettingsPatch(ContractModel):
@@ -295,6 +311,10 @@ class SiteSettingsPatch(ContractModel):
     thresholds: Thresholds | None = None
     modules: Modules | None = None
     floor_plan: list[FloorPlanItem] | None = None
+    guests_per_waiter: float | None = Field(default=None, gt=0, le=500)
+    """Since 1.3."""
+    weekend_days: list[IsoWeekday] | None = None
+    """Since 1.3. Duplicates are removed and the list sorted."""
 
 
 # --------------------------------------------------------------------------- devices and edge
@@ -494,6 +514,107 @@ class WsCloseCode(IntEnum):
     """Bad or expired access token: refresh it and reconnect."""
     FORBIDDEN = 4403
     """No access to the site (or it does not exist): do not retry."""
+
+
+# --------------------------------------------------------------------------- host view (1.3)
+
+
+class Confidence(StrEnum):
+    """How much to trust a prediction. Since 1.3."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class HostTable(ContractModel):
+    """One table in the host view. Since 1.3."""
+
+    table_id: Id
+    label: Label
+    seats: int = Field(ge=1)
+    state: TableState
+    guest_count: Count
+    seated_since: EpochSeconds | None
+    """When the current guests sat down (``seated``/``attended``); None otherwise."""
+    expected_free_at: EpochSeconds | None
+    """Predicted time the guests leave (occupied tables); None for free tables and tables
+    that need cleaning."""
+    confidence: Confidence
+    """Confidence of ``expected_free_at``; ``high`` for free tables and tables that need
+    cleaning (their state is known)."""
+
+
+class HostQueue(ContractModel):
+    """Queue at the door, summed over the site's queue zones. Since 1.3."""
+
+    people: Count
+    parties_est: Count
+    longest_wait_s: Seconds
+
+
+class HostView(ContractModel):
+    """``GET /sites/{site_id}/host``: what the host needs to seat the next party. Since 1.3.
+
+    ``tables`` order: free (``empty``) tables first, then ``needs_bussing`` (longest waiting
+    first), then occupied tables by ``expected_free_at`` (soonest first)."""
+
+    site_id: Id
+    ts: EpochSeconds
+    queue: HostQueue
+    free_tables: Count
+    next_free: HostTable | None
+    """The table predicted to become available next: the first ``needs_bussing`` table, else
+    the occupied table with the earliest ``expected_free_at``. None when no table is taken."""
+    tables: list[HostTable]
+
+
+# --------------------------------------------------------------------------- staffing (1.3)
+
+
+class DayType(StrEnum):
+    WEEKDAY = "weekday"
+    WEEKEND = "weekend"
+
+
+class StaffingHour(ContractModel):
+    """One site-local hour of one day type. Since 1.3."""
+
+    hour: int = Field(ge=0, le=23)
+    """Local hour of day (0-23)."""
+    days: Count
+    """Days of this type with occupancy data in this hour."""
+    avg_guests: NonNegative | None
+    """Mean over those days of the hour's mean guests; None without data."""
+    p75_guests: NonNegative | None
+    """75th percentile over those days of the hour's mean guests."""
+    peak_guests: NonNegative | None
+    """Highest guest count seen in this hour."""
+    recommended_waiters: Count
+    """``ceil(p75_guests / guests_per_waiter)``, at least 1 when guests were seen; 0 when
+    there is no data or no guests (closed)."""
+
+
+class StaffingDay(ContractModel):
+    day_type: DayType
+    hours: list[StaffingHour]
+    """24 entries, hour 0 to 23."""
+
+
+class StaffingReport(ContractModel):
+    """``GET /sites/{site_id}/metrics/staffing?weeks=4``: waiters per hour from occupancy
+    snapshots, in the site's time zone. An estimate. Since 1.3."""
+
+    site_id: Id
+    timezone: Timezone
+    from_ts: EpochSeconds
+    to_ts: EpochSeconds
+    weeks: int = Field(ge=1, le=52)
+    guests_per_waiter: float = Field(gt=0)
+    weekend_days: list[IsoWeekday]
+    is_estimate: Literal[True] = True
+    days: list[StaffingDay]
+    """``weekday`` then ``weekend``."""
 
 
 class CoverageReport(ContractModel):

@@ -8,14 +8,27 @@ import {
 } from '@rv/shared';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { FloorPlanEditor } from '../components/FloorPlanEditor';
-import { DetailsForm, DevicesTab, ModulesForm, ThresholdsForm } from '../components/SettingsForms';
+import {
+  DetailsForm,
+  DevicesTab,
+  ModulesForm,
+  StaffingForm,
+  ThresholdsForm,
+} from '../components/SettingsForms';
 import { Tabs } from '../components/Tabs';
 import { useAccess } from '../lib/access';
 
-type TabId = 'details' | 'thresholds' | 'modules' | 'floorPlan' | 'devices';
-const OWNER_TABS: TabId[] = ['details', 'thresholds', 'modules', 'floorPlan', 'devices'];
-/** Managers: thresholds only (architecture 7.2), plus read-only device health. */
-const MANAGER_TABS: TabId[] = ['thresholds', 'devices'];
+type TabId = 'details' | 'thresholds' | 'modules' | 'staffing' | 'floorPlan' | 'devices';
+const OWNER_TABS: TabId[] = [
+  'details',
+  'thresholds',
+  'modules',
+  'staffing',
+  'floorPlan',
+  'devices',
+];
+/** Managers: thresholds and staffing (1.3) (architecture 7.2), plus read-only device health. */
+const MANAGER_TABS: TabId[] = ['thresholds', 'staffing', 'devices'];
 
 export function SettingsPage() {
   const { siteId } = useParams();
@@ -49,6 +62,7 @@ export function SettingsPage() {
         {tab === 'modules' && (
           <ModulesForm key={site.site_id} site={site} plan={me.data?.org.plan ?? 'pro'} />
         )}
+        {tab === 'staffing' && <StaffingForm key={site.site_id} site={site} />}
         {tab === 'floorPlan' &&
           (config.data ? (
             <FloorPlanEditor key={site.site_id} site={site} tables={config.data.tables} />

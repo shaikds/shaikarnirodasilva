@@ -4,6 +4,7 @@ import zoneinfo
 from collections.abc import Iterable, Mapping, Sequence
 
 from rv_contracts import (
+    DEFAULT_GUESTS_PER_WAITER,
     DEVICE_OFFLINE_AFTER_S,
     AckVia,
     AlertKind,
@@ -117,7 +118,29 @@ def site_settings(site: Site) -> SiteSettings:
         thresholds=config.thresholds,
         modules=config.modules,
         floor_plan=floor_plan(site),
+        guests_per_waiter=guests_per_waiter(site),
+        weekend_days=weekend_days(site),
     )
+
+
+FRI_SAT_WEEKEND_TIMEZONES = frozenset({"Asia/Jerusalem", "Asia/Tel_Aviv", "Israel"})
+"""Time zones whose default weekend is Friday + Saturday (ISO 5, 6)."""
+
+
+def default_weekend_days(timezone: str) -> list[int]:
+    """Friday + Saturday for Israel, Saturday + Sunday otherwise (ISO weekdays)."""
+    return [5, 6] if timezone in FRI_SAT_WEEKEND_TIMEZONES else [6, 7]
+
+
+def weekend_days(site: Site) -> list[int]:
+    """The site's weekend (ISO weekdays), the time zone's default when never set."""
+    if site.weekend_days_json is None:
+        return default_weekend_days(site.timezone)
+    return sorted({int(d) for d in site.weekend_days_json})
+
+
+def guests_per_waiter(site: Site) -> float:
+    return site.guests_per_waiter or DEFAULT_GUESTS_PER_WAITER
 
 
 def memberships(rows: Iterable[Membership]) -> list[MembershipInfo]:

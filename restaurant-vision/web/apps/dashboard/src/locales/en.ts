@@ -5,6 +5,7 @@ export const dashboardEn = {
   nav: {
     overview: 'Overview',
     live: 'Live floor',
+    host: 'Host',
     analytics: 'Analytics',
     report: 'Shift report',
     settings: 'Settings',
@@ -155,7 +156,27 @@ export const dashboardEn = {
       localUrl: 'LAN address:',
     },
   },
+  host: {
+    noTables: 'No tables yet. Tables are defined in the edge device setup wizard.',
+  },
   analytics: {
+    staffing: {
+      title: 'Peak times & staffing',
+      desc: 'Guests per hour over the last 4 weeks in the branch time zone, and how many waiters that needs. Weekend: {{weekend}}.',
+      toggle: 'Day type',
+      weekday: 'Weekdays',
+      weekend: 'Weekend',
+      busiest: 'Busiest hour',
+      busiestHint: '~{{guests}} guests · {{waiters}} waiters',
+      maxWaiters: 'Most waiters needed at once',
+      guests: 'Guests (75th percentile)',
+      guestsSeries: 'Guests',
+      waitersPerHour: 'Recommended waiters per hour',
+      waiters: 'waiters',
+      assumption:
+        'Assumes one waiter serves {{count}} guests (a guess to calibrate in Settings), from the busy days of the last {{weeks}} weeks (75th percentile).',
+      noData: 'Not enough occupancy data yet.',
+    },
     title: 'Analytics',
     occupancyByHour: 'Occupancy by hour of day',
     occupancyDesc: 'Average guests in each hour, in the branch time zone.',
@@ -244,6 +265,7 @@ export const dashboardEn = {
       details: 'Branch details',
       thresholds: 'Thresholds',
       modules: 'Modules',
+      staffing: 'Staffing',
       floorPlan: 'Floor plan',
       devices: 'Devices',
     },
@@ -335,6 +357,14 @@ export const dashboardEn = {
         },
       },
     },
+    staffing: {
+      intro: 'Used by the “Peak times & staffing” recommendation on the Analytics page.',
+      guestsPerWaiter: 'Guests one waiter can serve',
+      guestsPerWaiterHelp:
+        'How many guests one waiter serves well at once. Default {{count}}: a guess, calibrate it to your team.',
+      weekend: 'Weekend days',
+      weekendHelp: 'These days are shown as “Weekend”, all others as “Weekdays”.',
+    },
     modules: {
       intro: 'Turn analytics on or off for this branch.',
       occupancy: { label: 'Occupancy', help: 'Guests in the restaurant and tables occupied.' },
@@ -344,6 +374,10 @@ export const dashboardEn = {
         help: 'Empty, seated, attended and needs bussing per table.',
       },
       alerts: { label: 'Waiter alerts', help: 'Alerts to waiters’ phones with an “On it” button.' },
+      table_freed_alerts: {
+        label: 'Table freed alerts',
+        help: 'Tell waiters the moment guests leave: “Table 5 freed – needs cleaning”.',
+      },
       proOnly: 'Included in the Pro plan.',
     },
     floorPlan: {

@@ -8,6 +8,8 @@ import type {
   AlertKind,
   AlertSeverity,
   CameraStatus,
+  Confidence,
+  DayType,
   Currency,
   EdgeEvent,
   EventType,
@@ -32,6 +34,7 @@ export const ALERT_KINDS = [
   'checkin_needed',
   'bussing_needed',
   'long_queue',
+  'table_freed',
 ] as const satisfies readonly AlertKind[];
 
 export const ALERT_SEVERITIES = [
@@ -87,6 +90,18 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   snapshot_interval_s: 10,
   track_id_ttl_h: 24,
 };
+
+/** Contracts 1.3: `HostTable.confidence` values, lowest first. */
+export const CONFIDENCES = ['low', 'medium', 'high'] as const satisfies readonly Confidence[];
+export const DAY_TYPES = ['weekday', 'weekend'] as const satisfies readonly DayType[];
+
+/** Default of `SiteSettings.guests_per_waiter` (rv_contracts): a guess to calibrate. */
+export const DEFAULT_GUESTS_PER_WAITER = 20;
+
+/** Default weekend (ISO weekdays) the cloud uses for a time zone: Fri+Sat in Israel. */
+export function defaultWeekendDays(timezone: string): number[] {
+  return ['Asia/Jerusalem', 'Asia/Tel_Aviv', 'Israel'].includes(timezone) ? [5, 6] : [6, 7];
+}
 
 /** Close codes of the cloud `WS /ws` when it refuses a connection (contracts `WsCloseCode`). */
 export const WS_CLOSE_CODES = {

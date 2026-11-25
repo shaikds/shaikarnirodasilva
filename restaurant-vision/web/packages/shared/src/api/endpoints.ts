@@ -9,6 +9,7 @@ import type {
   EdgeEvent,
   EventsAccepted,
   HealthStatus,
+  HostView,
   LiveSnapshot,
   LoginRequest,
   Me,
@@ -27,6 +28,7 @@ import type {
   SiteSettings,
   SiteSettingsPatch,
   SiteSummary,
+  StaffingReport,
   TableStats,
   Timeseries,
   TimeseriesMetric,
@@ -109,6 +111,9 @@ export function createRvApi(client: ApiClient) {
       params: { status?: AlertStatusFilter; from?: number; to?: number } = {},
       signal?: AbortSignal,
     ) => r<AlertView[]>(`/sites/${enc(siteId)}/alerts`, { query: params, signal }),
+    /** Contracts 1.3: next table to free (owners, managers and waiters of the site). */
+    getHost: (siteId: string, signal?: AbortSignal) =>
+      r<HostView>(`/sites/${enc(siteId)}/host`, { signal }),
     ackAlert: (alertId: string) => r<AlertView>(`/alerts/${enc(alertId)}/ack`, { method: 'POST' }),
 
     // ---------------------------------------------------------------- metrics and reports
@@ -119,6 +124,9 @@ export function createRvApi(client: ApiClient) {
         query: { metric: q.metric, bucket: q.bucket ?? '15m', from: q.from, to: q.to },
         signal,
       }),
+    /** Contracts 1.3: recommended waiters per local hour, weekday vs weekend. */
+    getStaffing: (siteId: string, weeks = 4, signal?: AbortSignal) =>
+      r<StaffingReport>(`/sites/${enc(siteId)}/metrics/staffing`, { query: { weeks }, signal }),
     getTableStats: (siteId: string, range: TimeRange, signal?: AbortSignal) =>
       r<TableStats[]>(`/sites/${enc(siteId)}/tables/stats`, { query: { ...range }, signal }),
     getShiftReport: (siteId: string, date: string, signal?: AbortSignal) =>

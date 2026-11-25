@@ -38,7 +38,7 @@ from . import views
 OWNER_ONLY_FIELDS = frozenset(
     {"name", "timezone", "locale", "currency", "avg_check_per_guest", "modules"}
 )
-"""Managers may change thresholds and the floor plan only."""
+"""Managers may change thresholds, the floor plan and the staffing settings only."""
 
 EDGE_FIELDS = ("cameras", "tables", "zones")
 
@@ -92,6 +92,10 @@ class SiteService:
                     raise InvalidInput(f"floor_plan: duplicate table_id {item.table_id!r}")
                 seen.add(item.table_id)
             site.floor_plan_json = [item.model_dump(mode="json") for item in patch.floor_plan]
+        if patch.guests_per_waiter is not None:
+            site.guests_per_waiter = patch.guests_per_waiter
+        if patch.weekend_days is not None:
+            site.weekend_days_json = sorted(set(patch.weekend_days))
 
         self._save_config(scope, site, config, config_changes)
         self._session.commit()

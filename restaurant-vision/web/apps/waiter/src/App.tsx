@@ -11,6 +11,7 @@ import {
 import { useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AlertsPage } from './pages/AlertsPage';
+import { HostPage } from './pages/HostPage';
 import { LoginPage } from './pages/LoginPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SitePickerPage } from './pages/SitePickerPage';
@@ -46,6 +47,7 @@ export function WaiterRoutes() {
       />
       <Route element={<RequireAuth />}>
         <Route index element={<AlertsPage />} />
+        <Route path="/host" element={<HostPage />} />
         <Route path="/sites" element={<SitePickerPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

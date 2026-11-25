@@ -20,6 +20,7 @@ import {
   type MultiDatum,
 } from '../components/charts';
 import { RangePicker } from '../components/RangePicker';
+import { StaffingCard } from '../components/StaffingCard';
 import { useRange, type RangeKey } from '../lib/range';
 import { byHourOfDay } from '../lib/series';
 import { useFmt } from '../lib/useFmt';
@@ -190,6 +191,8 @@ export function AnalyticsPage() {
             </div>
           </div>
         </Card>
+
+        <StaffingCard siteId={siteId} />
 
         <Card
           title={t('analytics.tablesTitle')}

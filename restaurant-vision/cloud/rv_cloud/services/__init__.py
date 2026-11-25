@@ -4,6 +4,7 @@ repositories, commits, and only then triggers side effects (broadcast, push)."""
 from .auth import AuthService, CurrentUser
 from .commands import CommandService
 from .devices import DeviceService
+from .host import HostService
 from .ingest import IngestResult, IngestService
 from .live import AlertService, LiveService
 from .metrics import MetricsService
@@ -17,6 +18,7 @@ __all__ = [
     "CommandService",
     "CurrentUser",
     "DeviceService",
+    "HostService",
     "IngestResult",
     "IngestService",
     "LiveService",

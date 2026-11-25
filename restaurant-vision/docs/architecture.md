@@ -192,6 +192,7 @@ The `CameraPipeline` seam (`rv_edge/interfaces.py`) is `start / stop / step / he
   - Alert `waiter_needed` if `seated` for `first_visit_timeout_s` with no visit. Alert `checkin_needed` if `attended` and no visit for `checkin_timeout_s`.
   - `seated|attended` → `needs_bussing` when no guests for `leave_confirm_s`. Closes the session (emits `table.session_closed`).
   - `needs_bussing` → `empty` on a staff visit of `bussing_visit_min_s`. Alert `bussing_needed` after `bussing_timeout_s`.
+  - Alert `table_freed` (info, contracts 1.3, `modules.table_freed_alerts`, default on) the moment a table enters `needs_bussing`, `condition_since_ts` = when the guests left; not raised when the table was already bussed while the departure was being confirmed. `bussing_needed` stays as the escalation. See 12.1.
   - Open alerts resolve automatically on the matching staff visit or state change.
 - `QueueModule`: tracks inside `queue` zones with entered time; crossing an `entrance_line` inward = seated (`queue.seated` with wait), leaving outward after `walkaway_min_wait_s` without being seated = `queue.walkaway`. Party estimate groups tracks that entered within 5 s and close together. `long_queue` alert by people or wait thresholds. Snapshots every `snapshot_interval_s`.
 - `OccupancyModule`: guests = sum of table guest counts + guest tracks in `area` zones (bars, standing); staff on floor; snapshot every `snapshot_interval_s`.
@@ -203,6 +204,7 @@ The `CameraPipeline` seam (`rv_edge/interfaces.py`) is `start / stop / step / he
 - `Outbox` (SQLite, WAL): every event persisted before send; `CloudSync` sends batches (<= 500) to `POST /api/v1/edge/events`, exponential backoff, marks delivered; polls `GET /api/v1/edge/commands` every 2 s for acks/config changes; fetches config with ETag.
 - Pairing: `rv-edge pair --code ABC123 --cloud https://...` → `POST /api/v1/edge/pair` → device token saved in the local secrets file (0600 / user-only ACL).
 - Local API (FastAPI on `0.0.0.0:8787`, LAN only): serves `edge-ui` static build, `GET /local/health`, `GET /local/state`, `GET /local/setup/status` (incl. `uniform_calibrated`), `WS /local/ws` (events plus a `live.snapshot` on connect and every few seconds), `POST /local/alerts/{id}/ack`, and setup endpoints protected by a local setup PIN (header `X-Setup-Pin`; 429 with `Retry-After` after repeated wrong PINs): `GET /local/setup/pin-check` (204), cameras (list incl. simulated ones, with only non-secret address parts: brand, host, port, channel, substream; ONVIF discover; add/update with RTSP URL + credentials stored locally), `GET /local/cameras/{id}/snapshot.jpg` (people blurred, generated on demand, never stored), **`POST /local/cameras/{id}/suggest-tables`** (automatic table detection: COCO dining table + chairs from YOLOX on the current frame, preferring `yolox_s` when downloaded; returns polygons and seat estimates only), zones and tables (`GET/PUT /local/config` → pushed to cloud), uniform calibration, `GET /local/coverage` (tables without a primary zone).
+- Live view (contracts 1.3): `GET /local/cameras/{id}/live.mjpeg` (setup PIN as header or `?pin=`, see 12.4).
 - CLI `rv-edge`: `run`, `pair`, `discover`, `check` (system capacity estimate: how many cameras this PC can handle), `simulate --scenario ...` (moves the scenario to start now with `--rebase-to-now`, the default, so live timers and today's shift report work in demos; `--no-rebase-to-now` for reproducible runs).
 - Packaging: Linux systemd unit + Dockerfile (mini PC), Windows service (pywin32 service wrapper + PowerShell installer), PyInstaller spec for a single installer later.
 
@@ -249,6 +251,8 @@ Metrics and reports
 - `GET /sites/{site_id}/tables/stats?from&to`
 - `GET /sites/{site_id}/reports/shift?date=YYYY-MM-DD` → shift report + ROI block
 - `GET /orgs/{org_id}/reports/compare?from&to` (owners)
+- `GET /sites/{site_id}/metrics/staffing?weeks=4` (owner, manager; 1.3) → `StaffingReport`, see 12.3
+- `GET /sites/{site_id}/host` (owner, manager, waiter of the site; 1.3) → `HostView`, see 12.2
 
 Push
 - `GET /push/vapid-public-key` · `POST /push/subscriptions` · `DELETE /push/subscriptions/{id}`; each push body is an `AlertPush`. Endpoints must be `https` URLs of an allowlisted push service (`RV_PUSH_ALLOWED_HOSTS`, default FCM, Mozilla, WNS, Apple), else 422. Pushes go only to subscriptions whose user still has access to the site, and are sent by a bounded background worker pool (capped and time-limited per ingest batch), never on the ingest request path.
@@ -287,7 +291,7 @@ Floor plan geometry: the dashboard shows a schematic floor plan (tables position
 
 ## 10. Privacy by design (enforced in code and tests)
 
-- No `cv2.imwrite`, `VideoWriter`, or frame persistence anywhere in `rv_edge` except the in-memory blurred setup snapshot; a test greps for forbidden calls.
+- No `cv2.imwrite`, `VideoWriter`, or frame persistence anywhere in `rv_edge`; the blurred setup snapshot and the live view (1.3) are encoded in memory only (`cv2.imencode`); a test greps for forbidden calls and the live-view tests fail on any disk write.
 - Privacy masks applied before detection; restroom/staff-room masks suggested in the setup wizard.
 - Track IDs random and camera-scoped, rotated daily; no cross-camera matching except zone geometry and timing; no embeddings.
 - Cloud receives only events defined in `rv_contracts`; payloads contain zone/table ids, counts, durations.
@@ -315,3 +319,33 @@ Floor plan geometry: the dashboard shows a schematic floor plan (tables position
 | 2 | edge setup UI | `web/apps/edge-ui` |
 | 2 | deploy + docs | `deploy/`, `docs/compliance`, `docs/runbooks`, CI |
 | 3 | integration | e2e wiring, fixes across modules, demo |
+
+## 12. Contracts 1.3: features from the competitor video
+
+All additive: new fields are optional or defaulted, old producers and readers keep working.
+
+### 12.1 "Table freed, needs cleaning" alert
+
+- Edge (`analytics/tables.py`): `AlertKind.table_freed` (severity `info`) is raised in the same transition that enters `needs_bussing` (after `table.state_changed`, `table.session_closed` and the moot-alert resolutions), with `condition_since_ts` = the last guest sighting. It resolves like `bussing_needed`: `staff_visit` on the bussing visit, `state_change` on new guests. Skipped when the table was bussed during the departure confirmation (it goes `empty` at once). Gate: `Modules.table_freed_alerts` (default `true`; needs `alerts` and `tables`).
+- Cloud: projected and pushed like any alert (`AlertPush`). Response-time metrics only count `waiter_needed`, so it never affects waiter response KPIs.
+- UI: waiter card, push title, dashboard alert row and edge-ui offline page show "Table 5 freed – needs cleaning" / "שולחן 5 התפנה – לנקות" with a sparkles icon.
+
+### 12.2 Host view ("next table to free")
+
+- `GET /sites/{id}/host` → `HostView {site_id, ts, queue {people, parties_est, longest_wait_s}, free_tables, next_free, tables[]}`; each `HostTable` has `table_id, label, seats, state, guest_count, seated_since, expected_free_at, confidence (low|medium|high)`.
+- Order: `empty` tables (config order), `needs_bussing` (longest waiting first), then occupied tables by `expected_free_at`. `next_free` = first `needs_bussing`, else the earliest occupied table.
+- Prediction (`rv_cloud/metrics/host.py`): `expected_free_at = seated_at + median dwell` of the site's sessions closed in the last 28 days, same party-size bucket (1-2, 3-4, 5+; party = current guest count) when it has >= 10 sessions (`high`), else the site-wide median (`medium`), else 60 minutes (`low`, a guess to calibrate). Already past: `now + 5 min`, one confidence step lower.
+- Dashboard page "Host / מארחת" (owner, manager; refetches on live `table.*` / `queue.snapshot` events and every 30 s) and a "Host" tab in the waiter PWA (polled every 15 s; waiters only get `alert.*` events).
+
+### 12.3 Staffing recommendation
+
+- `GET /sites/{id}/metrics/staffing?weeks=4` (1-52) → `StaffingReport {timezone, from_ts, to_ts, weeks, guests_per_waiter, weekend_days, is_estimate, days: [weekday, weekend] × 24 StaffingHour}`.
+- Occupancy snapshots grouped by site-local date and hour; each (date, hour) sample = the hour's mean guests. Per day type and hour: `avg_guests`, `p75_guests` (linear-interpolated percentile), `peak_guests` (max snapshot), `recommended_waiters = ceil(p75 / guests_per_waiter)`, at least 1 when any guest was seen, 0 for hours without data or guests.
+- Settings (`SiteSettings` / `SiteSettingsPatch`, owners and managers; migration `0005_staffing_settings`, nullable columns): `guests_per_waiter` (default 20, a guess to calibrate) and `weekend_days` (ISO weekdays; default Fri+Sat for `Asia/Jerusalem`, Sat+Sun otherwise).
+- Dashboard: Analytics section "Peak times & staffing / זמני שיא ומלצרים" (hourly bar chart, weekday/weekend toggle, waiters per hour, estimate badge) and a Settings "Staffing" tab.
+
+### 12.4 Live camera view (LAN only)
+
+- Edge: `GET /local/cameras/{id}/live.mjpeg`, setup PIN as `X-Setup-Pin` or `?pin=` (an `<img>` cannot send headers; uvicorn's access log is off and the PIN is never logged). `multipart/x-mixed-replace` at ~2 fps (`?frames=N` stops after N), `Cache-Control: no-store`.
+- Each frame reuses the snapshot path (`runtime/snapshot.py`): people blurred, privacy masks black (filled again after the overlay), simulated cameras as the placeholder drawing; table zones drawn as translucent polygons coloured by live state (empty gray, seated amber, attended green, needs_bussing blue) with the label (ASCII; Hebrew labels fall back to `T<n>`) and the time since `since_ts`. Encoded with `cv2.imencode`, nothing written to disk.
+- edge-ui `/live` ("Live view / תצוגה חיה"): PIN gate (same session as setup), camera tabs, the stream and a colour legend; linked from the status home.

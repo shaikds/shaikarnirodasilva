@@ -14,7 +14,7 @@ import {
   type CameraHealth,
 } from '@rv/shared';
 import { useQuery } from '@tanstack/react-query';
-import { BellRing, Camera, Cloud, CloudOff, Cpu, Users, Utensils, Wrench } from 'lucide-react';
+import { BellRing, Camera, Cloud, CloudOff, Cpu, Users, Utensils, Video, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useLocalApi } from '../api/context';
 import { useEdgeNow, useLocalLive } from '../live/useLocalLive';
@@ -52,6 +52,10 @@ export function HomePage() {
                 {t('home.openSetup')}
               </Link>
             )}
+            <Link to="/live" className={buttonClass('secondary')}>
+              <Video aria-hidden="true" className="h-4 w-4" />
+              {t('home.liveButton')}
+            </Link>
             <Link to="/local-alerts" className={buttonClass('secondary')}>
               <BellRing aria-hidden="true" className="h-4 w-4" />
               {t('home.alertsButton')}

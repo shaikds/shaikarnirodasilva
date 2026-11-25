@@ -3,7 +3,9 @@ import {
   Button,
   Card,
   CURRENCIES,
+  DEFAULT_GUESTS_PER_WAITER,
   DEFAULT_THRESHOLDS,
+  EstimateBadge,
   SelectField,
   Switch,
   TextField,
@@ -31,6 +33,7 @@ import {
   type ThresholdValues,
 } from '../lib/thresholds';
 import { TIMEZONES } from '../lib/timezones';
+import { weekdayName } from '../lib/weekdays';
 import { useFmt } from '../lib/useFmt';
 
 /** Save button + status line shared by the forms. */
@@ -238,8 +241,14 @@ export function ThresholdsForm({ site }: { site: SiteSettings }) {
   );
 }
 
-const MODULE_KEYS: (keyof Modules)[] = ['occupancy', 'queue', 'tables', 'alerts'];
-const PRO_MODULES: (keyof Modules)[] = ['tables', 'alerts'];
+const MODULE_KEYS: (keyof Modules)[] = [
+  'occupancy',
+  'queue',
+  'tables',
+  'alerts',
+  'table_freed_alerts',
+];
+const PRO_MODULES: (keyof Modules)[] = ['tables', 'alerts', 'table_freed_alerts'];
 
 export function ModulesForm({ site, plan }: { site: SiteSettings; plan: Plan }) {
   const { t } = useTranslation();
@@ -279,6 +288,87 @@ export function ModulesForm({ site, plan }: { site: SiteSettings; plan: Plan }) 
             );
           })}
         </div>
+        <SaveBar pending={update.isPending} saved={saved} error={update.error} />
+      </form>
+    </Card>
+  );
+}
+
+/** Staffing recommendation settings (1.3): guests per waiter and the weekend days. Owners and
+ * managers. */
+export function StaffingForm({ site }: { site: SiteSettings }) {
+  const { t, i18n } = useTranslation();
+  const update = useUpdateSite(site.site_id);
+  const [perWaiter, setPerWaiter] = useState(
+    String(site.guests_per_waiter ?? DEFAULT_GUESTS_PER_WAITER),
+  );
+  const [weekend, setWeekend] = useState<number[]>(site.weekend_days ?? []);
+  const [saved, setSaved] = useState(false);
+  const value = Number(perWaiter);
+  const error =
+    perWaiter.trim() === '' || !Number.isFinite(value) || value <= 0 || value > 500
+      ? t('settings.thresholds.errors.positive')
+      : undefined;
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (error) return;
+    setSaved(false);
+    update.mutate(
+      { guests_per_waiter: value, weekend_days: [...weekend].sort() },
+      { onSuccess: () => setSaved(true) },
+    );
+  };
+  return (
+    <Card>
+      <form
+        onSubmit={onSubmit}
+        noValidate
+        className="flex max-w-2xl flex-col gap-4"
+        aria-label={t('settings.tabs.staffing')}
+      >
+        <p className="text-sm text-muted">{t('settings.staffing.intro')}</p>
+        <TextField
+          name="guests_per_waiter"
+          label={
+            <span className="inline-flex items-center gap-2">
+              {t('settings.staffing.guestsPerWaiter')}
+              <EstimateBadge />
+            </span>
+          }
+          hint={t('settings.staffing.guestsPerWaiterHelp', { count: DEFAULT_GUESTS_PER_WAITER })}
+          type="number"
+          inputMode="decimal"
+          min={1}
+          max={500}
+          step="any"
+          value={perWaiter}
+          onChange={(e) => {
+            setSaved(false);
+            setPerWaiter(e.target.value);
+          }}
+          error={error}
+        />
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium">{t('settings.staffing.weekend')}</legend>
+          <p className="mb-2 text-xs text-muted">{t('settings.staffing.weekendHelp')}</p>
+          <div className="flex flex-wrap gap-3">
+            {[7, 1, 2, 3, 4, 5, 6].map((d) => (
+              <label key={d} className="inline-flex min-h-[36px] items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={weekend.includes(d)}
+                  onChange={(e) => {
+                    setSaved(false);
+                    setWeekend((cur) =>
+                      e.target.checked ? [...cur, d] : cur.filter((x) => x !== d),
+                    );
+                  }}
+                />
+                {weekdayName(d, i18n.language)}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <SaveBar pending={update.isPending} saved={saved} error={update.error} />
       </form>
     </Card>

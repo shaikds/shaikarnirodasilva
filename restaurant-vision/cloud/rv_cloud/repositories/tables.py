@@ -76,6 +76,18 @@ class TableRepository:
             self._session.add(row)
         return row
 
+    def sessions(self, session_ids: Collection[str]) -> dict[str, TableSession]:
+        """Sessions by id (open or closed); unknown ids are left out."""
+        if not session_ids:
+            return {}
+        rows = self._session.scalars(
+            select(TableSession).where(
+                TableSession.site_id == self._scope.site_id,
+                TableSession.session_id.in_(list(session_ids)),
+            )
+        )
+        return {row.session_id: row for row in rows}
+
     def closed_sessions(self, from_ts: float, to_ts: float) -> Sequence[TableSession]:
         """Sessions whose guests left in ``[from_ts, to_ts)``."""
         return self._session.scalars(

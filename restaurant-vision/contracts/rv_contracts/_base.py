@@ -15,7 +15,7 @@ from typing import Annotated, Final
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
-SCHEMA_VERSION: Final = "1.2"
+SCHEMA_VERSION: Final = "1.3"
 """Contract schema version ``MAJOR.MINOR``. Additive, optional changes bump MINOR; anything a
 reader of the previous version could not parse bumps MAJOR. Readers accept any MINOR of their
 own MAJOR.
@@ -23,7 +23,9 @@ own MAJOR.
 History: 1.0 initial. 1.1 (additive, all optional): ``TableStateChanged.since_ts``,
 ``AlertRaised``/``AlertView.condition_since_ts``, ``EdgeHeartbeat``/``DeviceStatus.local_url``,
 ``LiveSnapshotMessage``, ``AlertPush``, ``WsCloseCode`` and the ``queue_wait`` /
-``response_time_p90`` time series."""
+``response_time_p90`` time series. 1.3 (additive): ``AlertKind.table_freed``,
+``Modules.table_freed_alerts``, ``SiteSettings``/``SiteSettingsPatch.guests_per_waiter`` and
+``weekend_days``, ``HostView`` and ``StaffingReport``."""
 
 SCHEMA_MAJOR: Final = int(SCHEMA_VERSION.split(".", 1)[0])
 

@@ -240,8 +240,14 @@ class Scenario:
     people: list[Person] = field(default_factory=list)
     events: list[EdgeEvent] = field(default_factory=list)
     alert_kinds: dict[str, tuple[str, str | None]] = field(default_factory=dict)
+    table_freed: bool = False
+    """Keep ``modules.table_freed_alerts`` (1.3) as configured. Off by default so the exact
+    event sequences of the pre-1.3 tests stay as they were; ``test_analytics_table_freed``
+    covers the alert (and that it only adds events)."""
 
     def __post_init__(self) -> None:
+        if not self.table_freed:
+            self.config = with_modules(self.config, table_freed_alerts=False)
         if self.engine is None:
             self.engine = DefaultAnalyticsEngine(self.config, clock=FixedClock())
         self._dt = 1.0 / self.fps

@@ -1,13 +1,14 @@
 import {
+  cn,
   ConnectionBadge,
   LanguageSwitcher,
   buttonClass,
   useTranslation,
   type LiveStatus,
 } from '@rv/shared';
-import { Settings, Volume2, VolumeX } from 'lucide-react';
+import { BellRing, Settings, Users, Volume2, VolumeX } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useWaiterSettings } from '../lib/settings';
 
 /** Mobile-first frame: sticky header with site, live status, sound and settings. */
@@ -64,6 +65,27 @@ export function Shell({
             <Settings aria-hidden="true" className="h-5 w-5" />
           </Link>
         </div>
+        <nav aria-label={t('tabs.label')} className="flex border-t border-border text-sm">
+          {[
+            { to: '/', label: t('tabs.alerts'), icon: BellRing },
+            { to: '/host', label: t('tabs.host'), icon: Users },
+          ].map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end
+              className={({ isActive }) =>
+                cn(
+                  'flex min-h-tap flex-1 items-center justify-center gap-1.5 border-b-2 font-medium',
+                  isActive ? 'border-primary text-primary' : 'border-transparent text-muted',
+                )
+              }
+            >
+              <Icon aria-hidden="true" className="h-4 w-4" />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
         {banner}
       </header>
       <main

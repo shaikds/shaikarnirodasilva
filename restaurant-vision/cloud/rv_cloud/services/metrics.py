@@ -12,6 +12,7 @@ from rv_contracts import (
     Plan,
     ResolveReason,
     ShiftReport,
+    StaffingReport,
     TableStats,
     Timeseries,
     TimeseriesMetric,
@@ -36,6 +37,7 @@ from ..metrics import (
     table_stats,
 )
 from ..metrics import timeseries as ts_fn
+from ..metrics.staffing import staffing_days
 from ..repositories import (
     AlertRepository,
     OrgRepository,
@@ -92,6 +94,10 @@ class MetricsService:
             for s in TableRepository(self._session, scope).closed_sessions(start, end)
             if s.seated_at is not None and s.left_at is not None
         ]
+
+    def closed_sessions(self, scope: SiteScope, start: float, end: float) -> list[SessionRecord]:
+        """Sessions whose guests left in ``[start, end)`` (used by the host view)."""
+        return self._sessions(scope, start, end)
 
     def _alerts(self, scope: SiteScope, start: float, end: float) -> list[AlertRecord]:
         rows = AlertRepository(self._session, scope).list(
@@ -192,6 +198,27 @@ class MetricsService:
         start, end = resolve_range(from_ts, to_ts, self._clock.now())
         site = ScopedSiteRepository(self._session, scope).get()
         return table_stats(views.load_config(site).tables, self._sessions(scope, start, end))
+
+    def staffing(self, scope: SiteScope, weeks: int) -> StaffingReport:
+        """Waiters per site-local hour, weekday vs weekend, from the occupancy snapshots of
+        the last ``weeks`` weeks (see :mod:`rv_cloud.metrics.staffing`)."""
+        site = ScopedSiteRepository(self._session, scope).get()
+        tz = ZoneInfo(site.timezone)
+        end = self._clock.now()
+        start = end - weeks * 7 * 86400.0
+        weekend = views.weekend_days(site)
+        per_waiter = views.guests_per_waiter(site)
+        points = self._snapshots(scope, SNAPSHOT_OCCUPANCY, start, end)
+        return StaffingReport(
+            site_id=site.id,
+            timezone=site.timezone,
+            from_ts=start,
+            to_ts=end,
+            weeks=weeks,
+            guests_per_waiter=per_waiter,
+            weekend_days=weekend,
+            days=staffing_days(points, tz, weekend, per_waiter),
+        )
 
     def shift_report(self, scope: SiteScope, date: dt.date) -> ShiftReport:
         """One business day in the site's time zone, from ``business_day_start_hour`` local to

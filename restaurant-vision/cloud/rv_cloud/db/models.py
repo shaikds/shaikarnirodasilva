@@ -55,6 +55,10 @@ class Site(Base):
     first_event_ts: Mapped[float | None]
     """Earliest edge event ts ever received (start of the ROI baseline window)."""
     created_at: Mapped[float]
+    guests_per_waiter: Mapped[float | None]
+    """Staffing estimate (contracts 1.3); None = ``DEFAULT_GUESTS_PER_WAITER``."""
+    weekend_days_json: Mapped[list[Any] | None]
+    """ISO weekdays of the weekend (contracts 1.3); None = default for the time zone."""
 
 
 class User(Base):

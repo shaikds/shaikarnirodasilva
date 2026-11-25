@@ -64,9 +64,14 @@ Alerts (each raised at most once per condition episode, auto-resolved):
   (``state_change``).
 * ``bussing_needed`` (info): ``needs_bussing`` for ``bussing_timeout_s``. Resolved by the bussing
   visit (``staff_visit``) or by new guests being seated (``state_change``).
+* ``table_freed`` (info, 1.3): raised the moment the table enters ``needs_bussing`` (with
+  ``condition_since_ts`` = when the guests left) while ``modules.table_freed_alerts`` is on,
+  unless a bussing visit already happened. Resolved like ``bussing_needed``, which stays as
+  the escalation.
 
 Event order within one transition: ``table.state_changed``, then ``table.session_closed`` (if
-the session closes), then ``alert.resolved`` for alerts made moot.
+the session closes), then ``alert.resolved`` for alerts made moot, then ``alert.raised`` for
+``table_freed``.
 """
 
 from __future__ import annotations
@@ -277,6 +282,8 @@ class TableContext:
     site_id: str
     thresholds: Thresholds
     alerts: AlertManager
+    table_freed_alerts: bool = True
+    """``modules.table_freed_alerts``: raise ``table_freed`` on entering ``needs_bussing``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -500,6 +507,11 @@ class TableStateMachine:
         if target is EMPTY:
             self.session = None
             self.pre_bussed = False
+        elif target is NEEDS_BUSSING:
+            self._raised.discard(AlertKind.TABLE_FREED)
+            # raised at once, unless the table was already bussed (it goes empty right away)
+            if self._ctx.table_freed_alerts and not self.pre_bussed:
+                self.raise_once(AlertKind.TABLE_FREED, t, since=since)
 
     @staticmethod
     def _backdate(moment: float | None, floor: float | None, t: float) -> float:
@@ -630,6 +642,7 @@ class TableModule:
         resolve their alerts (``state_change``, emitted on the next call)."""
         self._ctx.site_id = config.site_id
         self._ctx.thresholds = config.thresholds
+        self._ctx.table_freed_alerts = config.modules.table_freed_alerts
         window = config.thresholds.count_window_s
         enabled_cams = {c.camera_id for c in config.cameras if c.enabled}
         ts = self._last_t if self._last_t is not None else 0.0

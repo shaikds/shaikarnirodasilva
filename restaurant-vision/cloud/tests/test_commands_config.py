@@ -218,7 +218,13 @@ def test_starter_plan_gates_pro_modules(api: Api, owner: Account) -> None:
         db.commit()
     site = api.create_site(owner)
     modules = api.client.get(f"/api/v1/sites/{site}", headers=owner.headers).json()["modules"]
-    assert modules == {"occupancy": True, "queue": True, "tables": False, "alerts": False}
+    assert modules == {
+        "occupancy": True,
+        "queue": True,
+        "tables": False,
+        "alerts": False,
+        "table_freed_alerts": True,  # 1.3; inert while alerts are off
+    }
     r = api.client.patch(
         f"/api/v1/sites/{site}", headers=owner.headers, json={"modules": {"tables": True}}
     )

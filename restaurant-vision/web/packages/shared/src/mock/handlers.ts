@@ -188,11 +188,16 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       const patch = (await request.json()) as SiteSettingsPatch;
       if (db.roleForSite(user, siteId) === 'manager') {
         const keys = Object.keys(patch).filter((k) => patch[k as keyof SiteSettingsPatch] != null);
-        if (keys.some((k) => k !== 'thresholds'))
+        const managerKeys = ['thresholds', 'guests_per_waiter', 'weekend_days'];
+        if (keys.some((k) => !managerKeys.includes(k)))
           return detail(403, 'Managers can change thresholds only');
       }
       const err = validThresholds(patch.thresholds);
       if (err) return detail(422, err);
+      if (patch.guests_per_waiter != null && !(patch.guests_per_waiter > 0))
+        return detail(422, 'guests_per_waiter must be > 0');
+      if (patch.weekend_days?.some((d) => !Number.isInteger(d) || d < 1 || d > 7))
+        return detail(422, 'weekend_days must be ISO weekdays 1-7');
       if (patch.avg_check_per_guest != null && patch.avg_check_per_guest < 0)
         return detail(422, 'avg_check_per_guest must be >= 0');
       if (patch.floor_plan) {
@@ -200,13 +205,14 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
         if (patch.floor_plan.some((f) => !ids.has(f.table_id)))
           return detail(422, 'unknown table_id in floor_plan');
       }
-      const { floor_plan, thresholds, modules, ...rest } = patch;
+      const { floor_plan, thresholds, modules, weekend_days, ...rest } = patch;
       return HttpResponse.json(
         db.updateSite(siteId, {
           ...(rest as object),
           ...(floor_plan ? { floor_plan } : {}),
           ...(thresholds ? { thresholds } : {}),
           ...(modules ? { modules } : {}),
+          ...(weekend_days ? { weekend_days: [...new Set(weekend_days)].sort() } : {}),
         }),
       );
     }),
@@ -354,6 +360,12 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
       if (to) alerts = alerts.filter((a) => a.raised_at < Number(to));
       return HttpResponse.json(alerts);
     }),
+    http.get(`${API}/sites/:siteId/host`, ({ request, params }) => {
+      const siteId = String(params.siteId);
+      const user = siteAccess(request, siteId, all);
+      if (user instanceof Response) return user;
+      return HttpResponse.json(db.hostView(siteId));
+    }),
     http.post(`${API}/alerts/:alertId/ack`, ({ request, params }) => {
       const alertId = String(params.alertId);
       const siteId = db.alertSite(alertId);
@@ -398,6 +410,21 @@ export function createHandlers(db: MockDb): (HttpHandler | WebSocketHandler)[] {
           bucket,
           from,
           to,
+          db.now(),
+        ),
+      );
+    }),
+    http.get(`${API}/sites/:siteId/metrics/staffing`, ({ request, params }) => {
+      const siteId = String(params.siteId);
+      const user = siteAccess(request, siteId, staff);
+      if (user instanceof Response) return user;
+      const weeks = num(new URL(request.url), 'weeks', 4);
+      if (!Number.isInteger(weeks) || weeks < 1 || weeks > 52) return detail(422, 'weeks 1-52');
+      const s = db.sites.get(siteId)!;
+      return HttpResponse.json(
+        metrics.staffing(
+          { settings: s.settings, tables: s.config.tables, installedAt: s.installedAt },
+          weeks,
           db.now(),
         ),
       );

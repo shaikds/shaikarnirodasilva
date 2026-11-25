@@ -12,7 +12,16 @@ import {
   type DeviceStatus,
   type LiveSnapshot,
 } from '@rv/shared';
-import { BellRing, Camera, CircleAlert, CircleCheck, CircleOff, Cpu, Hand } from 'lucide-react';
+import {
+  BellRing,
+  Camera,
+  CircleAlert,
+  CircleCheck,
+  CircleOff,
+  Cpu,
+  Hand,
+  Sparkles,
+} from 'lucide-react';
 import { useFmt } from '../lib/useFmt';
 
 export function OccupancyPanel({ live, now }: { live: LiveSnapshot; now: number }) {
@@ -110,17 +119,30 @@ function AlertRow({ alert, siteId, now }: { alert: AlertView; siteId: string; no
   const { t } = useTranslation();
   const f = useFmt();
   const ack = useAckAlert(siteId);
-  const what = `${alertTarget(alert, t)} · ${t(`common:alertKind.${alert.kind}`)}`;
+  const freed = alert.kind === 'table_freed' && alert.table_label !== null;
+  const what = freed
+    ? t('common:tableFreed', { label: alert.table_label })
+    : `${alertTarget(alert, t)} · ${t(`common:alertKind.${alert.kind}`)}`;
   const acked = alert.status === 'acknowledged';
   return (
     <li className="flex items-center gap-3 py-2.5">
       <span
         aria-hidden="true"
         className={
-          acked ? 'text-muted' : alert.severity === 'urgent' ? 'text-danger' : 'text-warning'
+          acked
+            ? 'text-muted'
+            : alert.severity === 'urgent'
+              ? 'text-danger'
+              : freed
+                ? 'text-info'
+                : 'text-warning'
         }
       >
-        <BellRing className="h-5 w-5" />
+        {freed ? (
+          <Sparkles className="h-5 w-5" data-testid="icon-table-freed" />
+        ) : (
+          <BellRing className="h-5 w-5" />
+        )}
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{what}</p>

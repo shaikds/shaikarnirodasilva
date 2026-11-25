@@ -9,6 +9,7 @@ import {
 import { useAuthStore } from '../auth/store';
 import type {
   AlertView,
+  HostView,
   LiveSnapshot,
   LoginRequest,
   SignupRequest,
@@ -248,7 +249,34 @@ export function useAckAlert(siteId: string) {
   });
 }
 
+// ------------------------------------------------------------------ host view (1.3)
+
+/** `GET /sites/{id}/host`, polled every `refetchInterval` (default 30 s); pages invalidate
+ * `queryKeys.host` on live table/queue events for faster updates. */
+export function useHostView(siteId: string | undefined, opts: Opts<HostView> = {}) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.host(siteId ?? ''),
+    queryFn: ({ signal }) => api.getHost(siteId!, signal),
+    enabled: !!siteId,
+    refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
+    ...opts,
+  });
+}
+
 // ------------------------------------------------------------------ metrics and reports
+
+/** `GET /sites/{id}/metrics/staffing?weeks=` (1.3). */
+export function useStaffing(siteId: string | undefined, weeks = 4) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.staffing(siteId ?? '', weeks),
+    queryFn: ({ signal }) => api.getStaffing(siteId!, weeks, signal),
+    enabled: !!siteId,
+    placeholderData: keepPreviousData,
+  });
+}
 
 export function useMetricsSummary(siteId: string | undefined, range: TimeRange) {
   const api = useApi();

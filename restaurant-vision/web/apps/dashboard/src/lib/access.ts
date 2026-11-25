@@ -22,11 +22,12 @@ export function landingFor(access: Access): Landing {
 
 /** Pages and who may open them. Site pages additionally require access to that site. */
 export type PageId =
-  'overview' | 'live' | 'analytics' | 'report' | 'settings' | 'users' | 'compliance';
+  'overview' | 'live' | 'host' | 'analytics' | 'report' | 'settings' | 'users' | 'compliance';
 
 const PAGE_ROLES: Record<PageId, Access['role'][]> = {
   overview: ['owner'],
   live: ['owner', 'manager'],
+  host: ['owner', 'manager'],
   analytics: ['owner', 'manager'],
   report: ['owner', 'manager'],
   settings: ['owner', 'manager'],

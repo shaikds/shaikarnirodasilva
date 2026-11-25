@@ -6,12 +6,15 @@ import type {
   RoiBlock,
   ShiftReport,
   SiteSettings,
+  StaffingDay,
+  StaffingReport,
   Table,
   TableStats,
   Timeseries,
   TimeseriesMetric,
   TimeseriesPoint,
 } from '../contracts';
+import { DEFAULT_GUESTS_PER_WAITER, defaultWeekendDays } from '../contracts';
 import { dayRange, zonedHour, zonedParts } from '../time/zoned';
 import { noise } from './random';
 
@@ -252,5 +255,52 @@ export function shiftReport(m: SiteModel, date: string, now: number): ShiftRepor
     tables: tableStats(m, from, to, now),
     occupancy_by_hour: occ.points,
     roi,
+  };
+}
+
+/** `GET /sites/{id}/metrics/staffing` (1.3) from the synthetic hourly occupancy. */
+export function staffing(m: SiteModel, weeks: number, now: number): StaffingReport {
+  const tz = m.settings.timezone;
+  const perWaiter = m.settings.guests_per_waiter ?? DEFAULT_GUESTS_PER_WAITER;
+  const weekend = m.settings.weekend_days ?? defaultWeekendDays(tz);
+  const from = now - weeks * 7 * 86400;
+  const samples: Record<'weekday' | 'weekend', number[][]> = {
+    weekday: Array.from({ length: 24 }, () => []),
+    weekend: Array.from({ length: 24 }, () => []),
+  };
+  for (const t of hoursIn(from, now, now)) {
+    const p = zonedParts(t * 1000, tz);
+    const iso = new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay() || 7;
+    const occ = hourStats(m, t).occupancy;
+    if (occ <= 0) continue; // closed
+    samples[weekend.includes(iso) ? 'weekend' : 'weekday'][zonedHour(t, tz)]!.push(occ);
+  }
+  const days: StaffingDay[] = (['weekday', 'weekend'] as const).map((dayType) => ({
+    day_type: dayType,
+    hours: samples[dayType].map((xs, hour) => {
+      const sorted = [...xs].sort((a, b) => a - b);
+      const p75 = percentile(sorted, 0.75);
+      const peak = sorted.length ? sorted[sorted.length - 1]! * 1.15 : null;
+      return {
+        hour,
+        days: xs.length,
+        avg_guests: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null,
+        p75_guests: p75,
+        peak_guests: peak,
+        recommended_waiters:
+          p75 === null || !peak ? 0 : Math.max(1, Math.ceil(+(p75 / perWaiter).toFixed(9))),
+      };
+    }),
+  }));
+  return {
+    site_id: m.settings.site_id,
+    timezone: tz,
+    from_ts: from,
+    to_ts: now,
+    weeks,
+    guests_per_waiter: perWaiter,
+    weekend_days: weekend,
+    is_estimate: true,
+    days,
   };
 }

@@ -8,7 +8,7 @@ import {
   useTranslation,
   type AlertView,
 } from '@rv/shared';
-import { BellRing, Hand, Users } from 'lucide-react';
+import { BellRing, Hand, Sparkles, Users } from 'lucide-react';
 import { alertTitle } from '../lib/alertText';
 
 export function AlertCard({
@@ -38,6 +38,7 @@ export function AlertCard({
   const waitingLabel = t(`common:alertWaiting.${alert.kind}`);
   const taken = alert.status === 'acknowledged';
   const urgent = alert.severity === 'urgent';
+  const freed = alert.kind === 'table_freed';
   return (
     <article
       aria-label={`${title}, ${kind}, ${t('alerts.waitingAria', { label: waitingLabel, duration: f.duration(age) })}`}
@@ -48,16 +49,23 @@ export function AlertCard({
           ? 'border-border opacity-80'
           : urgent
             ? 'border-s-8 border-danger border-s-danger'
-            : 'border-s-8 border-warning/60 border-s-warning',
+            : freed
+              ? 'border-s-8 border-info/60 border-s-info'
+              : 'border-s-8 border-warning/60 border-s-warning',
       )}
     >
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
-          className={cn('mt-1', taken ? 'text-muted' : urgent ? 'text-danger' : 'text-warning')}
+          className={cn(
+            'mt-1',
+            taken ? 'text-muted' : urgent ? 'text-danger' : freed ? 'text-info' : 'text-warning',
+          )}
         >
           {alert.kind === 'long_queue' ? (
             <Users className="h-7 w-7" />
+          ) : freed ? (
+            <Sparkles className="h-7 w-7" data-testid="icon-table-freed" />
           ) : (
             <BellRing className="h-7 w-7" />
           )}

@@ -23,7 +23,8 @@ Semantics where architecture 5.3/6.2 leave room (the edge analytics implements t
   ``table.state_changed`` ``needs_bussing -> empty`` with the same ``session_id``
   (``ts - left_at``). The field is kept for producers that close sessions after bussing.
 * ``first_visit_delay_s`` = first staff visit time minus ``seated_at`` (None: no visit).
-* Alerts: ``waiter_needed``, ``checkin_needed`` and ``bussing_needed`` require ``table_id``;
+* Alerts: ``waiter_needed``, ``checkin_needed``, ``bussing_needed`` and ``table_freed`` (1.3)
+  require ``table_id``;
   ``long_queue`` requires ``zone_id`` (the queue zone). The edge ``AlertManager`` is the source
   of truth. A cloud ack (waiter app) becomes an ``alert_ack`` command; the edge applies it and
   emits ``alert.acknowledged`` with ``via="cloud"`` and the cloud's ``ack_at``. A LAN ack emits
@@ -110,10 +111,18 @@ class AlertKind(StrEnum):
     """``needs_bussing`` for ``bussing_timeout_s``."""
     LONG_QUEUE = "long_queue"
     """Queue people or longest wait over the ``long_queue_*`` thresholds."""
+    TABLE_FREED = "table_freed"
+    """Guests just left: the table entered ``needs_bussing`` and needs cleaning (info, raised
+    immediately; ``bussing_needed`` is the later escalation). Since 1.3."""
 
 
 TABLE_ALERT_KINDS: Final = frozenset(
-    {AlertKind.WAITER_NEEDED, AlertKind.CHECKIN_NEEDED, AlertKind.BUSSING_NEEDED}
+    {
+        AlertKind.WAITER_NEEDED,
+        AlertKind.CHECKIN_NEEDED,
+        AlertKind.BUSSING_NEEDED,
+        AlertKind.TABLE_FREED,
+    }
 )
 """Alert kinds that concern one table (``table_id`` required)."""
 

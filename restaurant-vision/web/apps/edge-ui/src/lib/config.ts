@@ -35,7 +35,7 @@ export function emptyConfig(siteId: string | null | undefined, locale: Locale): 
     tables: [],
     zones: [],
     thresholds: { ...DEFAULT_THRESHOLDS },
-    modules: { occupancy: true, queue: true, tables: true, alerts: true },
+    modules: { occupancy: true, queue: true, tables: true, alerts: true, table_freed_alerts: true },
     config_version: 0,
   };
 }

@@ -238,7 +238,13 @@ def test_site_creation_and_settings(api: Api, owner: Account) -> None:
     settings = api.client.get(f"/api/v1/sites/{site_id}", headers=owner.headers).json()
     assert settings["timezone"] == "Australia/Sydney"
     assert settings["currency"] == "AUD"
-    assert settings["modules"] == {"occupancy": True, "queue": True, "tables": True, "alerts": True}
+    assert settings["modules"] == {
+        "occupancy": True,
+        "queue": True,
+        "tables": True,
+        "alerts": True,
+        "table_freed_alerts": True,  # 1.3
+    }
     assert settings["floor_plan"] == []
     org = api.client.get(f"/api/v1/orgs/{owner.org_id}", headers=owner.headers).json()
     assert org == {"org_id": owner.org_id, "name": "Org A", "plan": "pro"}

@@ -166,6 +166,17 @@ export function createLocalApi(options: LocalApiOptions) {
       setup<void>(`/local/cameras/${enc(cameraId)}`, { method: 'DELETE' }),
     discoverCameras: () => setup<DiscoveryOut>('/local/cameras/discover', { method: 'POST' }),
     snapshot,
+    /**
+     * URL of the live view (1.3, `multipart/x-mixed-replace` MJPEG at ~2 fps) for an `<img>`.
+     * An `<img>` cannot send `X-Setup-Pin`, so the PIN goes in the query; the edge never logs
+     * it. Frames are encoded in memory on the edge and the response is `no-store`.
+     */
+    liveUrl: (cameraId: string, pin: string) => {
+      const url = new URL(client.url(`/local/cameras/${enc(cameraId)}/live.mjpeg`));
+      url.searchParams.set('pin', pin);
+      url.searchParams.set('t', String(Date.now()));
+      return url.toString();
+    },
     getConfig: (signal?: AbortSignal) => setup<SiteConfig>('/local/config', { signal }),
     putConfig: (config: SiteConfig) =>
       setup<SiteConfig>('/local/config', { method: 'PUT', body: config }),

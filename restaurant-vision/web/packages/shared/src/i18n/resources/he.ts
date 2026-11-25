@@ -61,6 +61,7 @@ export const commonHe = {
     checkin_needed: 'נדרש ביקור חוזר',
     bussing_needed: 'נדרש פינוי',
     long_queue: 'תור ארוך בכניסה',
+    table_freed: 'שולחן התפנה – לנקות',
   },
   /** כמה זמן האורחים ממתינים, מרגע שהמצב התחיל. */
   alertWaiting: {
@@ -68,6 +69,35 @@ export const commonHe = {
     checkin_needed: 'האורחים ממתינים',
     bussing_needed: 'ממתין לפינוי',
     long_queue: 'אורחים ממתינים',
+    table_freed: 'פנוי מזה',
+  },
+  /** כותרת התראת `table_freed` (1.3). */
+  tableFreed: 'שולחן {{label}} התפנה – לנקות',
+  confidence: {
+    low: 'ודאות נמוכה',
+    medium: 'ודאות בינונית',
+    high: 'ודאות גבוהה',
+  },
+  /** תצוגת מארחת (1.3): איזה שולחן יתפנה בקרוב. */
+  host: {
+    title: 'מארחת',
+    nextFree: 'השולחן הבא שיתפנה',
+    nextFreeIn: '{{table}} בעוד כ-{{minutes}} דק׳',
+    nextFreeSoon: '{{table}} בכל רגע',
+    nextFreeCleaning: '{{table}} – אחרי ניקוי',
+    allFree: 'אין שולחנות תפוסים',
+    freeNow: 'פנויים כרגע: {{count}}',
+    queue: 'ממתינים בכניסה',
+    queueValue: '{{people}} אנשים · כ-{{parties}} חבורות',
+    longestWait: 'ההמתנה הארוכה {{duration}}',
+    tables: 'שולחנות',
+    free: 'פנוי',
+    needsCleaning: 'לניקוי',
+    expectedIn: 'יתפנה בעוד כ-{{minutes}} דק׳',
+    expectedSoon: 'יתפנה בכל רגע',
+    seatedFor: 'יושבים {{duration}}',
+    sittingLongest: 'יושבים הכי הרבה זמן',
+    prediction: 'תחזית לפי זמן הישיבה הרגיל בסניף; הערכה בלבד.',
   },
   alertSince: 'מאז {{time}}',
   severity: {

@@ -3,6 +3,9 @@
 // acknowledged (anonymously) and resolved, the entrance queue growing and shrinking, and
 // edge heartbeats. Used by the MSW handlers in the browser (VITE_MOCK=1) and in tests.
 import type {
+  Confidence,
+  HostTable,
+  HostView,
   AlertKind,
   AlertSeverity,
   AlertView,
@@ -22,7 +25,12 @@ import type {
   TableState,
   TokenPair,
 } from '../contracts';
-import { CONTRACT_SCHEMA_VERSION, DEVICE_OFFLINE_AFTER_S } from '../contracts';
+import {
+  CONTRACT_SCHEMA_VERSION,
+  DEFAULT_GUESTS_PER_WAITER,
+  DEVICE_OFFLINE_AFTER_S,
+  defaultWeekendDays,
+} from '../contracts';
 import { pick, randInt, shortId, uuidv7 } from './random';
 import { SEED_DEVICES, SEED_ORG, SEED_USERS, seedSites, type MockUser } from './seed';
 
@@ -384,6 +392,61 @@ export class MockDb {
     });
   }
 
+  /** `GET /sites/{id}/host` (1.3) with a synthetic dwell history: median 55 / 70 / 90 min
+   * for parties of 1-2 / 3-4 / 5+ (high confidence), overdue tables now + 5 min (medium). */
+  hostView(siteId: string): HostView | null {
+    const site = this.sites.get(siteId);
+    if (!site) return null;
+    const now = this.now();
+    const lower: Record<Confidence, Confidence> = { high: 'medium', medium: 'low', low: 'low' };
+    const free: HostTable[] = [];
+    const bussing: HostTable[] = [];
+    const occupied: HostTable[] = [];
+    for (const t of site.tables.values()) {
+      const { state, guest_count } = t.live;
+      const seated = state === 'seated' || state === 'attended';
+      const seatedSince = seated ? (t.seatedAt ?? t.live.since_ts) : null;
+      let expected: number | null = null;
+      let confidence: Confidence = 'high';
+      if (seatedSince !== null) {
+        const dwell = (guest_count <= 2 ? 55 : guest_count <= 4 ? 70 : 90) * 60;
+        expected = seatedSince + dwell;
+        if (expected <= now) {
+          expected = now + 300;
+          confidence = lower[confidence];
+        }
+      }
+      const item: HostTable = {
+        table_id: t.live.table_id,
+        label: t.live.label,
+        seats: t.live.seats,
+        state,
+        guest_count,
+        seated_since: seatedSince,
+        expected_free_at: expected,
+        confidence,
+      };
+      (state === 'empty' ? free : state === 'needs_bussing' ? bussing : occupied).push(item);
+    }
+    const since = (x: HostTable) => site.tables.get(x.table_id)?.live.since_ts ?? now;
+    bussing.sort((a, b) => since(a) - since(b));
+    occupied.sort((a, b) => (a.expected_free_at ?? 0) - (b.expected_free_at ?? 0));
+    const waiting = [...bussing, ...occupied];
+    const q = site.queue;
+    return {
+      site_id: siteId,
+      ts: now,
+      queue: {
+        people: q?.people ?? 0,
+        parties_est: q?.parties_est ?? 0,
+        longest_wait_s: q?.longest_wait_s ?? 0,
+      },
+      free_tables: free.length,
+      next_free: waiting[0] ?? null,
+      tables: [...free, ...waiting],
+    };
+  }
+
   summary(siteId: string): SiteSummary | null {
     const site = this.sites.get(siteId);
     if (!site) return null;
@@ -481,6 +544,14 @@ export class MockDb {
     if (!site) throw new Error(`unknown site ${siteId}`);
     const table = tableId ? (site.tables.get(tableId) ?? null) : null;
     return { ...this.createAlert(site, kind, severity, table, this.now(), true) };
+  }
+
+  /** Test/demo helper: move a table to `state` now (emits the events like the simulation). */
+  setTableState(siteId: string, tableId: string, state: TableState, guests = 0): void {
+    const site = this.sites.get(siteId);
+    const table = site?.tables.get(tableId);
+    if (!site || !table) throw new Error(`unknown table ${siteId}/${tableId}`);
+    this.setState(site, table, state, guests);
   }
 
   /** `POST /alerts/{id}/ack`: anonymous, records time and channel only. */
@@ -684,6 +755,10 @@ export class MockDb {
           if (r() < 0.012) {
             this.resolveAlerts(site, t, 'state_change');
             this.setState(site, t, 'needs_bussing', 0);
+            // contracts 1.3: "table freed, needs cleaning", raised at once
+            if (alertsOn && site.settings.modules.table_freed_alerts !== false) {
+              this.createAlert(site, 'table_freed', 'info', t, now, true);
+            }
           } else if (
             alertsOn &&
             age > 40 &&
@@ -841,8 +916,16 @@ export class MockDb {
       org_id: orgId,
       ...input,
       thresholds: seedSites()[0]!.settings.thresholds,
-      modules: { occupancy: true, queue: true, tables: true, alerts: true },
+      modules: {
+        occupancy: true,
+        queue: true,
+        tables: true,
+        alerts: true,
+        table_freed_alerts: true,
+      },
       floor_plan: [],
+      guests_per_waiter: DEFAULT_GUESTS_PER_WAITER,
+      weekend_days: defaultWeekendDays(input.timezone),
     };
     const config: SiteConfig = {
       schema_version: CONTRACT_SCHEMA_VERSION,

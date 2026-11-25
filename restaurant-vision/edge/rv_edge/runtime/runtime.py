@@ -81,7 +81,7 @@ from .outbox import Outbox
 from .pairing import pair as pair_device
 from .secrets_store import SecretsStore, redact_text
 from .settings import EdgeSettings
-from .snapshot import compose_snapshot, encode_jpeg
+from .snapshot import compose_live_frame, compose_snapshot, encode_jpeg, table_overlays
 from .sync import CloudSync
 
 log = logging.getLogger(__name__)
@@ -704,6 +704,24 @@ class EdgeRuntime:
         masks = config.privacy_masks_for(camera_id) if config is not None else []
         label = "simulated camera" if cap.kind == "simulated" else "preview unavailable"
         image = compose_snapshot(cap.frame, cap.boxes, masks, placeholder_label=label)
+        return encode_jpeg(image)
+
+    def live_frame_jpeg(self, camera_id: str) -> bytes:
+        """One live-view JPEG (1.3): the snapshot with the table zones coloured by live
+        state, label and timer. Encoded in memory; never stored."""
+        cap = self.capture(camera_id)
+        config = self.config
+        masks = config.privacy_masks_for(camera_id) if config is not None else []
+        overlays = table_overlays(config, camera_id, self.live_state().tables)
+        label = "simulated camera" if cap.kind == "simulated" else "preview unavailable"
+        image = compose_live_frame(
+            cap.frame,
+            cap.boxes,
+            masks,
+            overlays,
+            now=_finite(self.clock.now()),
+            placeholder_label=label,
+        )
         return encode_jpeg(image)
 
     def calibrate_uniform(self, camera_id: str, box: Box) -> tuple[float, float, float]:

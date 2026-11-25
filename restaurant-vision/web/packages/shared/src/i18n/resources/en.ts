@@ -60,6 +60,7 @@ export const commonEn = {
     checkin_needed: 'Check-in needed',
     bussing_needed: 'Bussing needed',
     long_queue: 'Long queue at the entrance',
+    table_freed: 'Table freed – needs cleaning',
   },
   /** How long the guests have been waiting, measured from when the condition began. */
   alertWaiting: {
@@ -67,8 +68,37 @@ export const commonEn = {
     checkin_needed: 'Guests waiting',
     bussing_needed: 'Waiting to be cleared',
     long_queue: 'Guests waiting',
+    table_freed: 'Free for',
   },
   /** "since 19:42": when the guests sat down / the condition began. */
+  /** Headline of a `table_freed` alert (1.3). */
+  tableFreed: 'Table {{label}} freed – needs cleaning',
+  confidence: {
+    low: 'Low confidence',
+    medium: 'Medium confidence',
+    high: 'High confidence',
+  },
+  /** Host view (1.3): which table frees up next. */
+  host: {
+    title: 'Host',
+    nextFree: 'Next free table',
+    nextFreeIn: '{{table}} in ~{{minutes}} min',
+    nextFreeSoon: '{{table}} any minute now',
+    nextFreeCleaning: '{{table}} – once it is cleaned',
+    allFree: 'No table is taken',
+    freeNow: 'Free now: {{count}}',
+    queue: 'Waiting at the door',
+    queueValue: '{{people}} people · ~{{parties}} parties',
+    longestWait: 'longest wait {{duration}}',
+    tables: 'Tables',
+    free: 'Free',
+    needsCleaning: 'Needs cleaning',
+    expectedIn: 'Free in ~{{minutes}} min',
+    expectedSoon: 'Free any minute',
+    seatedFor: 'seated {{duration}}',
+    sittingLongest: 'Sitting longest',
+    prediction: "Predicted from this branch's usual dwell time; an estimate.",
+  },
   alertSince: 'since {{time}}',
   severity: {
     info: 'Info',

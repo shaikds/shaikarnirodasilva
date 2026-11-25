@@ -21,6 +21,11 @@ export const waiterHe = {
     hint: 'תקבלו התראות רק מהסניף הזה.',
     none: 'לחשבון שלך עדיין אין סניף. בקשו מהמנהל להוסיף אתכם.',
   },
+  tabs: {
+    label: 'מסכים',
+    alerts: 'התראות',
+    host: 'מארחת',
+  },
   header: {
     settings: 'הגדרות',
     soundOn: 'צליל מופעל',

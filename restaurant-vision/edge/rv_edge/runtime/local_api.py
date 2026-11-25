@@ -18,6 +18,13 @@ automatic table suggestions (``POST /local/cameras/{id}/suggest-tables``, polygo
 config, coverage, uniform calibration and pairing. The custom header also blocks cross-site
 requests (it forces a CORS preflight, which this app never allows).
 
+Live view (1.3, PIN as ``X-Setup-Pin`` or ``?pin=`` because an ``<img>`` cannot send headers;
+the PIN is never logged, and uvicorn's access log is off):
+``GET /local/cameras/{id}/live.mjpeg`` streams ``multipart/x-mixed-replace`` JPEGs at about
+:data:`LIVE_FPS` fps (``?frames=N`` stops after N frames), encoded in memory only, people
+blurred, privacy masks black, table zones coloured by live state. A cross-site page that knew
+the PIN could only display the stream, never read it (no CORS).
+
 The built edge-ui is served at ``/`` (SPA fallback, e.g. ``/local-alerts``) when
 ``settings.edge_ui_dir`` exists.
 """
@@ -29,7 +36,7 @@ import importlib
 import logging
 import math
 import threading
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
@@ -39,6 +46,7 @@ from fastapi import (
     FastAPI,
     Header,
     HTTPException,
+    Query,
     Request,
     Response,
     WebSocket,
@@ -47,7 +55,7 @@ from fastapi import (
 from fastapi import Path as PathParam
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from rv_contracts import (
     ID_PATTERN,
@@ -83,6 +91,10 @@ log = logging.getLogger(__name__)
 
 STATE_MESSAGE_TYPE = LIVE_SNAPSHOT_MESSAGE_TYPE
 NO_STORE = {"Cache-Control": "no-store, max-age=0", "Pragma": "no-cache"}
+
+LIVE_FPS = 2.0
+"""Frames per second of the live view."""
+MJPEG_BOUNDARY = "rvframe"
 
 
 # ----------------------------------------------------------------------------- local models
@@ -294,6 +306,17 @@ def create_local_app(
         request: Request,
         x_setup_pin: Annotated[str | None, Header(alias="X-Setup-Pin")] = None,
     ) -> None:
+        check_pin(request, x_setup_pin)
+
+    def require_pin_header_or_query(
+        request: Request,
+        x_setup_pin: Annotated[str | None, Header(alias="X-Setup-Pin")] = None,
+        pin: Annotated[str | None, Query(max_length=PIN_MAX_LEN)] = None,
+    ) -> None:
+        """For ``<img src>`` (no custom headers): the PIN may come as ``?pin=``."""
+        check_pin(request, x_setup_pin or pin)
+
+    def check_pin(request: Request, x_setup_pin: str | None) -> None:
         client = request.client.host if request.client else "unknown"
         # Reserve the attempt before the (slow) hash, so concurrent guesses cannot all be
         # evaluated before the first failure is recorded.
@@ -515,6 +538,54 @@ def create_local_app(
             log.warning("snapshot of camera %s failed: %s", camera_id, exc)
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "snapshot failed") from exc
         return Response(content=jpeg, media_type="image/jpeg", headers=NO_STORE)
+
+    @app.get(
+        "/local/cameras/{camera_id}/live.mjpeg",
+        response_class=StreamingResponse,
+        dependencies=[Depends(require_pin_header_or_query)],
+    )
+    async def camera_live(
+        camera_id: Annotated[str, PathParam(pattern=ID_PATTERN)],
+        request: Request,
+        frames: Annotated[int | None, Query(ge=1, le=100_000)] = None,
+    ) -> StreamingResponse:
+        """Live view: MJPEG at ~``LIVE_FPS`` (see the module docstring)."""
+        try:
+            first = await run_in_threadpool(runtime.live_frame_jpeg, camera_id)
+        except KeyError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown camera") from exc
+        except Exception as exc:
+            log.warning("live view of camera %s failed: %s", camera_id, exc)
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "live view failed") from exc
+
+        def part(jpeg: bytes) -> bytes:
+            head = (
+                f"--{MJPEG_BOUNDARY}\r\nContent-Type: image/jpeg\r\n"
+                f"Content-Length: {len(jpeg)}\r\n\r\n"
+            )
+            return head.encode("ascii") + jpeg + b"\r\n"
+
+        async def stream() -> AsyncIterator[bytes]:
+            yield part(first)
+            sent = 1
+            period = 1.0 / LIVE_FPS
+            while frames is None or sent < frames:
+                await asyncio.sleep(period)
+                if await request.is_disconnected():
+                    return
+                try:
+                    jpeg = await run_in_threadpool(runtime.live_frame_jpeg, camera_id)
+                except Exception as exc:  # camera removed or failing: end the stream
+                    log.warning("live view of camera %s stopped: %s", camera_id, exc)
+                    return
+                yield part(jpeg)
+                sent += 1
+
+        return StreamingResponse(
+            stream(),
+            media_type=f"multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}",
+            headers=NO_STORE,
+        )
 
     def suggest_detector() -> MultiClassDetector:
         if table_detector is not None:

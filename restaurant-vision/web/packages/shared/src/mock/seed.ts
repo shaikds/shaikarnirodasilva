@@ -10,7 +10,7 @@ import type {
   Table,
   Zone,
 } from '../contracts';
-import { DEFAULT_THRESHOLDS } from '../contracts';
+import { DEFAULT_GUESTS_PER_WAITER, DEFAULT_THRESHOLDS, defaultWeekendDays } from '../contracts';
 import { DEMO_PASSWORD } from './demo';
 
 export interface MockUser {
@@ -90,7 +90,10 @@ interface TableSpec {
 }
 
 function buildSite(
-  site: Omit<SiteSettings, 'floor_plan' | 'thresholds' | 'modules'> & { modules?: Modules },
+  site: Omit<
+    SiteSettings,
+    'floor_plan' | 'thresholds' | 'modules' | 'guests_per_waiter' | 'weekend_days'
+  > & { modules?: Modules },
   specs: TableSpec[],
   cameras: { id: string; name: string }[],
 ): { settings: SiteSettings; config: SiteConfig } {
@@ -178,9 +181,22 @@ function buildSite(
       primary: false,
     },
   );
-  const modules = site.modules ?? { occupancy: true, queue: true, tables: true, alerts: true };
+  const modules: Modules = site.modules ?? {
+    occupancy: true,
+    queue: true,
+    tables: true,
+    alerts: true,
+    table_freed_alerts: true,
+  };
   const thresholds = { ...DEFAULT_THRESHOLDS };
-  const settings: SiteSettings = { ...site, modules, thresholds, floor_plan };
+  const settings: SiteSettings = {
+    ...site,
+    modules,
+    thresholds,
+    floor_plan,
+    guests_per_waiter: DEFAULT_GUESTS_PER_WAITER,
+    weekend_days: defaultWeekendDays(site.timezone),
+  };
   const config: SiteConfig = {
     schema_version: '1.0',
     site_id: site.site_id,

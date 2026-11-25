@@ -62,6 +62,9 @@ export {
 } from './live/socket';
 export { useReachability, reportReachability } from './live/reachability';
 
+// host view (1.3)
+export { hostTableStatus, longestSittingId, minutesUntil, nextFreeText } from './lib/host';
+
 // i18n
 export {
   i18n,

@@ -184,6 +184,9 @@ class Modules(ContractModel):
     queue: bool = True
     tables: bool = True
     alerts: bool = True
+    table_freed_alerts: bool = True
+    """Raise ``table_freed`` (info) the moment a table enters ``needs_bussing``, before the
+    ``bussing_needed`` escalation. Needs ``alerts`` and ``tables``. Since 1.3."""
 
 
 class SiteConfig(ContractModel):

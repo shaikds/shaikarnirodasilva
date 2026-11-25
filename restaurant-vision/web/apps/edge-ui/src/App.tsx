@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { LocalApiProvider } from './api/LocalApiProvider';
 import { EdgeLayout } from './components/EdgeLayout';
 import { HomePage } from './pages/HomePage';
+import { LiveViewPage } from './pages/LiveViewPage';
 import { LocalAlertsPage } from './pages/LocalAlertsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SetupIndex, SetupLayout, SetupStepRoute } from './pages/setup/SetupLayout';
@@ -17,6 +18,7 @@ export function AppRoutes() {
       <Route path="local-alerts" element={<LocalAlertsPage />} />
       <Route element={<EdgeLayout />}>
         <Route index element={<HomePage />} />
+        <Route path="live" element={<LiveViewPage />} />
         <Route
           path="setup"
           element={

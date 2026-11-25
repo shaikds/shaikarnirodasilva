@@ -43,6 +43,7 @@ SEVERITY: Mapping[AlertKind, AlertSeverity] = {
     AlertKind.CHECKIN_NEEDED: AlertSeverity.WARN,
     AlertKind.BUSSING_NEEDED: AlertSeverity.INFO,
     AlertKind.LONG_QUEUE: AlertSeverity.WARN,
+    AlertKind.TABLE_FREED: AlertSeverity.INFO,
 }
 """Severity of each alert kind."""
 

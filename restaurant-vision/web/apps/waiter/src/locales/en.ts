@@ -22,6 +22,11 @@ export const waiterEn = {
     hint: 'You will get alerts for this branch only.',
     none: 'Your account has no branch yet. Ask the manager to add you.',
   },
+  tabs: {
+    label: 'Screens',
+    alerts: 'Alerts',
+    host: 'Host',
+  },
   header: {
     settings: 'Settings',
     soundOn: 'Sound on',

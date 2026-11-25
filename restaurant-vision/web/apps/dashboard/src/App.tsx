@@ -4,6 +4,7 @@ import { HomeRoute, PublicOnly, RequireAuth, RequirePage, SiteScope } from './co
 import { Layout } from './components/Layout';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { CompliancePage } from './pages/CompliancePage';
+import { HostPage } from './pages/HostPage';
 import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -43,6 +44,14 @@ export function AppRoutes() {
               element={
                 <RequirePage page="live">
                   <SiteLivePage />
+                </RequirePage>
+              }
+            />
+            <Route
+              path="host"
+              element={
+                <RequirePage page="host">
+                  <HostPage />
                 </RequirePage>
               }
             />

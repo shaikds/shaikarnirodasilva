@@ -39,7 +39,7 @@ export function sampleConfig(overrides: Partial<SiteConfig> = {}): SiteConfig {
       },
     ],
     thresholds: { ...DEFAULT_THRESHOLDS, seat_confirm_s: 12 },
-    modules: { occupancy: true, queue: false, tables: true, alerts: true },
+    modules: { occupancy: true, queue: false, tables: true, alerts: true, table_freed_alerts: true },
     config_version: 3,
     ...overrides,
   };

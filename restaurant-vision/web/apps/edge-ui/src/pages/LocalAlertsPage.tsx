@@ -21,7 +21,7 @@ import {
   type LiveSnapshot,
 } from '@rv/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BellRing, CircleCheck, Hand, Users, Volume2, Wifi } from 'lucide-react';
+import { BellRing, CircleCheck, Hand, Sparkles, Users, Volume2, Wifi } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocalApi } from '../api/context';
 import { Logo } from '../components/Logo';
@@ -264,7 +264,13 @@ function AlertCard({
     >
       <div className="flex items-start gap-3">
         <span aria-hidden="true" className={cn('mt-1', taken ? 'text-muted' : urgent ? 'text-danger' : 'text-warning')}>
-          {alert.kind === 'long_queue' ? <Users className="h-7 w-7" /> : <BellRing className="h-7 w-7" />}
+          {alert.kind === 'long_queue' ? (
+            <Users className="h-7 w-7" />
+          ) : alert.kind === 'table_freed' ? (
+            <Sparkles className="h-7 w-7" data-testid="icon-table-freed" />
+          ) : (
+            <BellRing className="h-7 w-7" />
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-2xl font-bold leading-tight" dir="auto">
