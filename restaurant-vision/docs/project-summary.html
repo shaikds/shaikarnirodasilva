@@ -70,7 +70,7 @@ footer{margin-top:40px;font-size:.8rem;color:var(--muted)}
 <header>
   <button class="theme-btn" id="themeBtn" type="button">מצב תצוגה</button>
   <h1>Restaurant Vision: סיכום פרויקט</h1>
-  <p class="muted">ניתוח וידאו אנונימי למסעדות על המצלמות הקיימות · ברנץ' <code>claude/eloquent-cori-x318b0</code> · תיקייה <code>restaurant-vision/</code> · עודכן: <span id="updated">9 בנובמבר 2026 (גרסה סופית של שלב ה־MVP)</span></p>
+  <p class="muted">ניתוח וידאו אנונימי למסעדות על המצלמות הקיימות · ברנץ' <code>claude/eloquent-cori-x318b0</code> · תיקייה <code>restaurant-vision/</code> · עודכן: <span id="updated">25 בנובמבר 2026 (כולל 4 הפיצ'רים מסרטון המתחרה)</span></p>
   <nav class="toc">
     <a href="#tldr">בשורה התחתונה</a><a href="#built">מה נבנה</a><a href="#arch">ארכיטקטורה</a>
     <a href="#yours">ההחלטות שלך</a><a href="#mine">החלטות שאני קיבלתי</a><a href="#guesses">ניחושים והנחות</a>
@@ -81,13 +81,13 @@ footer{margin-top:40px;font-size:.8rem;color:var(--muted)}
 
 <section id="tldr" class="card tldr">
   <h2 style="margin-top:0;border:0">בשורה התחתונה</h2>
-  <p><b>ה־MVP הושלם ועובד מקצה לקצה:</b> מצלמה, ניתוח במסעדה, ענן, דשבורד, התראה בטלפון של המלצר, ואישור "בטיפול" שחוזר למסעדה תוך פחות משנייה. הוא נבדק בדפדפן מול מסעדה מדומה, בעברית ובאנגלית, במחשב ובטלפון, בלי שגיאות.</p><p><b>כל הבדיקות עוברות:</b> 754 בדיקות Python ו־207 בדיקות ווב, בלי שגיאות lint ובדיקת טיפוסים. כל 9 הבעיות שסקירת האבטחה מצאה תוקנו, ולכל אחת יש בדיקה קבועה.</p><p><b>הצעד הבא הוא פיילוט במסעדה אמיתית.</b> כל הדיוק נמדד עד עכשיו בסימולטור, והסיכון הגדול הוא אם המצלמות הקיימות באמת רואות את השולחנות.</p>
+  <p><b>ה־MVP הושלם ועובד מקצה לקצה:</b> מצלמה, ניתוח במסעדה, ענן, דשבורד, התראה בטלפון של המלצר, ואישור "בטיפול" שחוזר למסעדה תוך פחות משנייה. הוא נבדק בדפדפן מול מסעדה מדומה, בעברית ובאנגלית, במחשב ובטלפון, בלי שגיאות.</p><p><b>כל הבדיקות עוברות:</b> 754 בדיקות Python ו־207 בדיקות ווב, בלי שגיאות lint ובדיקת טיפוסים. כל 9 הבעיות שסקירת האבטחה מצאה תוקנו, ולכל אחת יש בדיקה קבועה.</p><p><b>הצעד הבא הוא פיילוט במסעדה אמיתית.</b> כל הדיוק נמדד עד עכשיו בסימולטור, והסיכון הגדול הוא אם המצלמות הקיימות באמת רואות את השולחנות.</p><p><b>נוסף בעקבות סרטון המתחרה:</b> התראה מיידית "שולחן התפנה", מסך מארחת עם השולחן הבא שיתפנה, המלצה כמה מלצרים צריך בכל שעה, ווידאו חי עם צבעי שולחנות (מטושטש, רק ברשת המסעדה). הכל תוספות, ושום יכולת קיימת לא השתנתה.</p>
 </section>
 
 <section id="built">
   <h2>מה נבנה</h2>
   <div class="grid">
-    <div class="stat"><b>754</b><span>בדיקות Python (חוזים, מנוע, ענן, סימולטור, e2e)</span></div><div class="stat"><b>207</b><span>בדיקות ווב (4 אפליקציות)</span></div><div class="stat"><b>100%</b><span>זיהוי ישיבות בסימולציה</span></div><div class="stat"><b>0.15 שנ׳</b><span>אישור "בטיפול" עד לדשבורד</span></div><div class="stat"><b>~6</b><span>מצלמות למחשב עם 4 ליבות (YOLOX-tiny)</span></div><div class="stat"><b>9/9</b><span>ממצאי אבטחה שתוקנו</span></div>
+    <div class="stat"><b>806</b><span>בדיקות Python (חוזים, מנוע, ענן, סימולטור, e2e)</span></div><div class="stat"><b>218</b><span>בדיקות ווב (4 אפליקציות)</span></div><div class="stat"><b>100%</b><span>זיהוי ישיבות בסימולציה</span></div><div class="stat"><b>0.15 שנ׳</b><span>אישור "בטיפול" עד לדשבורד</span></div><div class="stat"><b>~6</b><span>מצלמות למחשב עם 4 ליבות (YOLOX-tiny)</span></div><div class="stat"><b>9/9</b><span>ממצאי אבטחה שתוקנו</span></div>
   </div>
   <div class="card tbl">
   <table>
@@ -101,7 +101,7 @@ footer{margin-top:40px;font-size:.8rem;color:var(--muted)}
     <tr><td><b>דשבורד</b> <code>web/apps/dashboard</code></td><td>מפה חיה, ניתוחים, דוח משמרת ו־ROI, הגדרות, משתמשים ומכשירים. עברית ואנגלית.</td><td><span class="tag t-ok">הושלם</span></td></tr>
     <tr><td><b>אפליקציית מלצרים</b> <code>web/apps/waiter</code></td><td>PWA להתקנה בטלפון: התראות, כפתור "בטיפול", צליל ורטט, ומעבר אוטומטי למצב בלי אינטרנט.</td><td><span class="tag t-ok">הושלם</span></td></tr>
     <tr><td><b>אשף הקמה</b> <code>web/apps/edge-ui</code></td><td>רץ במסעדה. בו מגדירים PIN ומחברים לענן, מוסיפים מצלמות ושולחנות, מסמנים אזורים, מזהים שולחנות אוטומטית, בודקים כיסוי, ויש גם דף התראות למצב בלי אינטרנט.</td><td><span class="tag t-ok">הושלם</span></td></tr>
-    <tr><td><b>פריסה ומסמכים</b> <code>deploy/</code>, <code>docs/</code></td><td>Docker, דמו בפקודה אחת, התקנה ל־Linux ול־Windows, CI, 13 מסמכי ציות בעברית ובאנגלית, ומדריכים.</td><td><span class="tag t-warn">ההתקנה ל־Windows לא נוסתה</span></td></tr>
+    <tr><td><b>פיצ'רים מסרטון המתחרה</b></td><td>התראה מיידית "שולחן התפנה – לנקות"; מסך מארחת עם "השולחן הבא שיתפנה בעוד כ־X דק׳"; המלצה כמה מלצרים צריך בכל שעה (בהפרדה בין סוף שבוע לאמצע שבוע); וידאו חי עם צבעי שולחנות, אנשים מטושטשים, רק ברשת המסעדה ועם PIN.</td><td><span class="tag t-ok">הושלם</span></td></tr><tr><td><b>פריסה ומסמכים</b> <code>deploy/</code>, <code>docs/</code></td><td>Docker, דמו בפקודה אחת, התקנה ל־Linux ול־Windows, CI, 13 מסמכי ציות בעברית ובאנגלית, ומדריכים.</td><td><span class="tag t-warn">ההתקנה ל־Windows לא נוסתה</span></td></tr>
   </table>
   </div>
   <h3>דיוק במסעדה מדומה (סימולטור, מעקב לפי זהות אמיתית)</h3>
@@ -191,7 +191,7 @@ footer{margin-top:40px;font-size:.8rem;color:var(--muted)}
     <tr><td>אישור ישיבה / אישור עזיבה</td><td>20 שניות / 45 שניות</td><td><span class="tag t-warn">ניחוש</span></td></tr>
     <tr><td>נוטש = המתין לפחות</td><td>60 שניות</td><td><span class="tag t-warn">ניחוש</span></td></tr>
     <tr><td>תור ארוך</td><td>8 אנשים או 10 דקות</td><td><span class="tag t-warn">ניחוש</span></td></tr>
-    <tr><td>יום עסקים מתחיל ב־</td><td>05:00</td><td><span class="tag t-warn">ניחוש</span></td></tr>
+    <tr><td>אורחים למלצר (להמלצת מלצרים)</td><td>20</td><td><span class="tag t-warn">ניחוש</span></td></tr><tr><td>זמן ישיבה משוער כשאין היסטוריה (מסך מארחת)</td><td>60 דקות</td><td><span class="tag t-warn">ניחוש</span></td></tr><tr><td>סוף שבוע</td><td>שישי–שבת בישראל, שבת–ראשון בשאר העולם</td><td><span class="tag t-info">ברירת מחדל</span></td></tr><tr><td>יום עסקים מתחיל ב־</td><td>05:00</td><td><span class="tag t-warn">ניחוש</span></td></tr>
     <tr><td>שמירת נתונים בענן</td><td>אירועים גולמיים 90 יום, מדדים 400 יום</td><td><span class="tag t-warn">ניחוש; דורש אישור עורך דין</span></td></tr>
   </table></div>
   <h3>עסקי ומוצרי</h3>
@@ -236,7 +236,7 @@ footer{margin-top:40px;font-size:.8rem;color:var(--muted)}
   <h2>מה עוד לא הסתיים</h2>
   <div class="card tbl"><table>
     <tr><th>עדיפות</th><th>משימה</th></tr>
-    <tr><td><span class="tag t-bad">לפני פיילוט</span></td><td>להחליף סודות בייצור (RV_JWT_SECRET, מפתחות VAPID) ולהגדיר RV_ENVIRONMENT=production; בדמו בדיקת "אירועים מהעתיד" כבויה (RV_MAX_EVENT_FUTURE_S=0), ובייצור היא חייבת להיות פעילה (ברירת מחדל 300)</td></tr><tr><td><span class="tag t-bad">לפני פיילוט</span></td><td>בדיקה של עורך דין על מסמכי הציות; החלטה אם צריך DPO; תלייה של שלט והודעה בכתב לעובדים</td></tr><tr><td><span class="tag t-bad">פיילוט</span></td><td>לאמת דיוק על צילום אמיתי: כיסוי המצלמות, זיהוי סועדים יושבים, זיהוי מלצרים, זיהוי שולחנות אוטומטי; לכייל את ערכי הזמנים</td></tr><tr><td><span class="tag t-warn">פיילוט</span></td><td>לאמן מחדש (fine-tune) את YOLOX על צילומי מסעדות, כולל מצלמות fisheye בתקרה</td></tr><tr><td><span class="tag t-warn">פיילוט</span></td><td>לבדוק התקנה על Windows ו־Linux אמיתיים; לבנות מתקין בקובץ אחד (PyInstaller)</td></tr><tr><td><span class="tag t-warn">פיילוט</span></td><td>להריץ את ה־CI ב־GitHub בפעם הראשונה; לבדוק build של Docker מחוץ לסביבה הזו (שלב ה־apt של ה־PDF)</td></tr><tr><td><span class="tag t-warn">שלב 2</span></td><td>חיבור לקופה: Tabit, אחריה Beecomm; בארה"ב Toast. מצב "מחכה לחשבון" תלוי בקופה</td></tr><tr><td><span class="tag t-warn">שלב 2</span></td><td>לשפר ספירת נוטשים בתור צפוף עם מעקב אמיתי (כרגע 0.64/0.82)</td></tr><tr><td><span class="tag t-info">שלב 2</span></td><td>API מקומי ב־HTTPS: כרגע ה־PIN עובר ב־HTTP רגיל ברשת המקומית</td></tr><tr><td><span class="tag t-info">שלב 2</span></td><td>Redis לענן עם כמה שרתים; ערוצי התראה נוספים (WhatsApp/SMS/ביפרים); אייקוני PNG ל־iOS</td></tr><tr><td><span class="tag t-info">שלב 2</span></td><td>לשפר את עורך מפת הרצפה במסכים צרים (ב־1280px שולחן 8 נחתך)</td></tr>
+    <tr><td><span class="tag t-bad">לפני פיילוט</span></td><td>להחליף סודות בייצור (RV_JWT_SECRET, מפתחות VAPID) ולהגדיר RV_ENVIRONMENT=production; בדמו בדיקת "אירועים מהעתיד" כבויה (RV_MAX_EVENT_FUTURE_S=0), ובייצור היא חייבת להיות פעילה (ברירת מחדל 300)</td></tr><tr><td><span class="tag t-bad">לפני פיילוט</span></td><td>בדיקה של עורך דין על מסמכי הציות; החלטה אם צריך DPO; תלייה של שלט והודעה בכתב לעובדים</td></tr><tr><td><span class="tag t-bad">פיילוט</span></td><td>לאמת דיוק על צילום אמיתי: כיסוי המצלמות, זיהוי סועדים יושבים, זיהוי מלצרים, זיהוי שולחנות אוטומטי; לכייל את ערכי הזמנים</td></tr><tr><td><span class="tag t-warn">פיילוט</span></td><td>לכייל את "אורחים למלצר" (20) ואת זמן הישיבה המשוער (60 דק׳) לפי נתוני המסעדה; לבדוק את התחזית של מסך המארחת מול הזמנים בפועל</td></tr><tr><td><span class="tag t-warn">פיילוט</span></td><td>לאמן מחדש (fine-tune) את YOLOX על צילומי מסעדות, כולל מצלמות fisheye בתקרה</td></tr><tr><td><span class="tag t-warn">פיילוט</span></td><td>לבדוק התקנה על Windows ו־Linux אמיתיים; לבנות מתקין בקובץ אחד (PyInstaller)</td></tr><tr><td><span class="tag t-warn">פיילוט</span></td><td>להריץ את ה־CI ב־GitHub בפעם הראשונה; לבדוק build של Docker מחוץ לסביבה הזו (שלב ה־apt של ה־PDF)</td></tr><tr><td><span class="tag t-warn">שלב 2</span></td><td>חיבור לקופה: Tabit, אחריה Beecomm; בארה"ב Toast. מצב "מחכה לחשבון" תלוי בקופה</td></tr><tr><td><span class="tag t-warn">שלב 2</span></td><td>לשפר ספירת נוטשים בתור צפוף עם מעקב אמיתי (כרגע 0.64/0.82)</td></tr><tr><td><span class="tag t-info">שלב 2</span></td><td>API מקומי ב־HTTPS: כרגע ה־PIN עובר ב־HTTP רגיל ברשת המקומית</td></tr><tr><td><span class="tag t-info">שלב 2</span></td><td>Redis לענן עם כמה שרתים; ערוצי התראה נוספים (WhatsApp/SMS/ביפרים); אייקוני PNG ל־iOS</td></tr><tr><td><span class="tag t-info">שלב 2</span></td><td>לשפר את עורך מפת הרצפה במסכים צרים (ב־1280px שולחן 8 נחתך)</td></tr>
   </table></div>
 </section>
 
